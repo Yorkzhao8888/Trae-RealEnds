@@ -1,0 +1,45 @@
+name: android-apk
+
+on:
+  push:
+    paths: ['cajob-app-shell/**']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: cajob-app-shell/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: 安装依赖并 sync Capacitor
+        working-directory: cajob-app-shell
+        run: |
+          npm ci
+          mkdir -p dist && cp index.html dist/   # webDir 占位（真实业务在 H5 根 server.url）
+          npx cap sync android
+
+      - name: 构建 Debug APK
+        working-directory: cajob-app-shell/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: 上传 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cajob-app-debug-apk
+          path: cajob-app-shell/android/app/build/outputs/apk/debug/*.apk
+          retention-days: 30

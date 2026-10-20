@@ -1,10 +1,11 @@
 node_modules/
-ios/
-android/
 dist/
+.gradle/
+build/
+app/build/
+local.properties
 *.keystore
 *.jks
 *.p12
 *.mobileprovision
-.gradle/
 .DS_Store
