@@ -1,0 +1,43 @@
+{
+  "appId": "com.cewaycloud.cajob",
+  "appName": "Cajob",
+  "webDir": "dist",
+  "server": {
+    "url": "https://h5.cewaycloud.com",
+    "cleartext": false,
+    "allowNavigation": [
+      "h5.cewaycloud.com",
+      "oas.cewaycloud.com",
+      "*.cewaycloud.com"
+    ]
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "Keyboard": {
+      "resize": "ionic"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#ffffff",
+      "overlaysWebView": true
+    },
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#ffffff",
+      "showSpinner": false
+    }
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "webContentsDebuggingEnabled": false,
+    "preferredContentMode": "mobile"
+  }
+}

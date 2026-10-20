@@ -1,0 +1,178 @@
+# Cajob App Shell · iOS / Android 桌面壳
+
+> 版本 0.1.0 · 2026-10-19 · 加载目标：`https://h5.cewaycloud.com`
+> 壳不做业务，所有页面/逻辑在 H5 根；原生能力通过 Capacitor 插件桥接
+
+## 架构
+
+```
+┌─────────────────────────────────────────────────────┐
+│           iOS App / Android App                      │
+│  ┌─────────────────────────────────────────────┐    │
+│  │  Capacitor App Shell (这个工程)             │    │
+│  │  - 加载 https://h5.cewaycloud.com          │    │
+│  │  - 原生桥: window.cajobShell.*              │    │
+│  │  - 推送/定位/分享/震动 通过插件供给          │    │
+│  └──────────────────────┬──────────────────────┘    │
+│                         │ HTTPS WebView              │
+│  ┌──────────────────────▼──────────────────────┐    │
+│  │  h5.cewaycloud.com  (Next.js App Router)    │    │
+│  │  业务逻辑 / SSR / CSR / API                  │    │
+│  └─────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────┘
+```
+
+## 目录结构
+
+```
+cajob-app-shell/
+├── package.json              # 依赖 + 构建脚本
+├── capacitor.config.json     # 壳配置（server.url 指向线上 H5）
+├── capacitor-plugins.ts      # 原生桥初始化（推送/分享/定位/震动/deeplink）
+├── index.html                # 壳入口（启动屏 + 离线兜底 + redirect）
+├── tsconfig.json
+├── ios/                      ← ✅ 已生成 Xcode 工程
+│   ├── App/App.xcodeproj/
+│   ├── App/App/AppDelegate.swift
+│   └── Podfile + Podfile.lock
+├── android/                  ← ✅ 已生成 Android Studio 工程
+│   ├── app/build.gradle
+│   ├── gradle/wrapper/
+│   └── app/src/main/AndroidManifest.xml
+├── dist/                     壳 web 资源（已 cap sync）
+├── node_modules/             依赖（gitignore，团队 npm install 装）
+├── .gitignore
+└── README.md
+```
+
+## 快速开始
+
+```bash
+# 1. 安装依赖
+npm install
+
+# 2. 打开原生 IDE
+npm run open:ios      # macOS + Xcode 15+ → Cmd+R 跑模拟器
+npm run open:android  # JDK 17 + Android Studio → Run 'app'
+
+# 3. 改了壳配置后重新 sync（自动 pod install / gradle sync）
+npm run sync
+
+# 4. 构建产物（需原生 IDE）
+#    iOS：Xcode → Product → Archive → Export → App Store Connect
+#    Android：AS → Build → Generate Signed Bundle / APK
+```
+
+## 原生桥（H5 根可直接调用）
+
+壳初始化后，H5 根里通过 `window.cajobShell` 访问：
+
+```typescript
+// 判断环境
+if (window.cajobShell?.isMobileShell) {
+  // 震动提醒
+  window.cajobShell.vibrate();
+  // 系统分享
+  await window.cajobShell.share({
+    title: 'Cajob - 真实端职聘',
+    text: '下载 Cajob 找工友',
+    url: 'https://h5.cewaycloud.com/download',
+  });
+  // 定位
+  const loc = await window.cajobShell.getLocation();
+  // 打开系统浏览器
+  await window.cajobShell.openExternal('https://oas.cewaycloud.com/...');
+}
+```
+
+H5 根监听壳事件：
+
+```typescript
+window.addEventListener('cajob:app-resume', () => refreshUnread());
+window.addEventListener('cajob:push-token', (e) => {
+  api.post('/device/push-token', { token: (e as CustomEvent).detail });
+});
+window.addEventListener('cajob:deeplink', (e) => {
+  router.push(parseDeeplink((e as CustomEvent).detail));
+});
+```
+
+## 推送配置
+
+### iOS（APNs）
+1. Apple Developer → Identifiers → App ID → 勾 Push Notifications
+2. Production SSL 证书 → 转 `.p12` → 后端接 APNs 网关
+
+### Android（FCM）
+1. Firebase Console → 创建项目 → Add Android App
+2. 下 `google-services.json` → 放 `android/app/`
+3. 后端接 FCM HTTP v1 API
+
+## 签名与分发
+
+| 目标 | 前置 | 构建 | 分发 |
+|---|---|---|---|
+| iOS 内测 | Apple Developer Team | Xcode Archive → Ad Hoc | UDID 注册 + 直接安装 |
+| iOS App Store | 同上 + 应用已在 Connect 创建 | Xcode Archive → App Store | App Store Connect 上传 |
+| Android 内测 | Keystore 文件 | AS → Generate Signed APK | 微信/QQ 传文件安装 |
+| Android Google Play | Google Play 开发者账号 + keystore | AS → Generate Signed Bundle | Google Play 上传 AAB |
+
+Android 签名配置（Keystore 放 `android/app/release.keystore`）：
+
+```gradle
+// android/app/build.gradle
+android {
+    signingConfigs {
+        release {
+            storeFile file('release.keystore')
+            storePassword "your-store-password"
+            keyAlias "cajob"
+            keyPassword "your-key-password"
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+        }
+    }
+}
+```
+
+## 已知限制
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| H5 鉴权 | ✅ 正常 | OAuth + cookie 与 PC 壳一致 |
+| 微信 JS-SDK | ❌ 壳里不可用 | 微信 SDK 只在微信内置浏览器生效；壳里用 `window.cajobShell.share()` 替代 |
+| 支付 | ⚠️ 待接 | 需 Capacitor Stripe 插件或自建 |
+| Service Worker | ❌ 默认禁用 | Capacitor WebView 环境 SW 有坑，H5 根不要依赖 |
+| 热更新 | ❌ 未接 | 发版走商店；可接 Capacitor Live Updates 做 H5 热更 |
+| iPad | ✅ 自动覆盖 | Capacitor iOS 壳自动生成 iPhone + iPad target |
+| 鸿蒙 NEXT | ✅ 官方支持 | `npm install @capacitor/harmonyos`（等 HarmonyOS NEXT 正式版） |
+
+## 插件清单（已 sync）
+
+```
+@capacitor/app          生命周期（回到前台通知 H5、deeplink）
+@capacitor/browser      打开系统浏览器
+@capacitor/camera       拍照/选图
+@capacitor/filesystem   文件读写
+@capacitor/geolocation  定位
+@capacitor/haptics      震动
+@capacitor/keyboard     键盘
+@capacitor/local-notifications  本地通知
+@capacitor/push-notifications   远程推送
+@capacitor/share        系统分享
+@capacitor/status-bar   状态栏
+```
+
+## 构建问题排查
+
+| 错误 | 原因 | 解法 |
+|---|---|---|
+| Xcode `No signing certificate` | Team 没选 | Xcode → Signing & Capabilities → Team 选你的开发者账号 |
+| `pod install` 失败 | 网络 | 换源 `pod repo update` 或 `CDN` 源 |
+| AS `Gradle sync` 超时 | 网络 | 配置 gradle-wrapper.properties 用国内镜像（阿里） |
+| Android `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 签名不一致 | 卸载旧版本后重装，或用同一个 keystore 签 |
+| iOS 运行时白屏 | H5 根不可达 | 检查 `capacitor.config.json` 里的 url 是否是 `https://h5.cewaycloud.com` |

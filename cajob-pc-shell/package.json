@@ -1,0 +1,62 @@
+{
+  "name": "cajob-pc-shell",
+  "version": "0.2.0",
+  "description": "Cajob 真实端 H5 根 PC 桌面壳（Electron）",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder -mwl"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.cewaycloud.cajob",
+    "productName": "Cajob",
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist-release"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://h5.cewaycloud.com/download/latest/"
+      }
+    ],
+    "artifactName": "${productName}-${os}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "${productName}-${os}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "Cajob",
+      "artifactName": "${productName}-Setup.${ext}"
+    }
+  }
+}

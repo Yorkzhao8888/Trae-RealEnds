@@ -1,0 +1,10 @@
+node_modules/
+ios/
+android/
+dist/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision
+.gradle/
+.DS_Store
