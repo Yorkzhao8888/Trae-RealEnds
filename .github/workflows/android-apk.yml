@@ -22,7 +22,18 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      - name: 安装 Android SDK cmdline-tools (ubuntu-latest 已带 SDK platform-tools)
+        run: |
+          echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
+          which sdkmanager || true
+          # ubuntu-latest (24.04) 已预装 cmdline-tools 和 platform-tools 在 $ANDROID_SDK_ROOT
+          # 若缺 cmdline-tools 则手动装
+          if ! command -v sdkmanager &> /dev/null; then
+            apt-get update -y
+            apt-get install -y android-sdk
+          fi
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" 2>/dev/null || true
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
 
       - name: 安装依赖并 sync Capacitor
         working-directory: cajob-app-shell
