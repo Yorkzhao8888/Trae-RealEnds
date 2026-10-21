@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.2.1';
+  var VERSION = '0.2.2';
 
   // 幂等：已注册则直接返回，避免重复绑定监听导致事件翻倍
   if (window.cajobShell) return;
@@ -41,6 +41,46 @@
       window.dispatchEvent(new CustomEvent(name, { detail: detail }));
     } catch (e) {
       /* 老 WebView 不支持 CustomEvent 构造器：忽略 */
+    }
+  }
+
+  /**
+   * 前台提示音：与通知渠道里的 res/raw/cajob_notify.wav 同音色（E6→B6 上行五度）。
+   * 现场合成而非加载音频文件，避免首屏多一个请求。
+   */
+  var audioCtx = null;
+  function chime() {
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    try {
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      var t0 = audioCtx.currentTime + 0.01;
+      var notes = [[1318.51, 0], [1975.53, 0.105]];
+      for (var i = 0; i < notes.length; i++) {
+        var osc = audioCtx.createOscillator();
+        var gain = audioCtx.createGain();
+        var at = t0 + notes[i][1];
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(notes[i][0], at);
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(0.16, at + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.38);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(at);
+        osc.stop(at + 0.4);
+      }
+    } catch (e) {
+      /* 无音频权限或被系统静音：静默失败 */
+    }
+  }
+
+  function buzz(pattern) {
+    try {
+      if (navigator.vibrate) navigator.vibrate(pattern);
+    } catch (e) {
+      /* 用户关闭了振动 */
     }
   }
 
@@ -110,6 +150,9 @@
       });
       P.PushNotifications.addListener('pushNotificationReceived', function (n) {
         emit('cajob:push-received', n);
+        // 前台不走系统通知，用轻提示音 + 双短振代替，避免「叮一声很响」
+        chime();
+        buzz([0, 14, 70, 14]);
       });
       P.PushNotifications.addListener('pushNotificationActionPerformed', function (n) {
         emit('cajob:push-action', n);
@@ -148,11 +191,16 @@
         return window.__cajobPushToken__ || null;
       },
 
+      // 不传参：轻叩双短振（14ms + 70ms 间隔 + 14ms），传参则按指定时长单次
       vibrate: async function (duration) {
+        var single = typeof duration === 'number' && duration > 0;
+        if (navigator.vibrate) {
+          navigator.vibrate(single ? [0, duration] : [0, 14, 70, 14]);
+          return;
+        }
         if (!P.Haptics) return;
-        var ms = typeof duration === 'number' && duration > 0 ? duration : 12;
         try {
-          await P.Haptics.vibrate({ duration: ms });
+          await P.Haptics.vibrate({ duration: single ? duration : 14 });
         } catch (e) {
           /* iOS 忽略 duration，失败不影响调用方 */
         }

@@ -11,6 +11,17 @@
         android:hardwareAccelerated="true"
         android:theme="@style/AppTheme.NoActionBar">
 
+        <!-- 推送落地样式：单色小图标 + 品牌色 + 默认渠道（服务端未指定渠道时生效） -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_cajob" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/cajob_accent" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="cajob_messages" />
+
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode"
             android:name=".MainActivity"
