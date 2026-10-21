@@ -199,10 +199,20 @@
           return;
         }
         if (!P.Haptics) return;
+        // iOS 不支持时长与节奏参数：用两次 LIGHT 冲击模拟同一个「双叩」
         try {
-          await P.Haptics.vibrate({ duration: single ? duration : 14 });
+          if (single) {
+            await P.Haptics.vibrate({ duration: duration });
+            return;
+          }
+          var tap = function () {
+            return P.Haptics.impact ? P.Haptics.impact({ style: 'LIGHT' }) : P.Haptics.vibrate();
+          };
+          await tap();
+          await new Promise(function (r) { setTimeout(r, 70); });
+          await tap();
         } catch (e) {
-          /* iOS 忽略 duration，失败不影响调用方 */
+          /* 用户关闭了系统触感：静默失败 */
         }
       },
 

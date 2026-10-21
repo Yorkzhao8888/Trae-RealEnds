@@ -1,6 +1,7 @@
 // Cajob 真实端 H5 根 PC 壳 —— Electron 主进程
-// v0.2.0：Phase 1/4 补齐（https 收紧、离线兜底、菜单收敛）+ Phase 3 自动更新接入
-const { app, BrowserWindow, shell, Menu, session, nativeImage, dialog } = require('electron');
+// v0.2.2：三端体验统一（窗口记忆、主题跟随、下载/更新进度、崩溃自恢复、跨平台快捷键）
+const { app, BrowserWindow, shell, Menu, session, nativeImage, dialog, screen, nativeTheme } = require('electron');
+const fs = require('fs');
 const path = require('path');
 
 const HOME_URL = 'https://h5.cewaycloud.com/';
@@ -12,7 +13,12 @@ const ALLOWED_HOSTS = new Set([
   'oas.cewaycloud.com',
 ]);
 
+const THEME_BG = { dark: '#0F1115', light: '#FFFFFF' };
+const isDark = () => nativeTheme.shouldUseDarkColors;
+const bgColor = () => (isDark() ? THEME_BG.dark : THEME_BG.light);
+
 let mainWindow = null;
+let rendererCrashes = 0;
 
 // 单实例锁：重复启动时聚焦已有窗口
 const gotLock = app.requestSingleInstanceLock();
@@ -25,6 +31,41 @@ if (!gotLock) {
       mainWindow.focus();
     }
   });
+}
+
+// ── 窗口状态记忆（位置/尺寸/最大化/缩放）────────────────────────────
+const statePath = () => path.join(app.getPath('userData'), 'window-state.json');
+
+function loadWindowState() {
+  try {
+    return JSON.parse(fs.readFileSync(statePath(), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function saveWindowState(win) {
+  if (!win || win.isDestroyed()) return;
+  try {
+    const bounds = typeof win.getNormalBounds === 'function' ? win.getNormalBounds() : win.getBounds();
+    fs.writeFileSync(statePath(), JSON.stringify({
+      bounds,
+      maximized: win.isMaximized(),
+      zoom: win.webContents.getZoomFactor(),
+    }));
+  } catch { /* 状态写入失败不影响使用 */ }
+}
+
+// 副屏拔出后旧坐标可能落在可见区域外，这里回退到默认尺寸
+function visibleBounds(b) {
+  if (!b || !Number.isFinite(b.x) || !Number.isFinite(b.y) || !b.width || !b.height) return null;
+  const ok = screen.getAllDisplays().some((d) => {
+    const a = d.workArea;
+    const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+    const overlapY = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+    return overlapX > 160 && overlapY > 120;
+  });
+  return ok ? b : null;
 }
 
 function isAllowed(urlStr) {
@@ -66,15 +107,21 @@ code{font-size:11px;color:#9aa1ad}
 }
 
 function createWindow() {
+  const saved = loadWindowState() || {};
+  const bounds = visibleBounds(saved.bounds) || { width: 1280, height: 840 };
+
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 840,
+    ...bounds,
     minWidth: 960,
     minHeight: 640,
     title: 'Cajob',
-    backgroundColor: '#ffffff',
+    // 先不显示，等首帧绘完再 show，避免白底闪一下（移动端启动屏的桌面等价做法）
+    show: false,
+    backgroundColor: bgColor(),
     autoHideMenuBar: true,
     icon: APP_ICON,
+    // macOS 保留原生标题栏：H5 页头自带品牌栏，隐藏后红绿灯会压住页面内容
+    titleBarStyle: 'default',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -85,7 +132,24 @@ function createWindow() {
     },
   });
 
+  if (saved.maximized) mainWindow.maximize();
+  if (Number.isFinite(saved.zoom) && saved.zoom !== 1) {
+    mainWindow.webContents.setZoomFactor(Math.min(3, Math.max(0.5, saved.zoom)));
+  }
+
+  mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.loadURL(HOME_URL);
+
+  // 窗口尺寸/位置变化时落盘（拖动过程中节流，关闭时再存一次兜底）
+  let saveTimer = null;
+  const scheduleSave = () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveWindowState(mainWindow), 400);
+  };
+  mainWindow.on('resize', scheduleSave);
+  mainWindow.on('move', scheduleSave);
+  mainWindow.on('maximize', scheduleSave);
+  mainWindow.on('unmaximize', scheduleSave);
 
   // 站内导航：cewaycloud.com 域内放行（OAuth 回跳链），其余交给系统浏览器
   mainWindow.webContents.on('will-navigate', (event, url) => {
@@ -114,20 +178,90 @@ function createWindow() {
       .catch(() => {});
   });
 
-  // 下载改为 Electron 默认行为（弹保存对话框，用户自选落盘；P4-5 收敛：仅记录）
-  session.fromPartition('persist:cajob').on('will-download', (_event, item) => {
-    console.log('[cajob] download:', item.getFilename());
+  // 渲染进程崩溃：自动恢复一次，仍失败才提示（避免白屏无反馈）
+  mainWindow.webContents.on('render-process-gone', async (_e, details) => {
+    if (details.reason === 'clean-exit') return;
+    if (rendererCrashes < 1) {
+      rendererCrashes += 1;
+      mainWindow.reload();
+      return;
+    }
+    try {
+      await dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'Cajob',
+        message: '页面异常退出',
+        detail: `原因：${details.reason}。点击确定重新加载。`,
+        buttons: ['重新加载'],
+      });
+      rendererCrashes = 0;
+      mainWindow.loadURL(HOME_URL);
+    } catch { /* 窗口已关闭 */ }
   });
 
+  // 下载：任务栏显示进度，完成后复位并提示保存位置
+  session.fromPartition('persist:cajob').on('will-download', (_event, item) => {
+    const total = item.getTotalBytes();
+    item.on('updated', (_e, state) => {
+      if (state !== 'progressing' || !mainWindow || total <= 0) return;
+      mainWindow.setProgressBar(Math.min(1, item.getReceivedBytes() / total));
+    });
+    item.once('done', (_e, state) => {
+      if (mainWindow) mainWindow.setProgressBar(-1);
+      if (state === 'completed') {
+        dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          title: '下载完成',
+          message: item.getFilename(),
+          detail: item.getSavePath(),
+          buttons: ['好'],
+        }).catch(() => {});
+      }
+    });
+  });
+
+  // Windows/Linux 没有应用菜单，快捷键在这里补齐（macOS 由菜单角色提供）
+  if (process.platform !== 'darwin') {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.type !== 'keyDown') return;
+      const mod = input.control || input.meta;
+      const wc = mainWindow.webContents;
+      const key = input.key;
+      if (mod && (key === '=' || key === '+')) { wc.setZoomLevel(wc.getZoomLevel() + 0.5); event.preventDefault(); }
+      else if (mod && key === '-') { wc.setZoomLevel(wc.getZoomLevel() - 0.5); event.preventDefault(); }
+      else if (mod && key === '0') { wc.setZoomLevel(0); event.preventDefault(); }
+      else if (key === 'F11') { mainWindow.setFullScreen(!mainWindow.isFullScreen()); event.preventDefault(); }
+      else if (key === 'F5') { wc.reload(); event.preventDefault(); }
+      else if (input.alt && key === 'ArrowLeft') { wc.navigationHistory.goBack(); event.preventDefault(); }
+      else if (input.alt && key === 'ArrowRight') { wc.navigationHistory.goForward(); event.preventDefault(); }
+      else if (mod && input.shift && (key === 'I' || key === 'i') && !app.isPackaged) { wc.toggleDevTools(); event.preventDefault(); }
+    });
+
+    // 鼠标侧键（上一页/下一页）
+    mainWindow.on('app-command', (_e, cmd) => {
+      if (cmd === 'browser-backward') mainWindow.webContents.navigationHistory.goBack();
+      if (cmd === 'browser-forward') mainWindow.webContents.navigationHistory.goForward();
+    });
+  }
+
+  mainWindow.on('close', () => saveWindowState(mainWindow));
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-// Phase 3 自动更新：generic 源（/download/latest/），仅打包态启用；签名未就绪期间失败静默不阻塞
+// Phase 3 自动更新：generic 源（/download/latest/），仅打包态启用
+let autoUpdater = null;
+let manualCheck = false;
+
+function checkForUpdates(manual) {
+  if (!app.isPackaged || !autoUpdater) return;
+  manualCheck = !!manual;
+  autoUpdater.checkForUpdates().catch(() => {});
+}
+
 function setupAutoUpdate() {
   if (!app.isPackaged) return;
-  let autoUpdater;
   try {
     ({ autoUpdater } = require('electron-updater'));
   } catch {
@@ -136,7 +270,12 @@ function setupAutoUpdate() {
   autoUpdater.autoDownload = true; // 检出即后台下载，下载完成再询问重启
   autoUpdater.logger = console;
 
+  autoUpdater.on('download-progress', (p) => {
+    if (mainWindow && Number.isFinite(p.percent)) mainWindow.setProgressBar(Math.min(1, p.percent / 100));
+  });
+
   autoUpdater.on('update-downloaded', async (info) => {
+    if (mainWindow) mainWindow.setProgressBar(-1);
     try {
       const { response } = await dialog.showMessageBox(mainWindow, {
         type: 'info',
@@ -151,15 +290,37 @@ function setupAutoUpdate() {
     } catch { /* 窗口不存在等情况：忽略，下次启动再装 */ }
   });
 
+  // 手动检查时给出明确反馈；后台轮询保持静默
+  autoUpdater.on('update-not-available', () => {
+    if (!manualCheck) return;
+    manualCheck = false;
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Cajob 更新',
+      message: '当前已是最新版本',
+      detail: `版本 ${app.getVersion()}`,
+      buttons: ['好'],
+    }).catch(() => {});
+  });
+
   // 签名未就绪 / 网络异常 / yml 缺失：静默失败，不影响主流程
   autoUpdater.on('error', (err) => {
     console.log('[cajob] updater error (suppressed):', err && err.message);
+    if (mainWindow) mainWindow.setProgressBar(-1);
+    if (!manualCheck) return;
+    manualCheck = false;
+    dialog.showMessageBox(mainWindow, {
+      type: 'warning',
+      title: 'Cajob 更新',
+      message: '检查更新失败',
+      detail: '请稍后重试，或前往下载页手动获取最新版本。',
+      buttons: ['好'],
+    }).catch(() => {});
   });
 
   // 启动 10s 后检查一次；此后每 30 分钟轮询
-  const check = () => autoUpdater.checkForUpdates().catch(() => {});
-  setTimeout(check, 10_000);
-  setInterval(check, 30 * 60_000);
+  setTimeout(() => checkForUpdates(false), 10_000);
+  setInterval(() => checkForUpdates(false), 30 * 60_000);
 }
 
 // macOS 基础菜单（复制粘贴等编辑功能在壳内可用）；P4-4 发行版按打包状态收敛调试项
@@ -182,16 +343,7 @@ function buildMenu() {
   const appSubmenu = [
     { role: 'about', label: '关于 Cajob' },
     { type: 'separator' },
-    {
-      label: '检查更新…',
-      click: () => {
-        if (app.isPackaged) {
-          try {
-            require('electron-updater').autoUpdater.checkForUpdates().catch(() => {});
-          } catch { /* ignore */ }
-        }
-      },
-    },
+    { label: '检查更新…', accelerator: 'Cmd+U', click: () => checkForUpdates(true) },
     { type: 'separator' },
     { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' },
     { type: 'separator' },
@@ -216,11 +368,25 @@ function buildMenu() {
 }
 
 app.whenReady().then(() => {
+  // Windows：任务栏分组与通知归属（缺这行系统会把通知算到 electron.exe 名下）
+  if (process.platform === 'win32') app.setAppUserModelId('com.cewaycloud.cajob');
+
   // macOS 开发模式下 Dock 图标（打包后由 .app 内嵌 icns 接管）
   if (process.platform === 'darwin' && app.dock) {
     const dockIcon = nativeImage.createFromPath(APP_ICON);
     if (!dockIcon.isEmpty()) app.dock.setIcon(dockIcon);
+    app.setAboutPanelOptions({
+      applicationName: 'Cajob',
+      applicationVersion: app.getVersion(),
+      copyright: '© 2026 捷才智通',
+    });
   }
+
+  // 系统主题切换时同步窗口底色，避免深色模式下露出白底
+  nativeTheme.on('updated', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(bgColor());
+  });
+
   buildMenu();
   createWindow();
   setupAutoUpdate();

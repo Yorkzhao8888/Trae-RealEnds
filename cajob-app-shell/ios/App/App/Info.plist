@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>zh_CN</string>
 	<key>CFBundleDisplayName</key>
         <string>Cajob</string>
 	<key>CFBundleExecutable</key>
@@ -21,6 +21,12 @@
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<!-- 仅使用系统 HTTPS，无自定义加密算法：声明后提交 App Store 可跳过出口合规问答 -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<!-- iPad 触控板/鼠标指针事件走间接输入，避免系统把点击当成触摸延迟 0.5s -->
+	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<!-- 原生能力用途声明：缺失会在调用时直接终止进程（不是弹权限框） -->
 	<key>NSCameraUsageDescription</key>
