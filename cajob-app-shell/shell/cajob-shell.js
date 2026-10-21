@@ -16,7 +16,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '0.2.0';
+  var VERSION = '0.2.1';
 
   // 幂等：已注册则直接返回，避免重复绑定监听导致事件翻倍
   if (window.cajobShell) return;
@@ -44,12 +44,59 @@
     }
   }
 
+  /**
+   * 原生端视觉打磨：只在壳内注入，浏览器/微信零影响。
+   * 目的：去掉 WebView 默认的灰色点击方块、橡皮筋与滚动条，把「网页感」压下去。
+   */
+  function polish() {
+    if (document.getElementById('cajob-shell-css')) return;
+    var css = [
+      'html{-webkit-tap-highlight-color:transparent;overscroll-behavior:none}',
+      'body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior-y:none}',
+      '::-webkit-scrollbar{width:0;height:0}',
+      'a,button{-webkit-tap-highlight-color:transparent;transition:transform .12s cubic-bezier(.2,.8,.2,1),opacity .12s ease}',
+      'a:active,button:active{transform:scale(.975);opacity:.85}',
+    ].join('');
+    var style = document.createElement('style');
+    style.id = 'cajob-shell-css';
+    style.textContent = css;
+    (document.head || document.documentElement).appendChild(style);
+    document.documentElement.classList.add('cajob-native');
+  }
+
   function init() {
     var p = platform();
     if (p !== 'ios' && p !== 'android') return;
     if (window.cajobShell) return;
 
     var P = plugins();
+
+    polish();
+
+    // ---- 系统栏：与 H5 背景同色，浅色图标；覆盖 WebView 不透内容 ----
+    if (P.StatusBar) {
+      try {
+        P.StatusBar.setStyle({ style: 'DARK' });
+        if (typeof P.StatusBar.setBackgroundColor === 'function') {
+          P.StatusBar.setBackgroundColor({ color: '#0F1115' });
+        }
+      } catch (e) {
+        /* iOS 不支持背景色，忽略 */
+      }
+    }
+
+    // ---- 返回键：能回退就回退，到底则退到后台而不是杀进程 ----
+    if (p === 'android' && P.App) {
+      P.App.addListener('backButton', function (ev) {
+        if (ev && ev.canGoBack) {
+          window.history.back();
+          return;
+        }
+        if (typeof P.App.minimizeApp === 'function') {
+          P.App.minimizeApp();
+        }
+      });
+    }
 
     // ---- 推送：token 既缓存也广播，保证「取」和「推」两条路径都可用 ----
     function bindPush() {
@@ -141,6 +188,27 @@
     };
 
     window.cajobShell = bridge;
+
+    // 收启动屏：双 rAF 确保首帧已绘制，避免「收早了露白」
+    if (P.SplashScreen) {
+      var splashHidden = false;
+      var hideSplash = function () {
+        if (splashHidden) return;
+        splashHidden = true;
+        try {
+          P.SplashScreen.hide({ fadeOutDuration: 220 });
+        } catch (e) {
+          /* 启动屏已自动隐藏 */
+        }
+      };
+      window.cajobShell.hideSplash = hideSplash;
+      requestAnimationFrame(function () {
+        requestAnimationFrame(hideSplash);
+      });
+      // 兜底：桥接成功但首帧异常时，不让启动屏长期驻留
+      setTimeout(hideSplash, 1600);
+    }
+
     console.log('[cajob-shell] 原生桥就绪 v' + VERSION + ' (' + p + ')');
     emit('cajob:shell-ready', { version: VERSION, platform: p });
   }

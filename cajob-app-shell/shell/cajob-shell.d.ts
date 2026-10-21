@@ -27,6 +27,9 @@ export interface CajobNativeBridge {
 
   /** 在系统浏览器打开外部链接 */
   openExternal(url: string): Promise<void>;
+
+  /** 立即收起启动屏（H5 首屏渲染完成后可主动调用，避免等待自动收起） */
+  hideSplash(): void;
 }
 
 /** 桥派发的自定义事件 */

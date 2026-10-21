@@ -17,16 +17,19 @@
       "presentationOptions": ["badge", "sound", "alert"]
     },
     "Keyboard": {
-      "resize": "ionic"
+      "resize": "native"
     },
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#ffffff",
-      "overlaysWebView": true
+      "backgroundColor": "#0F1115",
+      "overlaysWebView": false
     },
     "SplashScreen": {
-      "launchShowDuration": 2000,
-      "backgroundColor": "#ffffff",
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 260,
+      "backgroundColor": "#0F1115",
+      "androidScaleType": "CENTER_CROP",
       "showSpinner": false
     }
   },

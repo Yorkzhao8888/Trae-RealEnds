@@ -1,22 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- Base application theme. -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
-        <!-- Customize your theme here. -->
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
+    <!-- 基础主题：深色底 + 浅色系统栏图标，冷启动首帧即为品牌底色，不闪白 -->
+    <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/cajob_accent</item>
+        <item name="colorPrimaryDark">@color/cajob_bg</item>
+        <item name="colorAccent">@color/cajob_accent</item>
+        <item name="android:windowBackground">@color/cajob_bg</item>
+        <item name="android:statusBarColor">@color/cajob_bg</item>
+        <item name="android:navigationBarColor">@color/cajob_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
     </style>
 
     <style name="AppTheme.NoActionBar" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- 深色沉浸：状态栏/导航栏与 H5 背景同色，图标保持浅色 -->
+        <item name="android:windowBackground">@color/cajob_bg</item>
+        <item name="android:statusBarColor">@color/cajob_bg</item>
+        <item name="android:navigationBarColor">@color/cajob_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 
-
+    <!-- 启动主题：Android 12+ 走 SplashScreen API，低版本由 core-splashscreen 兼容 -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">@color/cajob_bg</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/cajob_mark</item>
+        <item name="windowSplashScreenAnimationDuration">300</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
+        <item name="android:windowBackground">@color/cajob_bg</item>
     </style>
 </resources>
