@@ -1,13 +1,13 @@
 {
   "name": "cajob-pc-shell",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Cajob 真实端 H5 根 PC 桌面壳（Electron）",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist": "electron-builder -mwl"
+    "dist:mac": "electron-builder --mac --arm64 --x64 --publish never",
+    "dist:win": "electron-builder --win --x64 --publish never",
+    "dist": "npm run dist:mac && npm run dist:win"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"
@@ -40,6 +40,7 @@
         "dmg",
         "zip"
       ],
+      "artifactName": "${productName}-mac-${arch}.${ext}",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
       "entitlements": "build/entitlements.mac.plist",
@@ -50,7 +51,7 @@
         "nsis",
         "zip"
       ],
-      "artifactName": "${productName}-${os}-${arch}.${ext}"
+      "artifactName": "${productName}-win-${arch}.${ext}"
     },
     "nsis": {
       "oneClick": false,

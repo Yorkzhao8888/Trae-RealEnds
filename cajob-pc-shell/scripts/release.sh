@@ -2,7 +2,7 @@
 # Cajob PC 壳 —— 构建 / 上传 / 校验 一键脚本（Phase 2 签名 + Phase 3 自动更新元数据）
 #
 # 用法：
-#   ./scripts/release.sh                    # 全量：构建 mac+win 并上传
+#   ./scripts/release.sh                    # 全量：构建 mac(arm64+x64)+win(x64) 并上传
 #   SKIP_UPLOAD=1 ./scripts/release.sh      # 只构建不上传
 #   SKIP_WIN=1 ./scripts/release.sh         # 只出 mac 产物
 #
@@ -17,24 +17,50 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BASE_URL="${BASE_URL:-https://h5.cewaycloud.com/download/latest}"
-ARTIFACTS="Cajob-mac-arm64.dmg Cajob-mac-x64.dmg Cajob-Setup.exe Cajob-mac-arm64.zip Cajob-win-x64.zip"
+ARTIFACTS_MAC="Cajob-mac-arm64.dmg Cajob-mac-x64.dmg Cajob-mac-arm64.zip Cajob-mac-x64.zip"
+ARTIFACTS_WIN="Cajob-Setup.exe Cajob-win-x64.zip"
 METADATA="latest-mac.yml latest.yml"
 
-echo "==> [1/4] 构建 mac 产物（dmg+zip；注意：DMG 需在沙箱外执行）"
+EXPECTED="$ARTIFACTS_MAC"
+if [ "${SKIP_WIN:-0}" != "1" ]; then
+  EXPECTED="$EXPECTED $ARTIFACTS_WIN"
+fi
+# 更新元数据只在产出对应平台时要求
+EXPECTED_META="latest-mac.yml"
+if [ "${SKIP_WIN:-0}" != "1" ]; then
+  EXPECTED_META="$EXPECTED_META latest.yml"
+fi
+
+rm -rf dist-release
+
+echo "==> [1/4] 构建 mac 产物（arm64 + x64，dmg+zip）"
+# 必须显式声明两个架构：electron-builder 默认只构建宿主架构，另一架构会静默缺失
 if [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
   echo "    检测到公证凭据 → 启用 notarize"
-  npx electron-builder --mac -c.mac.notarize=true
+  npx electron-builder --mac --arm64 --x64 --publish never -c.mac.notarize=true
 else
   echo "    未检测到公证凭据 → 未签名构建（内测口径）"
-  npx electron-builder --mac
+  npx electron-builder --mac --arm64 --x64 --publish never
 fi
 
 if [ "${SKIP_WIN:-0}" != "1" ]; then
-  echo "==> [1/4] 构建 win 产物（nsis+zip）"
-  npx electron-builder --win
+  echo "==> [1/4] 构建 win 产物（x64，nsis+zip）"
+  npx electron-builder --win --x64 --publish never
 fi
 
-echo "==> [2/4] 产物清单（含自动更新元数据，yml 必须随产物同版本发布）"
+echo "==> [2/4] 产物完整性检查（缺失即失败，不允许静默跳过）"
+missing=0
+for f in $EXPECTED $EXPECTED_META; do
+  if [ ! -f "dist-release/$f" ]; then
+    echo "    MISSING  $f"
+    missing=1
+  fi
+done
+if [ "$missing" != "0" ]; then
+  echo "==> 产物不全，终止。检查构建日志或架构参数。"
+  ls -la dist-release/ 2>/dev/null || true
+  exit 1
+fi
 ls -la dist-release/ | grep -E '\.(dmg|exe|zip|yml)$' || true
 
 if [ "${SKIP_UPLOAD:-0}" = "1" ]; then
@@ -45,21 +71,19 @@ fi
 DEST_DIR="${DEST_DIR:-/opt/oas/download/latest}"
 
 echo "==> [3/4] 上传稳定名产物 + 更新元数据 → $REMOTE:$DEST_DIR"
-# shellcheck disable=SC2086
 rsync -av --checksum \
-  $(for f in $ARTIFACTS $METADATA; do [ -f "dist-release/$f" ] && echo "dist-release/$f"; done) \
+  $(for f in $EXPECTED $EXPECTED_META; do echo "dist-release/$f"; done) \
   "$REMOTE:$DEST_DIR/"
 
 echo "==> [4/4] 线上字节校验"
 fail=0
-for f in $ARTIFACTS $METADATA; do
-  [ -f "dist-release/$f" ] || continue
+for f in $EXPECTED $EXPECTED_META; do
   local_size=$(stat -f%z "dist-release/$f" 2>/dev/null || stat -c%s "dist-release/$f")
   remote_size=$(curl -sI "$BASE_URL/$f" | grep -i '^content-length' | tail -1 | tr -dc '0-9')
-  if [ "$local_size" = "$remote_size" ] && [ -n "$local_size" ]; then
+  if [ -n "$local_size" ] && [ "$local_size" = "$remote_size" ]; then
     echo "MATCH  $f ($local_size bytes)"
   else
-    echo "DIFF   $f  local=$local_size remote=$remote_size"
+    echo "DIFF   $f  local=$local_size remote=${remote_size:-<missing>}"
     fail=1
   fi
 done

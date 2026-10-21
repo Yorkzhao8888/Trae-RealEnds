@@ -32,14 +32,21 @@ function isAllowed(urlStr) {
     const u = new URL(urlStr);
     // P4-1 仅允许 https（http 明文不放行）
     if (u.protocol !== 'https:') return false;
-    return ALLOWED_HOSTS.has(u.hostname) || u.hostname.endsWith('.cewaycloud.com');
+    const host = u.hostname.toLowerCase();
+    return ALLOWED_HOSTS.has(host) || host.endsWith('.cewaycloud.com');
   } catch {
     return false;
   }
 }
 
+// 兜底页是 data: URL 拼出来的，任何外部字符串都必须转义后再进 HTML
+function escapeHtml(v) {
+  const MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => MAP[c]);
+}
+
 // P4-2 离线兜底页（内联 data: URL，零新文件）
-function offlinePageHtml(failedUrl, code, desc) {
+function offlinePageHtml(code, desc) {
   return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <title>Cajob · 网络异常</title>
 <style>
@@ -53,7 +60,7 @@ code{font-size:11px;color:#9aa1ad}
 </style></head><body><div class="card">
 <h1>网络连接异常</h1>
 <p>无法访问 Cajob 服务，请检查网络后重试。</p>
-<code>${String(code)} ${String(desc || '')}</code><br>
+<code>${escapeHtml(code)} ${escapeHtml(desc || '')}</code><br>
 <button onclick="location.replace('${HOME_URL}')">重新加载</button>
 </div></body></html>`;
 }
@@ -90,7 +97,7 @@ function createWindow() {
 
   // 新窗口请求（target=_blank / window.open）：域内在当前窗口打开，域外系统浏览器
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowed(url)) {
+    if (isAllowed(url) && mainWindow) {
       mainWindow.loadURL(url);
     } else {
       shell.openExternal(url);
@@ -99,11 +106,11 @@ function createWindow() {
   });
 
   // P4-2 主框架加载失败 → 内联离线兜底页（含重新加载入口）
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, _validatedURL, isMainFrame) => {
     // ERR_ABORTED(-3)：导航被取消（如重定向接续），不当作失败
-    if (!isMainFrame || errorCode === -3) return;
+    if (!isMainFrame || errorCode === -3 || !mainWindow) return;
     mainWindow
-      .loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(offlinePageHtml(validatedURL, errorCode, errorDescription)))
+      .loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(offlinePageHtml(errorCode, errorDescription)))
       .catch(() => {});
   });
 
