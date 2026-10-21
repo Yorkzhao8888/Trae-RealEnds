@@ -7,7 +7,8 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "noEmit": true
   },
-  "include": ["capacitor.config.ts", "capacitor-plugins.ts"]
+  "include": ["shell/cajob-shell.d.ts"]
 }

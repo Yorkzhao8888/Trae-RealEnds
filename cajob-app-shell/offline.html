@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Cajob · 网络异常</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #f5f6f8; }
+  .wrap { display: flex; flex-direction: column; align-items: center; justify-content: center;
+          height: 100%; padding: 0 28px; box-sizing: border-box; text-align: center;
+          font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; color: #1f2430; }
+  .icon { width: 56px; height: 56px; border-radius: 50%; background: #e8eef3;
+          display: flex; align-items: center; justify-content: center; font-size: 26px; color: #7b8794; }
+  h1 { font-size: 19px; margin: 20px 0 10px; }
+  p { font-size: 14px; color: #5b6472; line-height: 1.7; margin: 0; }
+  button { margin-top: 26px; padding: 11px 34px; border: 0; border-radius: 10px;
+           background: #0B6B5F; color: #fff; font-size: 15px; }
+  button:active { background: #095249; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="icon">!</div>
+  <h1>网络连接异常</h1>
+  <p>Cajob 需要联网才能使用。<br>请检查网络后重试。</p>
+  <button id="retry">重试</button>
+</div>
+
+<script>
+  // 本地兜底页：不依赖任何远程资源，重试即回到业务根。
+  // Capacitor 会在 server.url 加载失败时渲染本页（server.errorPath）。
+  document.getElementById('retry').addEventListener('click', function () {
+    location.replace('https://h5.cewaycloud.com/');
+  });
+</script>
+</body>
+</html>

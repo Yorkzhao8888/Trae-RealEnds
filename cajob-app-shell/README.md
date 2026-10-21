@@ -27,9 +27,13 @@
 ```
 cajob-app-shell/
 ├── package.json              # 依赖 + 构建脚本
-├── capacitor.config.json     # 壳配置（server.url 指向线上 H5）
-├── capacitor-plugins.ts      # 原生桥初始化（推送/分享/定位/震动/deeplink）
-├── index.html                # 壳入口（启动屏 + 离线兜底 + redirect）
+├── capacitor.config.json     # 壳配置（server.url 指向线上 H5，errorPath 指向离线页）
+├── shell/
+│   ├── cajob-shell.js        # 原生桥运行时（无构建，可被远程页面直接加载）
+│   └── cajob-shell.d.ts      # 桥的类型契约（window.cajobShell）
+├── index.html                # 本地占位页（仅在 webDir 被独立打开时生效）
+├── offline.html              # server.errorPath 兜底页（断网时展示）
+├── scripts/prepare-web.sh    # 组装 dist/（index + offline + 桥）
 ├── tsconfig.json
 ├── ios/                      ← ✅ 已生成 Xcode 工程
 │   ├── App/App.xcodeproj/
@@ -39,11 +43,25 @@ cajob-app-shell/
 │   ├── app/build.gradle
 │   ├── gradle/wrapper/
 │   └── app/src/main/AndroidManifest.xml
-├── dist/                     壳 web 资源（已 cap sync）
+├── dist/                     壳 web 资源（只放壳自身的三个文件，不含业务页面）
 ├── node_modules/             依赖（gitignore，团队 npm install 装）
 ├── .gitignore
 └── README.md
 ```
+
+## 关键前提：server.url 模式下本地入口页不执行
+
+壳配置了 `server.url`，Capacitor 会**直接加载** `https://h5.cewaycloud.com`，
+本地 `index.html` 的启动逻辑不会运行。因此：
+
+| 能力 | 承载位置 |
+|---|---|
+| 业务页面 | 线上 H5 根（唯一真源） |
+| 断网兜底 | `server.errorPath = offline.html`（本地静态页，零远程依赖） |
+| 原生桥 | `shell/cajob-shell.js`，由 H5 根引入后执行 |
+| 启动画面 | 原生 SplashScreen（`capacitor.config.json` 的 `plugins.SplashScreen`） |
+
+> 不要把健康探测、启动屏、兜底页写进 `index.html` —— 在 `server.url` 模式下它们全是死代码。
 
 ## 快速开始
 
@@ -65,7 +83,22 @@ npm run sync
 
 ## 原生桥（H5 根可直接调用）
 
-壳初始化后，H5 根里通过 `window.cajobShell` 访问：
+### 接入方式
+
+桥运行时是 `shell/cajob-shell.js`（自包含 IIFE，无 import、无打包依赖）。
+H5 根任选其一接入：
+
+1. **随 H5 同域部署**（推荐）：把 `cajob-shell.js` 放进 H5 根的 `public/`，
+   在根布局加 `<script src="/cajob-shell.js" defer></script>`；
+2. **直接调用 Capacitor 原生插件**（不引本文件）：
+   `window.Capacitor.Plugins.Share.share(...)`，桥只是更顺手的封装；
+3. 由壳原生侧注入（需 Android/iOS 原生改动，暂未启用）。
+
+桥自带幂等保护（重复引入不会重复绑定监听），并在 `deviceready` 后兜底重试。
+
+### 调用示例
+
+壳初始化后，H5 根里通过 `window.cajobShell` 访问（`shellVersion` 可用于能力判断）：
 
 ```typescript
 // 判断环境
@@ -96,6 +129,19 @@ window.addEventListener('cajob:deeplink', (e) => {
   router.push(parseDeeplink((e as CustomEvent).detail));
 });
 ```
+
+## 权限与隐私声明（已配齐，改动时勿删）
+
+| 能力 | Android 清单 | iOS 用途文案 |
+|---|---|---|
+| 相机 | `CAMERA` + `uses-feature required=false` | `NSCameraUsageDescription` |
+| 相册 | （系统 Photo Picker 无需权限） | `NSPhotoLibraryUsageDescription`、`NSPhotoLibraryAddUsageDescription` |
+| 定位 | `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | `NSLocationWhenInUseUsageDescription` |
+| 通知 | `POST_NOTIFICATIONS`（13+） | `UIBackgroundModes: remote-notification` |
+| 震动 | `VIBRATE` | — |
+| 外部浏览器 | `<queries>` https VIEW | — |
+
+> iOS 缺用途文案不是"弹不出权限"，而是**调用即终止进程**；Android 缺权限是**运行时异常**。两者都在真机上一票否决。
 
 ## 推送配置
 
@@ -175,4 +221,4 @@ android {
 | `pod install` 失败 | 网络 | 换源 `pod repo update` 或 `CDN` 源 |
 | AS `Gradle sync` 超时 | 网络 | 配置 gradle-wrapper.properties 用国内镜像（阿里） |
 | Android `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 签名不一致 | 卸载旧版本后重装，或用同一个 keystore 签 |
-| iOS 运行时白屏 | H5 根不可达 | 检查 `capacitor.config.json` 里的 url 是否是 `https://h5.cewaycloud.com` |
+| iOS 运行时白屏 | H5 根不可达 | 已由 `server.errorPath` 兜底；若仍白屏，检查 `capacitor.config.json` 的 url 与 errorPath 是否被 sync 进原生工程 |

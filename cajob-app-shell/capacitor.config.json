@@ -5,6 +5,7 @@
   "server": {
     "url": "https://h5.cewaycloud.com",
     "cleartext": false,
+    "errorPath": "offline.html",
     "allowNavigation": [
       "h5.cewaycloud.com",
       "oas.cewaycloud.com",
