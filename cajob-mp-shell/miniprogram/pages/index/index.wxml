@@ -1,0 +1,11 @@
+<view class="brand {{ready ? 'brand-leave' : ''}}">
+  <image class="logo" src="/assets/logo.png" mode="aspectFit" />
+  <text class="name">Cajob</text>
+  <text class="slogan">捷才智通</text>
+</view>
+
+<web-view
+  wx:if="{{ready}}"
+  src="{{src}}"
+  binderror="onWebError"
+></web-view>

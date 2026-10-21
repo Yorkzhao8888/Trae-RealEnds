@@ -1,0 +1,9 @@
+<view class="wrap">
+  <view class="ring"></view>
+  <text class="title">暂时打不开</text>
+  <text class="desc">无法连接 Cajob 服务，请检查网络后重试。</text>
+  <text class="reason">{{reason}}</text>
+
+  <button class="btn" hover-class="btn-hover" bindtap="retry">重新加载</button>
+  <button class="btn ghost" hover-class="btn-hover" bindtap="copyLink">复制入口链接</button>
+</view>

@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/error/error"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#0F1115",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "Cajob",
+    "backgroundColor": "#0F1115",
+    "backgroundTextStyle": "dark",
+    "enablePullDownRefresh": false
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

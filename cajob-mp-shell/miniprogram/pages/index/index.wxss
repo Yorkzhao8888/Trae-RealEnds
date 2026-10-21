@@ -1,0 +1,37 @@
+.brand {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #0F1115;
+  transition: opacity 240ms ease;
+}
+
+/* web-view 挂载后启动层淡出，不抢焦点 */
+.brand-leave {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.logo {
+  width: 132rpx;
+  height: 132rpx;
+  border-radius: 30rpx;
+  margin-bottom: 28rpx;
+}
+
+.name {
+  font-size: 44rpx;
+  font-weight: 600;
+  letter-spacing: 2rpx;
+  color: #E6EDF3;
+}
+
+.slogan {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  letter-spacing: 6rpx;
+  color: #5B6472;
+}
