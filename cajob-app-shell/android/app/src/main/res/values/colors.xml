@@ -2,6 +2,8 @@
 <resources>
     <!-- 品牌色：与 H5 根 body 背景 #0f1115 严格一致，避免状态栏与页面割裂 -->
     <color name="cajob_bg">#0F1115</color>
+    <!-- 商标标准色：字标与图标的藏青，仅用于启动页/图标，不参与页面配色 -->
+    <color name="cajob_navy">#0A2456</color>
     <color name="cajob_surface">#161A22</color>
     <color name="cajob_accent">#2F81F7</color>
     <color name="cajob_accent_soft">#6FB1FF</color>

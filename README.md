@@ -6,7 +6,7 @@
 
 | 目录 | 端 | 技术栈 | 状态 |
 |---|---|---|---|
-| `cajob-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.2.1**（Phase 3 自动更新已接入；发布脚本双架构 + 缺失产物硬失败；签名公证待证书） |
+| `cajob-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.2.2**（体验层：窗口记忆/主题/下载进度/崩溃重载；自动更新已接入；签名公证待证书） |
 | `cajob-app-shell/` | iOS / Android | Capacitor 6（11 插件） | 壳封装收口（桥/兜底/权限/隐私声明齐备）；Android 由 CI 产 Debug APK，iOS 真机包待开发者账号 |
 | `cajob-wechat-adapter/` | 微信内置浏览器 | JSSDK（分享/扫码/支付） | 适配层就绪 |
 | `cajob-iot-spec/` | IoT 设备 | 设备令牌 API 规范 | 规范定稿 |
@@ -21,7 +21,7 @@
 
 ## 各壳详细说明
 
-- PC 壳：见 `cajob-pc-shell/BRIEF.md`（v0.2.1 变更、验证边界、上线硬性要求、更新可观测性/回滚/兼容矩阵/会话验收）
+- PC 壳：见 `cajob-pc-shell/BRIEF.md`（v0.2.2 变更、验证边界、上线硬性要求、更新可观测性/回滚/兼容矩阵/会话验收）
 - 移动壳：见 `cajob-app-shell/`（Capacitor 工程与插件清单）
 - 微信/IoT/手表：见各自目录 README
 

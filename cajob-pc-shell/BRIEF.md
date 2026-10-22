@@ -258,8 +258,8 @@ curl -s   https://h5.cewaycloud.com/download/latest/latest-mac.yml | grep -m1 '^
 main.js                      # 主进程（updater / 离线兜底 / 菜单收敛 / 导航白名单）
 preload.js                   # 最小桥：暴露 window.cajobShell{ platform, isDesktopShell }
                              #   注意：与移动端同名不同实现，勿假设桌面端有 share()/getLocation()
-package.json                 # v0.2.1（publish / entitlements / 固定 artifactName / 双架构脚本）
-package-lock.json            # v0.2.1
+package.json                 # v0.2.2（publish / entitlements / 固定 artifactName / 双架构脚本）
+package-lock.json            # v0.2.2
 .gitignore                   # 含 dist-release/
 build/icon.png
 build/entitlements.mac.plist

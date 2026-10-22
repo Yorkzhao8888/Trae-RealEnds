@@ -1,6 +1,6 @@
 # Cajob App Shell · iOS / Android 桌面壳
 
-> 版本 0.1.0 · 2026-10-19 · 加载目标：`https://h5.cewaycloud.com`
+> 版本 0.2.2 · 加载目标：`https://h5.cewaycloud.com`
 > 壳不做业务，所有页面/逻辑在 H5 根；原生能力通过 Capacitor 插件桥接
 
 ## 架构

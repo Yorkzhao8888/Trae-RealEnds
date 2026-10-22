@@ -28,12 +28,12 @@
         <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
     </style>
 
-    <!-- 启动主题：Android 12+ 走 SplashScreen API，低版本由 core-splashscreen 兼容 -->
+    <!-- 启动主题：Android 12+ 走 SplashScreen API，低版本由 core-splashscreen 兼容。底色用商标藏青，与图标同色 -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@color/cajob_bg</item>
+        <item name="windowSplashScreenBackground">@color/cajob_navy</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/cajob_mark</item>
         <item name="windowSplashScreenAnimationDuration">300</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
-        <item name="android:windowBackground">@color/cajob_bg</item>
+        <item name="android:windowBackground">@color/cajob_navy</item>
     </style>
 </resources>

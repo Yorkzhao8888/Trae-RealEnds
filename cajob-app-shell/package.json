@@ -1,6 +1,6 @@
 {
   "name": "cajob-app-shell",
-  "version": "0.1.0",
+  "version": "0.2.2",
   "description": "Cajob 真实端 H5 根 · iOS / Android 薄壳（Capacitor）",
   "private": true,
   "scripts": {

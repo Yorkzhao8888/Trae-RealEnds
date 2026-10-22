@@ -18,19 +18,20 @@ cajob-mp-shell/
         └── error/               # 加载失败的独立兜底页
 ```
 
-## 一、上线前必须先配业务域名
+## 一、业务域名（已完成配置）
 
-`web-view` 打不开 90% 是这一步没做。
+`web-view` 打不开 90% 是这一步没做。本小程序已于 2026-10-21 配置完成：
 
-1. 微信公众平台 → **开发管理 → 开发设置 → 业务域名** → 添加 `h5.cewaycloud.com`
-2. 平台会要求下载一个校验文件（形如 `xxxxxxxx.txt`），放到**该域名根目录**，即：
+1. 微信公众平台 → **开发管理 → 开发设置 → 业务域名** 已保存：
+   - `https://h5.cewaycloud.com`（`web-view` 直连的 H5 根）
+   - `https://oas.cewaycloud.com`（H5 内 OAuth 登录的跳转目标）
+2. 校验文件为 `UlB86eY3CY.txt`（内容 `17120890685936c3658348986d420ff2`，32 字节、无换行），
+   放在服务器 `/opt/oas/mp-verify/`，由 Caddy 在 `h5`、`oas` 两个站点块里用精确 `handle` 直出。
+   两条地址均为 200 且内容一致；文件副本见本仓 `verify/UlB86eY3CY.txt`。
+3. 保存时微信要求**小程序管理员扫码确认**，属正常风控。
 
-   ```
-   https://h5.cewaycloud.com/xxxxxxxx.txt   → 200，内容与文件完全一致
-   ```
-
-   放法：H5 仓 `h5-root/public/xxxxxxxx.txt`，随构建一起发布。
-3. 回到后台点「保存」，校验通过后 `web-view` 才允许加载该域名。
+> 若校验文件被重置：把新文件放进 `/opt/oas/mp-verify/` 并同步改 Caddyfile 里的文件名，
+> `caddy validate` 后 `systemctl reload caddy`，再回后台保存。
 
 域名要求：已 ICP 备案（已满足）、HTTPS 证书有效、校验文件可公开访问。
 
