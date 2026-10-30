@@ -105,7 +105,7 @@ cd btos-app-store && python3 -m http.server 8099
 ## 7. 协作约定
 
 1. **契约先行**：改能力/事件/接口先改 `docs/shell-contract.md`（唯一真相），再改实现；契约版本语义化递增。
-2. **测试门槛**：`edge-store`、`cloud-root` 改动后 `npm test` 必须全过，新增行为补用例；两者已接入 GitHub Actions（`.github/workflows/tests.yml`，Node 24），PR 必须绿。
+2. **测试门槛**：`edge-store`、`cloud-root` 改动后 `npm test` 必须全过，新增行为补用例。测试工作流 `.github/workflows/tests.yml`（Node 24）已就绪，但推送需 PAT 具备 `workflow` scope，落地后 PR 必须绿。
 3. **提交**：`feat|fix|docs(scope): 中文简述`，一次提交一个主题；文档与代码同批提交。
 4. **不落凭证**：仓库内不提交任何 token / AccessKey / 证书私钥；线上配置走环境变量。
 5. **商店清单是唯一真相**：`btos-app-store/data/apps.json` 的 `status` 未置 `available` 时，页面按钮不可点，不允许前端自行放开。
