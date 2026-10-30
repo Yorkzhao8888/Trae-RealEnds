@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-30T14:45:00+08:00",
+  "generatedAt": "2026-10-30T18:10:00+08:00",
   "store": {
     "name": "百泰OS 应用商店",
     "nameEn": "BTOS App Store",
@@ -134,10 +134,11 @@
     {
       "id": "cajob-app-android", "brand": "cajob", "end": "hp",
       "platform": "android", "platformLabel": "Android APK",
-      "packageId": "com.cewaycloud.cajob", "version": "0.1.0",
-      "contractVersion": "0.2.0", "size": null, "sha256": null,
-      "url": null, "status": "pending",
-      "notes": "入口已切至 cajob.cewaysoft.com"
+      "packageId": "com.cewaycloud.cajob", "version": "0.2.2",
+      "contractVersion": "0.2.0", "size": 7375846,
+      "sha256": "1563db5ef07d5e8c421e62607eb0b42ebf7521fde9c5e1ed16a223982099169b",
+      "url": "https://cajob.cewaysoft.com/download/latest/cajob-app-0.2.2-debug.apk", "status": "beta",
+      "notes": "CI Debug 构建（debug 签名）；校验和见 /download/latest/SHA256SUMS，正式签名后替换"
     },
     {
       "id": "cajob-app-ios", "brand": "cajob", "end": "hp",

@@ -113,6 +113,8 @@ curl -s  https://cajob.cewaysoft.com/store/data/apps.json | head -c 120
   - `cloud-root` 由 systemd（`cloud-root.service`）常驻，Node 24.8.0 装在 `/opt/node24`（宿主自带 Node 20 无 `node:sqlite`），代码 `/opt/baitos/cloud-root`，DB `data/cloud.db`，密钥 `/opt/baitos/cloud-root/cloud.env`（0600，不入库）；
   - 备份：API 接入前的 Caddyfile 为 `Caddyfile.bak-storeapi-20261030-175710`；
   - 演示租户 `t-demo`（20 座 / 3 店 / ziway 四端 + cajob hp），许可页填 `dev:t-demo` 可直接看到数据。
+- **下载目录**（2026-10-30 起可用）：`/download/latest/` 由 Caddy `handle_path /download/*` 指向 `/data/download`（宿主 `/opt/baitos/caddy/data/download`），`Cache-Control 1h`。首个真实包：`cajob-app-0.2.2-debug.apk`（7,375,846 B，SHA-256 `1563db5e…169b`），同目录 `SHA256SUMS`；清单里置 `beta`、灰度 100%，稳定通道不出现。
+  - 说明：这是 CI 产出的 **Debug 构建**（debug 签名），可用于真机安装与联调，但不可对外分发；正式渠道需替换为 release 签名包后改 `status=available`。
 
 ## 如果坚持独立域名（h5.cewaycloud.com）
 

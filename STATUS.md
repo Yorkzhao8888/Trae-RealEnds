@@ -38,6 +38,7 @@
 - API 路由：同一站点块内 `@storeapi` 匹配 `/store/entitlements`、`/activate`、`/deactivate`、`/stores`、`/downloads`、`/rollouts`、`/tenants/*`，`reverse_proxy 172.18.0.1:7331`，**位于静态 `handle_path` 之前**，页面无需配置接口地址（同源）
 - 服务端：`cloud-root` 由 systemd 常驻（`cloud-root.service`），二进制 `/opt/node24/bin/node`（v24.8.0，宿主机自带 Node 20 不支持 `node:sqlite`，故独立安装），监听 `172.18.0.1:7331`，代码 `/opt/baitos/cloud-root`，DB `/opt/baitos/cloud-root/data/cloud.db`，密钥在 `/opt/baitos/cloud-root/cloud.env`（0600，不入库）
 - 演示租户：`t-demo`（20 座 / 3 店 / ziway 四端 + cajob hp），许可页用 `Authorization: Bearer dev:t-demo` 可直接看到数据
+- 下载目录：`/download/latest/` → 容器 `/data/download`（宿主 `/opt/baitos/caddy/data/download`），备份 `Caddyfile.bak-download-20261030-180929`；已放首个真实包 `cajob-app-0.2.2-debug.apk`（7,375,846 B，`SHA-256 1563db5e…169b`）+ `SHA256SUMS`
 - 回滚：`cat /opt/baitos/caddy/Caddyfile.bak-store-20261030-172601 | docker exec -i baitos-caddy sh -c 'cat > /etc/caddy/Caddyfile'` 后 reload（API 接入前的备份是 `Caddyfile.bak-storeapi-20261030-175710`）
 - 坑：`/etc/caddy/Caddyfile` 是单文件 bind mount，宿主机改写换 inode 容器读不到，必须就地写入
   （细节见 [btos-app-store/README.md](btos-app-store/README.md#上线状态2026-10-30)）
@@ -98,7 +99,7 @@ cd btos-app-store && python3 -m http.server 8099
 |---|---|---|
 | OAS 真实身份接入 | 需 OAuth 客户端 ID、授权/回调地址、userinfo 或 introspect 端点；接入点集中在 `cloud-root/src/server.js` 的 `tenantOf()` | 平台方 |
 | 商店 M1/M2 接口上线 | ~~需部署 `cloud-root` + 反代~~ → **已完成 2026-10-30**（systemd + Caddy `@storeapi`） | 已闭环 |
-| 安装包分发 | 清单 19 条仍全为 `pending`；需签名包 + SHA-256 + `/download/<brand>/<version>/` | 发行团队 |
+| 安装包分发 | cajob Android **Debug** 已以 `beta` 上线（灰度 100%，下载 200）；其余 18 条仍 `pending`；PC 更新源仍空——无签名包、无 `latest.yml` | 发行团队 |
 | iOS / macOS 真机包 | 需 Apple 开发者账号与公证凭据 | 账号方 |
 | h5.cewaycloud.com 独立域名 | 443 无证书，DNS/证书不在当前账号；已改用 cajob 子路径，仅作可选 | 边缘维护方 |
 
