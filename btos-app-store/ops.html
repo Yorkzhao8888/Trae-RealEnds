@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>运营台 · 灰度与下载 · 百泰OS 应用商店</title>
+<style>
+  :root {
+    --bg: #0B0F17; --panel: #121826; --panel-2: #171F30;
+    --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.16);
+    --text: #E8ECF4; --muted: #8E99AB; --accent: #4C8DFF;
+    --accent-soft: rgba(76,141,255,.12); --ok: #2ED3A0; --warn: #E8A33D; --bad: #E5534B;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 400 14px/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 24px 20px 64px; }
+  .top { display: flex; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(150deg, #2C5FD6, #4C8DFF); color: #fff; font-weight: 700; font-size: 20px; }
+  .top b { font-size: 16px; font-weight: 600; }
+  .top .sub { color: var(--muted); font-size: 12px; letter-spacing: 1.5px; margin-top: 1px; }
+  .top .meta { margin-left: auto; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .card { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 18px; margin-top: 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+  .card h2 .pill { font-weight: 400; }
+  .field { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  label { color: var(--muted); font-size: 12px; }
+  input { flex: 1 1 200px; min-width: 0; background: var(--panel-2); border: 1px solid var(--line-strong); color: var(--text); border-radius: 8px; padding: 8px 11px; font: inherit; outline: none; }
+  input:focus { border-color: var(--accent); }
+  input[type="number"] { flex: 0 0 84px; min-width: 84px; text-align: right; font-variant-numeric: tabular-nums; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--text); padding: 7px 12px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { cursor: not-allowed; opacity: .45; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+  .bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); overflow: hidden; min-width: 80px; }
+  .bar > i { display: block; height: 100%; background: var(--accent); }
+  .row-ops { display: flex; gap: 8px; align-items: center; }
+  .state { text-align: center; color: var(--muted); padding: 32px 12px; border: 1px dashed var(--line-strong); border-radius: 12px; margin-top: 14px; }
+  .state.err { color: var(--bad); border-color: rgba(229,83,75,.45); }
+  .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line-strong); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 560px) { .top .meta { display: none; } td, th { padding: 8px 4px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo">百</div>
+    <div>
+      <b>运营台 · 灰度与下载</b>
+      <div class="sub">BTOS STORE OPS</div>
+    </div>
+    <div class="meta"><a class="pill" href="./index.html">← 返回商店</a></div>
+  </header>
+
+  <section class="card">
+    <h2>凭据</h2>
+    <div class="field">
+      <label for="token">管理令牌</label>
+      <input id="token" type="password" placeholder="CLOUD_ADMIN_TOKEN" autocomplete="off" />
+      <button class="primary" id="go">加载</button>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label for="api">接口地址</label>
+      <input id="api" type="text" placeholder="留空 = 同源（/store/*）" autocomplete="off" />
+      <button id="save">保存</button>
+    </div>
+    <div class="hint">本页只做展示与操作入口，写操作都要管理令牌；令牌只存本机 <code>localStorage</code>，服务端仍是唯一裁决方。</div>
+  </section>
+
+  <div id="panel"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var tokenEl = $('#token');
+  var apiEl = $('#api');
+  tokenEl.value = localStorage.getItem('store:admin') || '';
+  apiEl.value = localStorage.getItem('store:api') || '';
+
+  var toastTimer = null;
+  function toast(msg, bad) {
+    var el = $('#toast');
+    el.textContent = msg;
+    el.style.borderColor = bad ? 'rgba(229,83,75,.6)' : 'rgba(255,255,255,.16)';
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2400);
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function base() { return (localStorage.getItem('store:api') || '').replace(/\/$/, ''); }
+
+  function state(html, bad) {
+    $('#panel').innerHTML = '<div class="state' + (bad ? ' err' : '') + '">' + html + '</div>';
+  }
+
+  function api(method, path, body, tk) {
+    return fetch(base() + path, {
+      method: method,
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + tk },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
+
+  function errorText(res, body) {
+    if (res.status === 403) return '令牌无效或没有管理员权限。';
+    if (res.status === 401) return '未授权。';
+    return '请求失败（HTTP ' + res.status + '）' + (body && body.code ? '：' + esc(body.code) : '');
+  }
+
+  function renderRollouts(items) {
+    var rows = items.map(function (r) {
+      var cls = r.percent >= 100 ? 'var(--ok)' : r.percent <= 0 ? 'var(--muted)' : 'var(--warn)';
+      return '<tr data-id="' + esc(r.itemId) + '">' +
+        '<td class="mono">' + esc(r.itemId) + '</td>' +
+        '<td><div class="bar"><i style="width:' + Math.max(0, Math.min(100, r.percent)) + '%;background:' + cls + '"></i></div></td>' +
+        '<td class="num" style="color:' + cls + '">' + r.percent + '%</td>' +
+        '<td><div class="row-ops"><input type="number" min="0" max="100" step="1" value="' + r.percent + '" data-pct />' +
+        '<button data-save>保存</button></div></td>' +
+        '</tr>';
+    }).join('');
+    return '<section class="card"><h2>灰度配置 <span class="pill">' + items.length + ' 条</span></h2>' +
+      (items.length
+        ? '<table><thead><tr><th>条目</th><th>进度</th><th>当前</th><th>设为</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<div class="state" style="margin-top:8px">还没有条目设置灰度；在下方“新增条目”里填 id 与比例。</div>') +
+      '<div class="field" style="margin-top:14px">' +
+        '<input id="newId" type="text" placeholder="条目 id，如 cajob-pc-win" style="flex:1 1 260px" />' +
+        '<input id="newPct" type="number" min="0" max="100" step="1" placeholder="比例" />' +
+        '<button class="primary" id="newSave">设置为</button>' +
+      '</div>' +
+      '<div class="hint">0 = 关闭；100 = 全量；其余按 <code>sha256(条目|身份)</code> 取模 100 稳定分桶。有租户令牌按租户，否则按设备。</div>' +
+      '</section>';
+  }
+
+  function renderStats(s) {
+    var rows = s.items.map(function (r) {
+      return '<tr><td class="mono">' + esc(r.itemId) + '</td><td>' + esc(r.channel) + '</td><td class="num">' + r.count + '</td></tr>';
+    }).join('');
+    return '<section class="card"><h2>下载统计 <span class="pill">合计 ' + s.total + '</span></h2>' +
+      (s.items.length
+        ? '<table><thead><tr><th>条目</th><th>通道</th><th>次数</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '<div class="state" style="margin-top:8px">还没有下载记录。页面点击“下载”即计数，失败不阻塞下载。</div>') +
+      '</section>';
+  }
+
+  function render(rollouts, stats) {
+    $('#panel').innerHTML = renderRollouts(rollouts) + renderStats(stats);
+  }
+
+  async function load() {
+    var tk = tokenEl.value.trim();
+    if (!tk) { state('请填写管理令牌后加载。'); return; }
+    localStorage.setItem('store:admin', tk);
+    state('加载中…');
+    var r1, b1, r2, b2;
+    try {
+      r1 = await api('GET', '/store/rollouts', null, tk);
+      b1 = await r1.json();
+      r2 = await api('GET', '/store/downloads', null, tk);
+      b2 = await r2.json();
+    } catch (err) {
+      state('接口不可达：' + esc(err.message), true);
+      return;
+    }
+    if (!r1.ok) { state(errorText(r1, b1), true); return; }
+    if (!r2.ok) { state(errorText(r2, b2), true); return; }
+    render(b1.items || [], b2);
+  }
+
+  async function setPercent(itemId, percent) {
+    var tk = tokenEl.value.trim();
+    if (!tk) { toast('先填管理令牌', true); return; }
+    if (!itemId) { toast('填条目 id', true); return; }
+    var p = Number(percent);
+    if (!Number.isFinite(p)) { toast('比例要填数字', true); return; }
+    try {
+      var res = await api('PUT', '/store/rollouts/' + encodeURIComponent(itemId), { percent: p }, tk);
+      var body = await res.json();
+      if (!res.ok) { toast(errorText(res, body), true); return; }
+      toast(itemId + ' → ' + body.percent + '%');
+      load();
+    } catch (err) {
+      toast('接口不可达：' + err.message, true);
+    }
+  }
+
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('[data-save]');
+    if (btn) {
+      var tr = btn.closest('tr');
+      var pct = tr.querySelector('[data-pct]');
+      setPercent(tr.dataset.id, pct.value);
+      return;
+    }
+    if (ev.target.closest('#newSave')) {
+      setPercent($('#newId').value.trim(), $('#newPct').value);
+    }
+  });
+
+  $('#go').addEventListener('click', load);
+  $('#save').addEventListener('click', function () {
+    localStorage.setItem('store:api', apiEl.value.trim());
+    localStorage.setItem('store:admin', tokenEl.value.trim());
+    toast('已保存');
+    load();
+  });
+  tokenEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  apiEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+
+  if (tokenEl.value) load(); else state('填写管理令牌后加载灰度与下载统计。');
+})();
+</script>
+</body>
+</html>

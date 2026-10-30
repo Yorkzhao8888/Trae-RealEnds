@@ -15,6 +15,7 @@
 btos-app-store/
 ├── index.html          # 单页目录（无外部依赖，纯静态）
 ├── tenant.html         # 「我的许可」：查座位/门店配额与品牌授权（M1）
+├── ops.html            # 运营台：灰度比例 + 下载统计（M2，需管理令牌）
 ├── data/apps.json      # 清单（唯一真相）
 └── README.md
 ```
@@ -198,7 +199,9 @@ cd ../cloud-root && CLOUD_TOKEN=dev-token CLOUD_ADMIN_TOKEN=adm-token CLOUD_DB=/
 
 **回滚**：清单是唯一真相——把 `version` / `size` / `sha256` / `url` 改回上一版并更新 `generatedAt` 即回滚。macOS 与 iOS 不支持自动降级，旧版用户需手动重装（细节见 `../cajob-pc-shell/BRIEF.md` §7）。
 
-**未做**（明确边界）：下载去重、灰度放量自动化（按留存/崩溃率自动收缩）、CDN 访问日志对账、统计看板页。
+**运营台 `ops.html`**：填管理令牌后加载 `GET /store/rollouts` 与 `GET /store/downloads`；表格里直接改比例并保存（`PUT /store/rollouts/:itemId`），也可在底部新增条目。令牌只存本机 `localStorage`，写操作仍由服务端校验 `CLOUD_ADMIN_TOKEN`；页面本身不含数据，放在公开路径也不泄露。
+
+**未做**（明确边界）：下载去重、灰度放量自动化（按留存/崩溃率自动收缩）、CDN 访问日志对账、图表化看板（运营台目前只有表格）。
 
 ## 与壳的闭环
 

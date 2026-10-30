@@ -68,3 +68,4 @@
 - 2026-10-30：商店 M1 前端 —— `btos-app-store/tenant.html`「我的许可」：令牌 + 接口地址查询 `/store/entitlements`，座位/门店配额进度条、有效期、品牌-端授权表；401/404/不可达三类错误态；商店顶栏加「我的许可」入口。纯展示，配额仍由服务端裁决。
 - 2026-10-30：商店 M2 最小实现 —— 商店页加「通道」筛选（`status=beta` 即测试通道，稳定通道不可见），下载点击向 `POST /store/downloads` 计数（失败不阻塞下载）；`cloud-root` 新增下载计数与聚合（聚合需 `CLOUD_ADMIN_TOKEN`），未知通道归一 `stable`、缺 `itemId` 拒绝；回滚仍以清单为唯一真相。cloud-root 测试增至 13 项；按设备/租户的百分比灰度明确未做。
 - 2026-10-30：商店 M2 百分比灰度 —— `PUT /store/rollouts/:itemId` 设 0..100，`POST /store/rollouts` 批量判定；`sha256(itemId|身份)` 前 8 位取模 100 稳定分桶，有租户令牌按租户、否则按设备，匿名且 <100% 一律 `no_identity`；商店页把 beta 条目交给云根判定，命中才在测试通道渲染。cloud-root 测试增至 14 项。
+- 2026-10-30：商店 M2 运营台 —— `btos-app-store/ops.html`：管理令牌换 `GET /store/rollouts` + `GET /store/downloads`，表格内改比例即 `PUT`，可新增条目；令牌只存本机，写操作仍由服务端校验。浏览器验收：两条灰度、合计 2 次下载、改 40% 保存生效。
