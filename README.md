@@ -29,7 +29,7 @@
 | `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0** 目录/清单/校验和/筛选；入口 `h5.cewaycloud.com`（DNS 在、证书待重签） |
 | `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
-| `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级 + UDP 发现；11 项测试通过 |
+| `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传 + UDP 发现；16 项测试通过 |
 
 ## 关键口径
 
@@ -58,3 +58,4 @@
 - 2026-10-30：`shell-core` 第二刀——桌面 preload 由模板生成（`ShellDesktop` 6 个最小能力）、小程序承载页统一附加 `shell=mp&brand=&v=`、新增 P0 离线队列（幂等键 + 顺序重放 + 4xx 出队）。
 - 2026-10-30：新增 `edge-store` 店根 P1 —— 零依赖 Node 服务（内置 SQLite）：租约、单事务原子扣减、幂等重放、快照增量、UDP 广播发现；7 项测试覆盖整批回滚与超卖拒绝。
 - 2026-10-30：`edge-store` 升 P2 —— 云根 outbox 回传（409 停在冲突点、不跳过）、冲突分级（库存自动 / 资金人工）、`/edge/outbox` `/edge/sync` `/edge/conflicts`；测试增至 11 项。`shell-core` 同步接入 `edge.*` 适配器（3s 超时、租约缓存、`E_STOCK` 映射、可回落离线队列）。
+- 2026-10-30：`edge-store` 补「定时回传 + 指数退避」——配 `EDGE_CLOUD_URL` 即自动后台循环：成功归位 30s、失败 `30s→…→15min` 封顶、连续 3 次置 `cloudOffline`、409 冲突暂停等人裁决、4xx 直退最慢档；新增 `GET /edge/sync/status`、`POST /edge/sync/now`；测试增至 16 项。

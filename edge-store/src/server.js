@@ -3,6 +3,7 @@
 import { createServer } from 'node:http';
 import { openDb, createLease, aliveLeases, commit, snapshot, metaGet, metaSet, version } from './db.js';
 import { syncOnce, openConflicts, resolveConflict, pending } from './sync.js';
+import { startSync } from './scheduler.js';
 
 const PORT = Number(process.env.EDGE_PORT || 7321);
 const HOST = process.env.EDGE_HOST || '0.0.0.0';
@@ -33,8 +34,28 @@ function readBody(req) {
   });
 }
 
-export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE_ID } = {}) {
+export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE_ID, cloudUrl = '', cloudToken = '' } = {}) {
   const db = openDb(dbPath);
+
+  function cloudSend(url, tk) {
+    return async (payload) => {
+      const resp = await fetch(url.replace(/\/$/, '') + '/cloud/events', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(tk ? { authorization: 'Bearer ' + tk } : {}),
+        },
+        body: JSON.stringify(payload),
+      });
+      let rb = null;
+      try { rb = await resp.json(); } catch (e) {}
+      return { status: resp.status, body: rb };
+    };
+  }
+
+  // 配了云根就自动回传：门店没人会手动点同步按钮
+  let scheduler = null;
+  if (cloudUrl) scheduler = startSync({ db, send: cloudSend(cloudUrl, cloudToken) });
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://edge');
@@ -119,20 +140,20 @@ export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE
         const cloudToken = body.token || process.env.EDGE_CLOUD_TOKEN || '';
         if (!cloudUrl) return json(res, 400, { ok: false, code: 'cloud_not_configured' });
 
-        const r = await syncOnce(db, async (payload) => {
-          const resp = await fetch(cloudUrl.replace(/\/$/, '') + '/cloud/events', {
-            method: 'POST',
-            headers: {
-              'content-type': 'application/json',
-              ...(cloudToken ? { authorization: 'Bearer ' + cloudToken } : {}),
-            },
-            body: JSON.stringify(payload),
-          });
-          let rb = null;
-          try { rb = await resp.json(); } catch (e) {}
-          return { status: resp.status, body: rb };
-        });
+        const r = await syncOnce(db, cloudSend(cloudUrl, cloudToken));
         return json(res, r.ok ? 200 : r.conflict ? 409 : 502, r);
+      }
+
+      if (req.method === 'GET' && path === '/edge/sync/status') {
+        return json(res, 200, {
+          ok: true,
+          configured: !!scheduler,
+          ...(scheduler ? scheduler.status() : { running: false, last: null }),
+        });
+      }
+
+      if (req.method === 'POST' && path === '/edge/sync/now' && scheduler) {
+        return json(res, 200, { ok: true, ...(await scheduler.now()) });
       }
 
       if (req.method === 'GET' && path === '/edge/conflicts') {
@@ -156,6 +177,7 @@ export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE
     server,
     db,
     close: () => new Promise((r) => {
+      scheduler?.stop();
       server.closeAllConnections?.(); // 测试里 fetch 走 keep-alive，不清理会卡住 close
       server.close(() => { try { db.close(); } catch (e) {} r(); });
     }),
@@ -163,8 +185,12 @@ export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE
 }
 
 if (process.argv[1] && process.argv[1].endsWith('server.js')) {
-  const app = createEdge({ dbPath: process.env.EDGE_DB || './edge.db' });
+  const app = createEdge({
+    dbPath: process.env.EDGE_DB || './edge.db',
+    cloudUrl: process.env.EDGE_CLOUD_URL || '',
+    cloudToken: process.env.EDGE_CLOUD_TOKEN || '',
+  });
   app.server.listen(PORT, HOST, () => {
-    console.log(`[edge-store] listening http://${HOST}:${PORT} store=${STORE_ID} token=${TOKEN ? 'on' : 'off'}`);
+    console.log(`[edge-store] listening http://${HOST}:${PORT} store=${STORE_ID} token=${TOKEN ? 'on' : 'off'} cloud=${process.env.EDGE_CLOUD_URL || '-'}`);
   });
 }

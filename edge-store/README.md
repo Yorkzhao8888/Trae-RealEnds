@@ -31,6 +31,8 @@ EDGE_TOKEN=dev-token npm start
 | `EDGE_LEASE_TTL_MS` | 900000 | 租约有效期（15 分钟） |
 | `EDGE_MAX_QTY` | 20 | 单笔上限（离线额度） |
 | `EDGE_DB` | ./edge.db | 本地库路径 |
+| `EDGE_CLOUD_URL` | 空 | 云根地址；**非空即启动后台定时回传** |
+| `EDGE_CLOUD_TOKEN` | 空 | 回传用的云根凭据（Bearer） |
 
 ## API
 
@@ -42,7 +44,9 @@ EDGE_TOKEN=dev-token npm start
 | GET | `/edge/snapshot?since=` | 事件增量 + 当前库存 + 版本号 |
 | POST | `/edge/cloud` | `{offline}` 由探针写入云根连通性 |
 | GET | `/edge/outbox` | 待回传事件（游标之后的批次） |
-| POST | `/edge/sync` | `{cloudUrl, token}` 触发回传；`200` 完成、`409` 冲突、`502` 可重试 |
+| POST | `/edge/sync` | `{cloudUrl, token}` 手动触发一次回传；`200` 完成、`409` 冲突、`502` 可重试 |
+| GET | `/edge/sync/status` | 调度器状态：`configured/running/paused/backoffMs/fails/last` |
+| POST | `/edge/sync/now` | 立即跑一次（不等待下一个定时点），返回本次结果 |
 | GET | `/edge/conflicts` | 未处理的冲突 |
 | POST | `/edge/conflicts/:id/resolve` | `{action:'accept'\|'reject'\|'auto'}`，`auto` 仅限库存类 |
 
@@ -74,7 +78,7 @@ const edge = await discover();         // 端侧：拿到 {storeId, port}
 npm test
 ```
 
-11 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记，以及回传游标推进、409 不跳过、资金类禁止自动放行、5xx 可重试。
+16 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记；回传游标推进、409 不跳过、资金类禁止自动放行、5xx 可重试；以及退避归位、连续失败置离线、恢复归零、冲突暂停、冲突解决后恢复。
 
 ## 云根回传与冲突裁决
 
@@ -86,9 +90,21 @@ npm test
 
 库存类（`stock.dec` / `stock.inc` / `order.draft`）可自动放行；云根 5xx 视为可重试、游标不动。
 
+## 定时回传与退避
+
+配了 `EDGE_CLOUD_URL` 就自带后台循环（`src/scheduler.js`），不用人点按钮：
+
+| 情形 | 行为 |
+|---|---|
+| 回传成功且有量 | 退避归位到基准 30s，`cloudOffline` 归零 |
+| 可重试失败（5xx / 网络） | 失败计数 +1，退避 `30s→60s→…→15min` 封顶；连续 3 次置 `cloudOffline=1` |
+| 云根 409 冲突 | **暂停回传**，等人工裁决；不累计失败次数，不刷屏 |
+| 4xx 非冲突（参数/凭据） | 重试无意义，直接退到最慢档 15min |
+
+所有定时器 `unref()`，不会拖住进程退出；`status()` 可随时观察 `paused / backoffMs / fails / last`。冲突全部处理完后自动恢复。
+
 ## 尚未做
 
 - **云根侧接口**：`/cloud/events` 目前由店根调用，需云根按同契约实现（幂等 + 409 冲突体 `{seq, reason}`）
-- **定时回传**：现为手动 `POST /edge/sync` 触发，未做后台定时器与退避
 - **读模型下发**：只有上行事件，没有云根把商品/价格变更推到店根（`/edge/pull`）
 - **冲突复核界面**：只有 API，没有运营端页面

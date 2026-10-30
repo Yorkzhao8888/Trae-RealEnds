@@ -6,6 +6,6 @@
   "description": "BTOS 店根（Edge Store）：云根不可达时承接店内原子扣减与离线成交",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test test/edge.test.js test/sync.test.js"
+    "test": "node --test test/edge.test.js test/sync.test.js test/scheduler.test.js"
   }
 }
