@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS lease (id TEXT PRIMARY KEY, device TEXT NOT NULL, exp
 CREATE TABLE IF NOT EXISTS idem (key TEXT PRIMARY KEY, result TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, payload TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, seq INTEGER NOT NULL, type TEXT NOT NULL, payload TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS catalog (sku TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', price INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'on', updated_at INTEGER NOT NULL DEFAULT 0);
 `;
 
 export function openDb(path = ':memory:') {
@@ -18,6 +19,7 @@ export function openDb(path = ':memory:') {
   db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run('version', '0');
   db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run('cloudOffline', '0');
   db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run('syncedSeq', '0');
+  db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run('catalogSeq', '0');
   return db;
 }
 
@@ -118,4 +120,59 @@ export function snapshot(db, since = 0) {
     events: rows.map((r) => ({ seq: r.seq, type: r.type, data: JSON.parse(r.payload), at: r.at })),
     stock,
   };
+}
+
+export function catalogList(db) {
+  return db.prepare('SELECT sku, name, price, status, updated_at FROM catalog ORDER BY sku').all();
+}
+
+/**
+ * 下行读模型落库（云根权威）：整批写入商品/价格，有变化才写事件。
+ * items: [{ sku, name, price, status: 'on'|'off'|'deleted', updatedAt }]
+ * 返回 { applied, deleted, unchanged, version }
+ */
+export function applyCatalog(db, items, now = Date.now()) {
+  let applied = 0;
+  let deleted = 0;
+  let unchanged = 0;
+
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    for (const it of items || []) {
+      const sku = String((it && it.sku) || '').trim();
+      if (!sku) continue;
+      const updatedAt = Number(it.updatedAt) || now;
+      const row = db.prepare('SELECT name, price, status, updated_at FROM catalog WHERE sku = ?').get(sku);
+
+      if (it.status === 'deleted') {
+        if (!row) { unchanged++; continue; }
+        db.prepare('DELETE FROM catalog WHERE sku = ?').run(sku);
+        appendEvent(db, 'catalog.delete', { sku, updatedAt }, now);
+        deleted++;
+        continue;
+      }
+
+      const price = Number(it.price);
+      if (!Number.isFinite(price)) continue;
+      const status = it.status === 'off' ? 'off' : 'on';
+      const name = String(it.name ?? '');
+
+      // 幂等：同一份内容重复下发不重复写事件（避免把事件流刷满）
+      if (row && row.name === name && row.price === price && row.status === status && row.updated_at >= updatedAt) {
+        unchanged++;
+        continue;
+      }
+      if (row) db.prepare('UPDATE catalog SET name = ?, price = ?, status = ?, updated_at = ? WHERE sku = ?').run(name, price, status, updatedAt, sku);
+      else db.prepare('INSERT INTO catalog (sku, name, price, status, updated_at) VALUES (?, ?, ?, ?, ?)').run(sku, name, price, status, updatedAt);
+      appendEvent(db, 'catalog.upsert', { sku, name, price, status, updatedAt }, now);
+      applied++;
+    }
+
+    const v = applied + deleted > 0 ? bumpVersion(db) : version(db);
+    db.exec('COMMIT');
+    return { applied, deleted, unchanged, version: v };
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
 }

@@ -12,7 +12,7 @@ const DEFAULTS = {
   failThreshold: 3,
 };
 
-export function startSync({ db, send, baseMs = DEFAULTS.baseMs, maxMs = DEFAULTS.maxMs, failThreshold = DEFAULTS.failThreshold, onTick } = {}) {
+export function startSync({ db, send, pull, baseMs = DEFAULTS.baseMs, maxMs = DEFAULTS.maxMs, failThreshold = DEFAULTS.failThreshold, onTick } = {}) {
   let stopped = false;
   let timer = null;
   let backoff = baseMs;
@@ -20,13 +20,24 @@ export function startSync({ db, send, baseMs = DEFAULTS.baseMs, maxMs = DEFAULTS
   let paused = false;
   let last = { at: Date.now(), ok: null, sent: 0, cursor: Number(metaGet(db, 'syncedSeq') || 0) };
 
+  // 下行失败不参与上行退避：拉商品失败 ≠ 回传失败，不置 cloudOffline
+  async function runPull() {
+    if (!pull) return null;
+    try {
+      return await pull();
+    } catch (e) {
+      return { ok: false, error: e.message };
+    }
+  }
+
   async function tick() {
     if (stopped) return;
+    const pulled = await runPull();
     // 有未处理冲突时不传：宁可停，也不刷一屏 409
     const openCnt = openConflicts(db).length;
     if (openCnt > 0) {
       paused = true;
-      last = { at: Date.now(), ok: false, sent: 0, paused: true, conflicts: openCnt, cursor: Number(metaGet(db, 'syncedSeq') || 0) };
+      last = { at: Date.now(), ok: false, sent: 0, paused: true, conflicts: openCnt, cursor: Number(metaGet(db, 'syncedSeq') || 0), ...(pulled ? { pull: pulled } : {}) };
       schedule(baseMs);
       if (onTick) onTick(last);
       return last;
@@ -34,7 +45,7 @@ export function startSync({ db, send, baseMs = DEFAULTS.baseMs, maxMs = DEFAULTS
     paused = false;
 
     const r = await syncOnce(db, send);
-    last = { at: Date.now(), ...r };
+    last = { at: Date.now(), ...r, ...(pulled ? { pull: pulled } : {}) };
 
     if (r.ok) {
       if (r.sent > 0) {

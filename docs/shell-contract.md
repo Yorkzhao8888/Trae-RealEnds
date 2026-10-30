@@ -268,12 +268,21 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 | `POST /edge/lease` | 端获取店内租约：`{leaseId, ttl, limits}` |
 | `POST /edge/commit` | 原子提交 `{leaseId, ops[]}`，整批成功或整批失败 |
 | `GET /edge/snapshot?since=` | 拉取店内读模型增量 |
+| `GET /edge/catalog` | 店根商品读模型 + 下行游标 |
 | `GET /edge/health` | 店根存活与云根连通性 |
+
+店根 ↔ 云根（服务端之间，双向游标、各自独立）：
+
+| 接口 | 方向 | 作用 |
+|---|---|---|
+| `POST /cloud/events` | 店根 → 云根 | 上行事件批量回传；`409` 停在冲突点、不跳过 |
+| `GET /cloud/catalog?since=` | 云根 → 店根 | 下行商品/价格增量；整批落库后才推进游标 |
 
 规则：
 - 单事务提交，带 `version`；冲突返回 `409` 与当前版本，端必须重拉快照。
 - 端离线超过租约 TTL 自动降为「只读」，不允许继续成交。
 - 店根与云根断开时，店根标记 `cloudOffline=true`，端据此切换降级文案。
+- 上行与下行互不阻塞：下行失败不置 `cloudOffline`、不参与上行退避；重复下发幂等（不重复写事件）。
 
 ---
 
@@ -334,5 +343,5 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 |---|---|---|
 | P0 | 本契约 + 自检页 + `capabilities` 上报 | 进行中 |
 | P1 | 本地镜像 + 离线队列 + 幂等重放 + 策略下发 | 待启动 |
-| P2 | 店根（PC 壳本地库、局域网发现、原子扣减） | 已确认方向 |
+| P2 | 店根（PC 壳本地库、局域网发现、原子扣减、上行回传/下行读模型/退避调度） | 已实现（`edge-store/`） |
 | P3 | 策略自动调优、围栏触发、批量对账 | 规划中 |

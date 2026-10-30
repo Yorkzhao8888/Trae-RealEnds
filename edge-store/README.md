@@ -31,7 +31,7 @@ EDGE_TOKEN=dev-token npm start
 | `EDGE_LEASE_TTL_MS` | 900000 | 租约有效期（15 分钟） |
 | `EDGE_MAX_QTY` | 20 | 单笔上限（离线额度） |
 | `EDGE_DB` | ./edge.db | 本地库路径 |
-| `EDGE_CLOUD_URL` | 空 | 云根地址；**非空即启动后台定时回传** |
+| `EDGE_CLOUD_URL` | 空 | 云根地址；**非空即启动后台定时回传 + 下行拉取** |
 | `EDGE_CLOUD_TOKEN` | 空 | 回传用的云根凭据（Bearer） |
 
 ## API
@@ -45,8 +45,10 @@ EDGE_TOKEN=dev-token npm start
 | POST | `/edge/cloud` | `{offline}` 由探针写入云根连通性 |
 | GET | `/edge/outbox` | 待回传事件（游标之后的批次） |
 | POST | `/edge/sync` | `{cloudUrl, token}` 手动触发一次回传；`200` 完成、`409` 冲突、`502` 可重试 |
-| GET | `/edge/sync/status` | 调度器状态：`configured/running/paused/backoffMs/fails/last` |
+| GET | `/edge/sync/status` | 调度器状态：`configured/running/paused/backoffMs/fails/last`（`last.pull` 含本次下行结果） |
 | POST | `/edge/sync/now` | 立即跑一次（不等待下一个定时点），返回本次结果 |
+| POST | `/edge/pull` | `{cloudUrl, token}` 拉一批商品/价格；`200` 完成、`502` 可重试 |
+| GET | `/edge/catalog` | 店根本地商品读模型 + 下行游标 `cursor` |
 | GET | `/edge/conflicts` | 未处理的冲突 |
 | POST | `/edge/conflicts/:id/resolve` | `{action:'accept'\|'reject'\|'auto'}`，`auto` 仅限库存类 |
 
@@ -78,7 +80,7 @@ const edge = await discover();         // 端侧：拿到 {storeId, port}
 npm test
 ```
 
-16 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记；回传游标推进、409 不跳过、资金类禁止自动放行、5xx 可重试；以及退避归位、连续失败置离线、恢复归零、冲突暂停、冲突解决后恢复。
+23 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记；回传游标推进、409 不跳过、资金类禁止自动放行、5xx 可重试；退避归位、连续失败置离线、恢复归零、冲突暂停、冲突解决后恢复；下行的首次落库与事件、增量带 `since`、下架/删除、重复下发幂等、5xx 与网络异常不动游标、下行失败不影响上行。
 
 ## 云根回传与冲突裁决
 
@@ -101,10 +103,30 @@ npm test
 | 云根 409 冲突 | **暂停回传**，等人工裁决；不累计失败次数，不刷屏 |
 | 4xx 非冲突（参数/凭据） | 重试无意义，直接退到最慢档 15min |
 
-所有定时器 `unref()`，不会拖住进程退出；`status()` 可随时观察 `paused / backoffMs / fails / last`。冲突全部处理完后自动恢复。
+所有定时器 `unref()`，不会拖住进程退出；`status()` 可随时观察 `paused / backoffMs / fails / last`。冲突全部处理完后自动恢复。每次 tick 先跑一次下行拉取，再跑上行回传——下行失败只记在 `last.pull`，不参与上行退避、不改 `cloudOffline`。
+
+## 下行读模型（商品/价格）
+
+云根是商品与价格的权威，店根只做增量跟随。契约：
+
+```
+GET {cloud}/cloud/catalog?since=<catalogSeq>
+→ { cursor, items: [{ sku, name, price, status: 'on'|'off'|'deleted', updatedAt }] }
+```
+
+| 字段 | 说明 |
+|---|---|
+| `price` | 整数，单位**分**（避免浮点误差） |
+| `status` | `on` 可售 / `off` 下架 / `deleted` 从店根移除 |
+| `cursor` | 云根游标；缺省时取本批最大 `updatedAt`，且永不回退 |
+
+落库规则：
+
+1. **整批落库后才推进游标**——失败绝不跳批（与上行同一条红线）。
+2. **重复下发幂等**：内容完全相同则 `unchanged`，不写事件，不刷事件流。
+3. **事件化**：有变化才写 `catalog.upsert` / `catalog.delete` 并 `bumpVersion`，端壳通过 `/edge/snapshot?since=` 增量拿到全量读模型。
 
 ## 尚未做
 
-- **云根侧接口**：`/cloud/events` 目前由店根调用，需云根按同契约实现（幂等 + 409 冲突体 `{seq, reason}`）
-- **读模型下发**：只有上行事件，没有云根把商品/价格变更推到店根（`/edge/pull`）
+- **云根侧接口**：`/cloud/events`（上行）与 `/cloud/catalog`（下行）需云根按同契约实现（幂等 + 409 冲突体 `{seq, reason}`）
 - **冲突复核界面**：只有 API，没有运营端页面

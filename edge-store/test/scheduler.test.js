@@ -90,3 +90,24 @@ test('冲突解决后恢复回传', async () => {
   s.stop();
   db.close();
 });
+
+test('tick 顺带拉下行；下行失败不影响上行退避', async () => {
+  const db = openDb();
+  seed(db);
+  let pulled = 0;
+  const pull = async () => { pulled++; throw new Error('catalog unavailable'); };
+  let sent = 0;
+  const send = async () => { sent++; return { status: 200, body: { ok: true } }; };
+  const s = startSync({ db, send, pull, baseMs: 10, maxMs: 20, failThreshold: 1 });
+
+  const r = await s.tick();
+  assert.equal(pulled, 1);
+  assert.equal(sent, 1);
+  assert.equal(r.ok, true);
+  assert.equal(r.pull.ok, false); // 下行错误被隔离，不污染上行结果
+  assert.equal(metaGet(db, 'cloudOffline'), '0');
+  assert.equal(s.status().backoffMs, 10);
+  assert.equal(s.status().fails, 0);
+  s.stop();
+  db.close();
+});

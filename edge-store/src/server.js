@@ -1,8 +1,9 @@
 // 店根 HTTP 服务：契约 §店根 API（/edge/health /edge/lease /edge/commit /edge/snapshot）
 // 无第三方依赖，默认监听 0.0.0.0:7321（门店局域网），通过 EDGE_TOKEN 做最小鉴权。
 import { createServer } from 'node:http';
-import { openDb, createLease, aliveLeases, commit, snapshot, metaGet, metaSet, version } from './db.js';
+import { openDb, createLease, aliveLeases, commit, snapshot, metaGet, metaSet, version, catalogList } from './db.js';
 import { syncOnce, openConflicts, resolveConflict, pending } from './sync.js';
+import { pullOnce } from './pull.js';
 import { startSync } from './scheduler.js';
 
 const PORT = Number(process.env.EDGE_PORT || 7321);
@@ -53,9 +54,27 @@ export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE
     };
   }
 
+  // 下行读模型：云根商品/价格增量
+  function cloudCatalog(url, tk) {
+    return async (since) => {
+      const resp = await fetch(url.replace(/\/$/, '') + '/cloud/catalog?since=' + encodeURIComponent(since), {
+        headers: tk ? { authorization: 'Bearer ' + tk } : {},
+      });
+      let rb = null;
+      try { rb = await resp.json(); } catch (e) {}
+      return { status: resp.status, body: rb };
+    };
+  }
+
   // 配了云根就自动回传：门店没人会手动点同步按钮
   let scheduler = null;
-  if (cloudUrl) scheduler = startSync({ db, send: cloudSend(cloudUrl, cloudToken) });
+  if (cloudUrl) {
+    scheduler = startSync({
+      db,
+      send: cloudSend(cloudUrl, cloudToken),
+      pull: () => pullOnce(db, cloudCatalog(cloudUrl, cloudToken)),
+    });
+  }
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://edge');
@@ -149,6 +168,25 @@ export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE
           ok: true,
           configured: !!scheduler,
           ...(scheduler ? scheduler.status() : { running: false, last: null }),
+        });
+      }
+
+      // 下行读模型：body 可覆盖云根地址与凭据
+      if (req.method === 'POST' && path === '/edge/pull') {
+        const body = await readBody(req);
+        const cloudUrl = body.cloudUrl || process.env.EDGE_CLOUD_URL || '';
+        const cloudToken = body.token || process.env.EDGE_CLOUD_TOKEN || '';
+        if (!cloudUrl) return json(res, 400, { ok: false, code: 'cloud_not_configured' });
+
+        const r = await pullOnce(db, cloudCatalog(cloudUrl, cloudToken));
+        return json(res, r.ok ? 200 : r.retryable ? 502 : 400, r);
+      }
+
+      if (req.method === 'GET' && path === '/edge/catalog') {
+        return json(res, 200, {
+          ok: true,
+          cursor: Number(metaGet(db, 'catalogSeq') || 0),
+          items: catalogList(db),
         });
       }
 
