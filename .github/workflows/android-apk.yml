@@ -4,12 +4,23 @@ on:
   push:
     paths:
       - 'cajob-app-shell/**'
+      - 'jechan-app-shell/**'
+      - 'ziway-app-shell/**'
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
+    inputs:
+      app:
+        description: '只构建某个壳（留空=全部）'
+        required: false
+        default: ''
 
 jobs:
   apk:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [cajob-app-shell, jechan-app-shell, ziway-app-shell]
     steps:
       - uses: actions/checkout@v4
 
@@ -17,7 +28,7 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: cajob-app-shell/package-lock.json
+          cache-dependency-path: ${{ matrix.app }}/package-lock.json
 
       - uses: actions/setup-java@v4
         with:
@@ -40,17 +51,17 @@ jobs:
           "$SDKM" --install "platform-tools" "platforms;android-34" "build-tools;34.0.0" > /dev/null
 
       - name: 安装依赖并组装 webDir
-        working-directory: cajob-app-shell
+        working-directory: ${{ matrix.app }}
         run: |
           npm ci
           npm run prepare:web
 
       - name: sync Capacitor
-        working-directory: cajob-app-shell
+        working-directory: ${{ matrix.app }}
         run: npx cap sync android
 
       - name: 构建 Debug APK
-        working-directory: cajob-app-shell/android
+        working-directory: ${{ matrix.app }}/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
@@ -58,6 +69,6 @@ jobs:
       - name: 上传 APK
         uses: actions/upload-artifact@v4
         with:
-          name: cajob-app-debug-apk
-          path: cajob-app-shell/android/app/build/outputs/apk/debug/*.apk
+          name: ${{ matrix.app }}-debug-apk
+          path: ${{ matrix.app }}/android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
