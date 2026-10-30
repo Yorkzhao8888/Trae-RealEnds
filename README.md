@@ -1,6 +1,11 @@
-# Trae-RealEnds · Cajob 真实端壳收集仓
+# Trae-RealEnds · 真实端壳收集仓（Cajob / 知味工场 ZiwayOS）
 
-收集 Cajob「真实端 H5 根」（`https://h5.cewaycloud.com/`）之上所有端的薄壳与适配层。**壳不做业务**，只承载 H5 根 + 各端原生能力适配；业务全部在 H5 侧（H5 根 + 多端薄壳统一架构）。
+收集「真实端 H5 根」之上所有端的薄壳与适配层。**壳不做业务**，只承载 H5 根 + 各端原生能力适配；业务全部在 H5 侧（H5 根 + 多端薄壳统一架构）。
+
+当前覆盖两个品牌：
+
+- **Cajob**（`https://h5.cewaycloud.com/`，H5 已下线，壳仅存档）
+- **知味工场 ZiwayOS**（`https://ziway-hp.ziway.cewaycloud.com/shop`）
 
 ## 目录
 
@@ -11,6 +16,9 @@
 | `cajob-wechat-adapter/` | 微信内置浏览器 | JSSDK（分享/扫码/支付） | 适配层就绪 |
 | `cajob-iot-spec/` | IoT 设备 | 设备令牌 API 规范 | 规范定稿 |
 | `cajob-watch-spec/` | 手表 Widget | WidgetKit 设计 | 设计定稿 |
+| `ziway-app-shell/` | iOS / Android | Capacitor 6 | **v0.1.0** 壳工程就绪（`com.cewaycloud.ziwayos`，图标/启动图/桥/推送渠道） |
+| `ziway-mp-shell/` | 微信小程序 | 原生小程序 + `web-view` | **v0.1.0** 单页壳；AppID 为 `touristappid` 占位，业务域名校验待配置 |
+| `ziway-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 同一套代码出 Windows/macOS；更新源 `download/latest/` 待部署 |
 
 ## 关键口径
 
@@ -24,8 +32,10 @@
 - PC 壳：见 `cajob-pc-shell/BRIEF.md`（v0.2.2 变更、验证边界、上线硬性要求、更新可观测性/回滚/兼容矩阵/会话验收）
 - 移动壳：见 `cajob-app-shell/`（Capacitor 工程与插件清单）
 - 微信/IoT/手表：见各自目录 README
+- 知味工场三端：见 `ziway-app-shell/`、`ziway-mp-shell/`、`ziway-pc-shell/` 各自 README
 
 ## 版本记录
 
 - 2026-10-20：建仓。导入 PC 壳 v0.2.0、移动壳、微信适配、IoT/手表规范。
 - 2026-10-21：壳封装收口。修 CI 构建链；移动壳改用 `server.errorPath` 兜底、补齐原生桥运行时与权限/隐私声明；PC 壳发布脚本改为双架构构建 + 缺失产物硬失败；离线页输入转义。
+- 2026-10-30：新增「知味工场 ZiwayOS」生态三端（`ziway-app-shell` / `ziway-mp-shell` / `ziway-pc-shell`），统一包名 `com.cewaycloud.ziwayos` 与品牌色 `#F97316`。

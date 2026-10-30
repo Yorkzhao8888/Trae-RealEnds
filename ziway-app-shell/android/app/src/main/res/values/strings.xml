@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">知味工场</string>
+    <string name="title_activity_main">知味工场</string>
+    <string name="package_name">com.cewaycloud.ziwayos</string>
+    <string name="custom_url_scheme">com.cewaycloud.ziwayos</string>
+</resources>

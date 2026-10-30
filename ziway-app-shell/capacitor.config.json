@@ -1,0 +1,48 @@
+{
+  "appId": "com.cewaycloud.ziwayos",
+  "appName": "知味工场",
+  "webDir": "dist",
+  "server": {
+    "url": "https://ziway-hp.ziway.cewaycloud.com/shop",
+    "cleartext": false,
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "ziway-hp.ziway.cewaycloud.com",
+      "ziway.cewaycloud.com",
+      "oas.cewaycloud.com",
+      "*.cewaycloud.com"
+    ]
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    },
+    "Keyboard": {
+      "resize": "native"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#F97316",
+      "overlaysWebView": false
+    },
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 260,
+      "backgroundColor": "#F97316",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    }
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "webContentsDebuggingEnabled": false,
+    "preferredContentMode": "mobile"
+  }
+}

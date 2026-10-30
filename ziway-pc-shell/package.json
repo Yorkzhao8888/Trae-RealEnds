@@ -1,0 +1,63 @@
+{
+  "name": "ziway-pc-shell",
+  "version": "0.1.0",
+  "description": "知味工场 ZiwayOS PC 桌面壳（Electron）· Windows / macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac --arm64 --x64 --publish never",
+    "dist:win": "electron-builder --win --x64 --publish never",
+    "dist": "npm run dist:mac && npm run dist:win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.cewaycloud.ziwayos",
+    "productName": "知味工场",
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist-release"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://ziway-hp.ziway.cewaycloud.com/download/latest/"
+      }
+    ],
+    "artifactName": "ZiwayOS-${os}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "ZiwayOS-mac-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "ZiwayOS-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "知味工场",
+      "artifactName": "ZiwayOS-Setup.${ext}"
+    }
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "name": "ziway-app-shell",
+  "version": "0.1.0",
+  "description": "知味工场 ZiwayOS 真实端 H5 根 · iOS / Android 薄壳（Capacitor）",
+  "private": true,
+  "scripts": {
+    "start": "npx cap serve",
+    "prepare:web": "bash scripts/prepare-web.sh",
+    "build": "npm run prepare:web",
+    "sync": "npm run prepare:web && npx cap sync",
+    "open:ios": "npx cap open ios",
+    "open:android": "npx cap open android",
+    "add:ios": "npx cap add ios",
+    "add:android": "npx cap add android",
+    "build:ios": "npx cap sync ios && npx cap open ios",
+    "build:android": "npx cap sync android && npx cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/browser": "^6.0.2",
+    "@capacitor/camera": "^6.0.2",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/filesystem": "^6.0.1",
+    "@capacitor/geolocation": "^6.0.1",
+    "@capacitor/haptics": "^6.0.2",
+    "@capacitor/ios": "^6.1.0",
+    "@capacitor/keyboard": "^6.0.2",
+    "@capacitor/local-notifications": "^6.1.0",
+    "@capacitor/push-notifications": "^6.0.2",
+    "@capacitor/share": "^6.0.1",
+    "@capacitor/splash-screen": "^6.0.4",
+    "@capacitor/status-bar": "^6.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0",
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2"
+  }
+}

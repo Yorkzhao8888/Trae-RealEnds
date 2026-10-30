@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌色：与 H5 根 theme-color #F97316 严格一致，避免状态栏与页面割裂 -->
+    <color name="ziway_bg">#F97316</color>
+    <!-- 商标标准色：启动页与图标底色 -->
+    <color name="ziway_splash">#F97316</color>
+    <color name="ziway_surface">#FFF7ED</color>
+    <color name="ziway_accent">#F97316</color>
+    <color name="ziway_accent_soft">#FDBA74</color>
+</resources>

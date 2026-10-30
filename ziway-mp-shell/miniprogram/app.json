@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/error/error"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#F97316",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "知味工场",
+    "backgroundColor": "#F97316",
+    "backgroundTextStyle": "dark",
+    "enablePullDownRefresh": false
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}
