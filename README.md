@@ -2,6 +2,8 @@
 
 收集「真实端 H5 根」之上所有端的薄壳与适配层。**壳不做业务**，只承载 H5 根 + 各端原生能力适配；业务全部在 H5 侧（H5 根 + 多端薄壳统一架构）。
 
+**新同学先看 [STATUS.md](STATUS.md)**：一页说明三层架构、各模块验证程度、线上地址、接口清单、本地跑法与当前卡点。
+
 当前覆盖四个品牌：
 
 - **Cajob**（`https://cajob.cewaysoft.com/`，2026-10-30 起从已停用的 `h5.cewaycloud.com` 迁移）
@@ -26,11 +28,11 @@
 | `jechan-app-shell/` | iOS / Android | Capacitor 6 | **v0.1.0** 壳就绪（`com.cewaycloud.jechan`，蓝渐变 `#1F6FEB→#0B3F9E`） |
 | `jechan-mp-shell/` | 微信小程序 | 原生小程序 + `web-view` | **v0.1.0** 单页壳；AppID 占位，业务域名待配置 |
 | `jechan-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 一套代码出 Windows/macOS；更新源待部署 |
-| `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0** 目录/清单/校验和/筛选；入口 `https://cajob.cewaysoft.com/store/`（复用现有证书，零新增） |
+| `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0 已上线 + M1/M2 页面就绪**：目录/清单/筛选、通道（stable/beta）、下载计数、灰度配置、运营台；入口 `https://cajob.cewaysoft.com/store/`（复用现有证书，零新增） |
 | `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
 | `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型/冲突复核页 + UDP 发现；24 项测试通过 |
-| `cloud-root/` | 云根参考实现（联调/契约样板） | Node 24 + 内置 SQLite，零依赖 | **v0.1.1** 上行幂等接收/冲突判定/下行商品读模型 + 商店 M1 授权（租户/座位/门店配额/过期）；与店根端到端打通，12 项测试通过。非生产实现 |
+| `cloud-root/` | 云根参考实现（联调/契约样板） | Node 24 + 内置 SQLite，零依赖 | **v0.1.2** 上行幂等接收/冲突判定/下行商品读模型 + 商店 M1 授权（租户/座位/门店配额/过期）+ M2 下载统计与百分比灰度；与店根端到端打通，14 项测试通过。非生产实现 |
 
 ## 关键口径
 
@@ -70,3 +72,4 @@
 - 2026-10-30：商店 M2 百分比灰度 —— `PUT /store/rollouts/:itemId` 设 0..100，`POST /store/rollouts` 批量判定；`sha256(itemId|身份)` 前 8 位取模 100 稳定分桶，有租户令牌按租户、否则按设备，匿名且 <100% 一律 `no_identity`；商店页把 beta 条目交给云根判定，命中才在测试通道渲染。cloud-root 测试增至 14 项。
 - 2026-10-30：商店 M2 运营台 —— `btos-app-store/ops.html`：管理令牌换 `GET /store/rollouts` + `GET /store/downloads`，表格内改比例即 `PUT`，可新增条目；令牌只存本机，写操作仍由服务端校验。浏览器验收：两条灰度、合计 2 次下载、改 40% 保存生效。
 - 2026-10-30：商店 M0 上线 —— `https://cajob.cewaysoft.com/store/` 公网 200（`/store/`、`index.html`、`tenant.html`、`ops.html`、`data/apps.json` 全通），主站 `/` 回归 200。落点：47 边缘机 `i-uf6ctneanpjturpbp3j5`（cn-shanghai），静态文件 `/opt/baitos/caddy/data/store`，Caddy 容器内 `/data/store`，站点块加 `redir /store /store/ 308` + `handle_path /store/*`；配置备份 `/opt/baitos/caddy/Caddyfile.bak-store-20261030-172601`。注意：该 Caddyfile 是单文件 bind mount，宿主机改写会换 inode 导致容器仍读旧文件，需 `docker exec -i ... cat > /etc/caddy/Caddyfile` 就地写入再 reload。
+- 2026-10-30：面向团队补齐说明 —— 新增 `STATUS.md`（三层架构、模块验证度、线上落点、接口清单、本地跑法、外部依赖、协作约定），README 顶部加导览；`cloud-root` 版本号对齐至 0.1.2（14 项测试）。

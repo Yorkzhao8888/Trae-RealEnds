@@ -1,6 +1,6 @@
 {
   "name": "cloud-root",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "type": "module",
   "description": "BTOS 云根参考实现：上行事件幂等接收、冲突判定、下行商品读模型",
