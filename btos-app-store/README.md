@@ -14,6 +14,7 @@
 ```
 btos-app-store/
 ├── index.html          # 单页目录（无外部依赖，纯静态）
+├── tenant.html         # 「我的许可」：查座位/门店配额与品牌授权（M1）
 ├── data/apps.json      # 清单（唯一真相）
 └── README.md
 ```
@@ -150,6 +151,25 @@ curl -X POST http://127.0.0.1:7331/store/activate \
 
 **落地待办**：OAS 侧提供 OAuth 客户端与 userinfo（或 introspect）端点；本服务把 `tenantOf()` 从 `dev:` 换成真实校验即可，其余逻辑不动。
 
+### 前端：`tenant.html`（我的许可）
+
+商店顶栏「我的许可」→ `./tenant.html`。纯静态、无依赖，只做**展示**，配额裁决全在服务端：
+
+- 顶部两个输入：**租户令牌**（存 `localStorage` 的 `store:token`）、**接口地址**（`store:api`，留空即同源）。
+- 点「查询许可」→ `GET {api}/store/entitlements` 带 `Authorization: Bearer <token>`，渲染座位/门店进度条、有效期、品牌-端授权表。
+- 错误态区分：`401` 令牌无效、`404` 租户不存在、其他显示 `code`；接口不可达单独提示。
+- 配额满时进度条转警示色；过期显示「已过期」pill。
+- 接口地址留空要求页面与 `cloud-root` **同源**（例如由 Caddy/反向代理把 `/store/*` 与静态页挂到同一域）。跨域联调时填完整地址，服务端需放行 CORS。
+
+本地联调：
+
+```bash
+# 1) 起云根（建租户见上一节 curl）
+cd ../cloud-root && CLOUD_TOKEN=dev-token CLOUD_ADMIN_TOKEN=adm-token CLOUD_DB=/tmp/cloud.db npm start
+# 2) 起静态页（同源代理 /store/* 到 7331，或直接把 tenant.html 与接口放同一域）
+# 3) 打开 http://127.0.0.1:<静态端口>/tenant.html，令牌填 dev:<tenantId>
+```
+
 ## 与壳的闭环
 
 - PC 壳自动更新源 → 本站 `/download/latest/`。
@@ -162,7 +182,7 @@ curl -X POST http://127.0.0.1:7331/store/activate \
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M0 | 静态目录 + 清单 + 校验和 + 筛选 | 已完成 |
-| M1 | 授权与租户（座位数、许可下发、门店数） | 最小实现（`cloud-root` 参考，待接 OAS 身份） |
+| M1 | 授权与租户（座位数、许可下发、门店数） | 最小实现（`cloud-root` + 商店「我的许可」页，待接 OAS 身份） |
 | M2 | 更新通道 stable/beta、灰度比例、回滚、下载统计 | 未启动 |
 
 M1 起才需要登录，且必须共享 `oas_mother` 身份，不新建账号体系。

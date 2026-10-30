@@ -65,3 +65,4 @@
 - 2026-10-30：新增 `cloud-root` 云根参考实现 —— 零依赖 Node 服务：`POST /cloud/events` 幂等接收（`(store,seq)` 主键）、冲突停在冲突点、库存不足/对账不符返回 409；`GET /cloud/catalog?since=` 下行商品增量；管理接口写商品与库存。与店根端到端打通（上行回传 + 下行落库 + 冲突裁决），7 项测试通过。
 - 2026-10-30：商店 M1 解除证书阻塞 —— 商店改挂 `cajob.cewaysoft.com/store/`（复用 47 边缘已有效证书，Caddy `handle_path` 一行接入），页面保持相对路径可任意子路径部署；`apps.json` 的 `store.entry` 从已停用的 `h5.cewaycloud.com` 修正为 `cajob.cewaysoft.com`。h5 独立域名的补证诊断与两条路径写入 `btos-app-store/README.md`。
 - 2026-10-30：商店 M1 最小实现 —— `cloud-root` 新增 `/store/*`：许可总览、设备占座/退座（幂等）、门店注册/注销（配额）、管理建租户（`CLOUD_ADMIN_TOKEN`）；座位与门店以服务端计数硬约束（`409 seat_exhausted`/`store_quota`），过期即拒；身份复用 OAS，参考实现用 `dev:<tenantId>` 模拟。测试增至 12 项。
+- 2026-10-30：商店 M1 前端 —— `btos-app-store/tenant.html`「我的许可」：令牌 + 接口地址查询 `/store/entitlements`，座位/门店配额进度条、有效期、品牌-端授权表；401/404/不可达三类错误态；商店顶栏加「我的许可」入口。纯展示，配额仍由服务端裁决。

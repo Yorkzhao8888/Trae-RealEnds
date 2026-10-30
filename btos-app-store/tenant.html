@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>我的许可 · 百泰OS 应用商店</title>
+<style>
+  :root {
+    --bg: #0B0F17; --panel: #121826; --panel-2: #171F30;
+    --line: rgba(255,255,255,.08); --line-strong: rgba(255,255,255,.16);
+    --text: #E8ECF4; --muted: #8E99AB; --accent: #4C8DFF;
+    --accent-soft: rgba(76,141,255,.12); --ok: #2ED3A0; --warn: #E8A33D; --bad: #E5534B;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body { font: 400 14px/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 24px 20px 64px; }
+  .top { display: flex; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: linear-gradient(150deg, #2C5FD6, #4C8DFF); color: #fff; font-weight: 700; font-size: 20px; }
+  .top b { font-size: 16px; font-weight: 600; }
+  .top .sub { color: var(--muted); font-size: 12px; letter-spacing: 1.5px; margin-top: 1px; }
+  .top .meta { margin-left: auto; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .card { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 18px; margin-top: 18px; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .field { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  label { color: var(--muted); font-size: 12px; }
+  input { flex: 1 1 220px; min-width: 0; background: var(--panel-2); border: 1px solid var(--line-strong); color: var(--text); border-radius: 8px; padding: 8px 11px; font: inherit; outline: none; }
+  input:focus { border-color: var(--accent); }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel-2); color: var(--text); padding: 8px 14px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  .hint code { background: var(--panel-2); padding: 1px 6px; border-radius: 5px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 4px; }
+  .kv { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--panel-2); }
+  .kv .k { color: var(--muted); font-size: 12px; }
+  .kv .v { font-size: 18px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .bar { height: 6px; border-radius: 99px; background: rgba(255,255,255,.08); margin-top: 8px; overflow: hidden; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+  .bar.full > i { background: var(--warn); }
+  table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .ends { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); }
+  .tag.on { color: var(--ok); border-color: rgba(46,211,160,.5); }
+  .state { text-align: center; color: var(--muted); padding: 40px 12px; border: 1px dashed var(--line-strong); border-radius: 12px; margin-top: 16px; }
+  .state.err { color: var(--bad); border-color: rgba(229,83,75,.45); }
+  .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--panel-2); border: 1px solid var(--line-strong); padding: 8px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  @media (max-width: 560px) { .top .meta { display: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo">百</div>
+    <div>
+      <b>我的许可</b>
+      <div class="sub">BTOS ENTITLEMENTS</div>
+    </div>
+    <div class="meta"><a class="pill" href="./index.html">← 返回商店</a></div>
+  </header>
+
+  <section class="card">
+    <h2>身份</h2>
+    <div class="field">
+      <label for="token">租户令牌</label>
+      <input id="token" type="password" placeholder="OAS 登录后返回的租户令牌" autocomplete="off" />
+      <button class="primary" id="go">查询许可</button>
+    </div>
+    <div class="field" style="margin-top:10px">
+      <label for="api">接口地址</label>
+      <input id="api" type="text" placeholder="留空 = 同源（/store/entitlements）" autocomplete="off" />
+      <button id="save">保存</button>
+    </div>
+    <div class="hint">身份由 OAS（<code>oas_mother</code>）校验，本页不建账号。联调时可用 <code>dev:&lt;tenantId&gt;</code> 令牌；正式环境填入 OAS 颁发的令牌即可。</div>
+  </section>
+
+  <div id="panel"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var $ = function (s) { return document.querySelector(s); };
+  var tokenEl = $('#token');
+  var apiEl = $('#api');
+  tokenEl.value = localStorage.getItem('store:token') || '';
+  apiEl.value = localStorage.getItem('store:api') || '';
+
+  var toastTimer = null;
+  function toast(msg, bad) {
+    var el = $('#toast');
+    el.textContent = msg;
+    el.style.borderColor = bad ? 'rgba(229,83,75,.6)' : 'rgba(255,255,255,.16)';
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2400);
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  function base() {
+    return (localStorage.getItem('store:api') || '').replace(/\/$/, '');
+  }
+
+  function state(html, bad) {
+    $('#panel').innerHTML = '<div class="state' + (bad ? ' err' : '') + '">' + html + '</div>';
+  }
+
+  function endTag(e) { return '<span class="tag on">' + esc(e) + '</span>'; }
+
+  function renderEnt(e) {
+    var seatPct = e.seats.total ? Math.min(100, Math.round(e.seats.used / e.seats.total * 100)) : 0;
+    var storePct = e.stores.total ? Math.min(100, Math.round(e.stores.used / e.stores.total * 100)) : 0;
+    var expired = e.expired;
+    var expText = e.tenant.expires ? new Date(e.tenant.expires).toLocaleDateString() : '长期';
+    var brands = (e.brands || []).map(function (b) {
+      var ends = (b.ends || []).map(endTag).join('') || '<span class="tag">未指定端</span>';
+      return '<tr><td>' + esc(b.brand) + '</td><td><div class="ends">' + ends + '</div></td></tr>';
+    }).join('');
+
+    $('#panel').innerHTML =
+      '<section class="card">' +
+        '<h2>' + esc(e.tenant.name) + ' <span class="pill" style="margin-left:6px">' + esc(e.tenant.plan) + '</span>' +
+        (expired ? ' <span class="pill" style="color:var(--bad);border-color:rgba(229,83,75,.5)">已过期</span>' : '') + '</h2>' +
+        '<div class="stats">' +
+          '<div class="kv"><div class="k">设备座位</div><div class="v">' + e.seats.used + ' / ' + e.seats.total + '</div><div class="bar' + (seatPct >= 100 ? ' full' : '') + '"><i style="width:' + seatPct + '%"></i></div></div>' +
+          '<div class="kv"><div class="k">门店</div><div class="v">' + e.stores.used + ' / ' + e.stores.total + '</div><div class="bar' + (storePct >= 100 ? ' full' : '') + '"><i style="width:' + storePct + '%"></i></div></div>' +
+          '<div class="kv"><div class="k">有效期至</div><div class="v" style="font-size:15px">' + expText + '</div></div>' +
+        '</div>' +
+      '</section>' +
+      '<section class="card"><h2>已授权品牌与端</h2>' +
+        (brands ? '<table><thead><tr><th>品牌</th><th>可用端</th></tr></thead><tbody>' + brands + '</tbody></table>'
+                : '<div class="state" style="margin-top:6px">该租户还没有任何品牌授权。</div>') +
+      '</section>';
+  }
+
+  async function load() {
+    var tk = tokenEl.value.trim();
+    if (!tk) { state('请填写租户令牌后查询。'); return; }
+    localStorage.setItem('store:token', tk);
+    state('查询中…');
+    var res, body;
+    try {
+      res = await fetch(base() + '/store/entitlements', { headers: { authorization: 'Bearer ' + tk } });
+    } catch (err) {
+      state('接口不可达：' + esc(err.message), true); return;
+    }
+    try { body = await res.json(); } catch (err) { body = null; }
+
+    if (res.status === 401) { state('令牌无效或已过期。', true); return; }
+    if (res.status === 404) { state('租户不存在：' + esc(tk), true); return; }
+    if (!res.ok || !body || !body.ok) {
+      state('查询失败（HTTP ' + res.status + '）' + (body && body.code ? '：' + esc(body.code) : ''), true); return;
+    }
+    renderEnt(body);
+  }
+
+  $('#go').addEventListener('click', load);
+  $('#save').addEventListener('click', function () {
+    localStorage.setItem('store:api', apiEl.value.trim());
+    localStorage.setItem('store:token', tokenEl.value.trim());
+    toast('已保存');
+    load();
+  });
+  tokenEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+  apiEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+
+  if (tokenEl.value) load(); else state('填写租户令牌后查询许可。');
+})();
+</script>
+</body>
+</html>
