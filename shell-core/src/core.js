@@ -123,6 +123,7 @@
     set('biometric', has('BiometricAuth') ? '✓' : '─', '─', '─');
     set('offlineQueue', '✓', '✓', '─');
     set('subscribeMsg', '─', '─', '✓');
+    cap['edge.storeRoot'] = '✓';
 
     return cap;
   }
@@ -252,7 +253,112 @@
     return caps;
   }
 
-  // ---------------------------------------------------------------- 离线队列（P0：只排队，不本地裁决）
+  // ---------------------------------------------------------------- 店根适配器
+  // 店根在店内局域网（默认 http://127.0.0.1:7321，桌面壳即店根本机）。
+  // 超时 3s：门店 Wi-Fi 抖动时快速失败，由调用方决定回落到离线队列。
+  var EDGE_KEY = 'shell:edge';
+  var EDGE_TIMEOUT = 3000;
+
+  function edgeConfig() {
+    var cfg = {};
+    try { cfg = JSON.parse(localStorage.getItem(EDGE_KEY) || '{}'); } catch (e) {}
+    if (!cfg.baseUrl) {
+      // 桌面壳自带店根：默认本机端口；移动壳需要显式配置门店地址
+      if (window.ShellDesktop) cfg.baseUrl = 'http://127.0.0.1:7321';
+      else {
+        var q = parseQuery();
+        if (q.edge) cfg.baseUrl = q.edge;
+      }
+    }
+    return cfg;
+  }
+
+  function edgeConfigure(opts) {
+    var o = opts || {};
+    if (!o.baseUrl) return err('E_BAD_ARGS', 'edge.configure');
+    var cfg = { baseUrl: String(o.baseUrl).replace(/\/$/, ''), token: o.token || '', deviceId: o.deviceId || null };
+    try { localStorage.setItem(EDGE_KEY, JSON.stringify(cfg)); } catch (e) {}
+    return ok(cfg);
+  }
+
+  async function edgeFetch(path, init) {
+    var cfg = edgeConfig();
+    if (!cfg.baseUrl) return err('E_UNSUPPORTED', 'edge', '未配置店根地址');
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, EDGE_TIMEOUT) : null;
+    try {
+      var headers = { 'Content-Type': 'application/json' };
+      if (cfg.token) headers.authorization = 'Bearer ' + cfg.token;
+      var res = await fetch(cfg.baseUrl + path, Object.assign({ headers: headers, signal: ctrl && ctrl.signal, cache: 'no-store' }, init || {}));
+      var body = null;
+      try { body = await res.json(); } catch (e) {}
+      if (!res.ok) {
+        var code = (body && body.code) || 'E_EDGE';
+        var out = err(code === 'stock' ? 'E_STOCK' : code === 'limit' ? 'E_LIMIT' : code === 'lease_expired' || code === 'lease_unknown' ? 'E_LEASE' : 'E_EDGE', 'edge');
+        out.status = res.status;
+        out.data = body;
+        return out;
+      }
+      return ok(body);
+    } catch (e) {
+      return err('E_EDGE_OFFLINE', 'edge', e && e.message);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function edgeHealth() { return edgeFetch('/edge/health'); }
+
+  async function edgeLease(opts) {
+    var cfg = edgeConfig();
+    var body = {
+      deviceId: (opts && opts.deviceId) || cfg.deviceId || (shellDeviceId()),
+      ttlMs: (opts && opts.ttlMs) || undefined,
+    };
+    var r = await edgeFetch('/edge/lease', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) {
+      _lease = { id: r.data.leaseId, expires: r.data.expires };
+    }
+    return r;
+  }
+
+  var _lease = null;
+  function edgeLeaseId() {
+    if (_lease && _lease.expires > Date.now()) return _lease.id;
+    return null;
+  }
+
+  async function edgeCommit(opts) {
+    var o = opts || {};
+    if (!Array.isArray(o.ops) || !o.ops.length) return err('E_BAD_ARGS', 'edge.commit');
+    var leaseId = o.leaseId || edgeLeaseId();
+    if (!leaseId) {
+      var lr = await edgeLease({});
+      if (!lr.ok) return lr;
+      leaseId = lr.data.leaseId;
+    }
+    var r = await edgeFetch('/edge/commit', { method: 'POST', body: JSON.stringify({ leaseId: leaseId, ops: o.ops }) });
+    // 店内不可达且调用方允许回落：转离线队列（队列重放目标仍是店根路径）
+    if (!r.ok && o.fallback === 'queue' && r.code === 'E_EDGE_OFFLINE') {
+      for (var i = 0; i < o.ops.length; i++) {
+        enqueue({ url: edgeConfig().baseUrl + '/edge/commit', method: 'POST', body: { leaseId: leaseId, ops: [o.ops[i]] }, headers: { authorization: edgeConfig().token ? 'Bearer ' + edgeConfig().token : '' } });
+      }
+      return ok({ queued: o.ops.length });
+    }
+    return r;
+  }
+
+  function shellDeviceId() {
+    var k = 'shell:device-id';
+    var v = null;
+    try { v = localStorage.getItem(k); } catch (e) {}
+    if (!v) {
+      v = uuid();
+      try { localStorage.setItem(k, v); } catch (e) {}
+    }
+    return v;
+  }
+
   // 条目：{ idem, method, url, body, at, tries }
   // 规则：幂等键由端生成；联网后按入队顺序重放；4xx 视为永久失败并出队，5xx/网络错误保留重试。
   var QUEUE_KEY = 'shell:offline-queue';
@@ -390,6 +496,11 @@
     'offline.enqueue': function (a) { return enqueue(a); },
     'offline.flush': function () { return flush(); },
     'offline.list': function () { return ok(queueRead()); },
+    'edge.configure': function (a) { return edgeConfigure(a); },
+    'edge.health': function () { return edgeHealth(); },
+    'edge.lease': function (a) { return edgeLease(a); },
+    'edge.commit': function (a) { return edgeCommit(a); },
+    'edge.snapshot': function (a) { return edgeFetch('/edge/snapshot?since=' + Number((a && a.since) || 0)); },
     'desktop.paths': function () {
       if (!window.ShellDesktop || typeof window.ShellDesktop.paths !== 'function') return err('E_UNSUPPORTED', 'desktop.paths');
       try { return ok(window.ShellDesktop.paths()); } catch (e) { return err('E_NATIVE', 'desktop.paths', e && e.message); }

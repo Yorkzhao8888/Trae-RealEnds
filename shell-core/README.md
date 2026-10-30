@@ -45,6 +45,25 @@ node shell-core/build.mjs --check  # 校验产物与源一致（CI）
 - `Shell.call('core.net')` 返回 `{ online, type, weak }`，弱网降级以此为准
 - 旧调用不变：`Shell.vibrate()` / `Shell.share()` / `Shell.getLocation()` / `Shell.switchEnd(id)`
 
+## 店根接入（edge）
+
+店内局域网有店根时，成交走高置信事务；店根不可达再回落离线队列。
+
+```js
+await Shell.call('edge.configure', { baseUrl: 'http://192.168.1.20:7321', token: '...' });
+const h = await Shell.call('edge.health');           // {ok, version, cloudOffline}
+await Shell.call('edge.lease', {});                  // 自动缓存租约（TTL 内复用）
+await Shell.call('edge.commit', {
+  ops: [{ idem: 'pos1-000123', op: 'dec', sku: 'SKU-1', qty: 2 }],
+  fallback: 'queue',                                 // 店根不可达则入离线队列
+});
+```
+
+- 桌面壳默认店根为 `http://127.0.0.1:7321`（PC 壳即店根本机）
+- 移动壳需显式 `edge.configure`，或用 `?edge=http://<门店IP>:7321`
+- 超时 3s，快速失败；错误码 `E_EDGE_OFFLINE` / `E_STOCK`（带 `onHand`）/ `E_LEASE` / `E_LIMIT`
+- 幂等键由端生成，重放安全；库存不足整批回滚
+
 ## 平台适配
 
 | 环境 | 探测方式 | 说明 |
