@@ -1,0 +1,12 @@
+{
+  "brand": "xso",
+  "name": "XSO 智慧企业",
+  "project": "xso-app-shell",
+  "file": "xso-shell.js",
+  "alias": "xsoOS",
+  "prefix": "xso",
+  "accent": "#1F6FEB",
+  "statusBarStyle": "dark",
+  "endKey": "xso.end",
+  "ends": {}
+}

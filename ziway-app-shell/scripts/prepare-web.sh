@@ -14,5 +14,6 @@ rm -rf dist
 mkdir -p dist
 cp index.html offline.html dist/
 cp shell/ziwayos-shell.js dist/
+[ -f ../shell-core/dist/selftest.html ] && cp ../shell-core/dist/selftest.html dist/ || true
 
 echo "==> dist/ 就绪：$(ls dist | tr '\n' ' ')"

@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>壳自检 · shell-core</title>
+<style>
+  :root { --ink:#0B1220; --muted:#5B6472; --line:#E6E9EE; --ok:#16A34A; --warn:#D97706; --bad:#DC2626; --bg:#F7F8FA; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:20px 16px 40px; font:14px/1.55 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--ink); background:var(--bg); }
+  h1 { font-size:18px; margin:0 0 4px; }
+  p.sub { margin:0 0 18px; color:var(--muted); font-size:12px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px dashed var(--line); }
+  .row:last-child { border-bottom:0; }
+  .k { color:var(--muted); }
+  .v { font-weight:600; font-variant-numeric:tabular-nums; }
+  .s-ok { color:var(--ok); } .s-warn { color:var(--warn); } .s-bad { color:var(--bad); }
+  .caps { display:grid; grid-template-columns:repeat(auto-fill,minmax(132px,1fr)); gap:6px; margin-top:6px; }
+  .cap { display:flex; justify-content:space-between; border:1px solid var(--line); border-radius:8px; padding:6px 8px; font-size:12px; }
+  .cap b { font-weight:600; }
+  button { appearance:none; border:1px solid var(--line); background:#fff; border-radius:10px; padding:10px 14px; font-size:13px; margin:0 8px 8px 0; }
+  button:active { transform:scale(.97); }
+  .end { display:block; width:100%; text-align:left; }
+  code { font-size:12px; background:#F1F3F5; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<h1>壳自检</h1>
+<p class="sub">逐项验证 <code>window.Shell</code> 与原生能力；结果仅供真机验收，不做业务判断。</p>
+
+<div class="card" id="env"></div>
+<div class="card"><div class="k" style="margin-bottom:6px">能力矩阵</div><div class="caps" id="caps"></div></div>
+<div class="card"><div class="k" style="margin-bottom:4px">交互探针</div><div id="probe"></div></div>
+<div class="card" id="endsCard"><div class="k" style="margin-bottom:6px">四端</div><div id="ends"></div></div>
+<div class="card"><div class="k" style="margin-bottom:6px">事件流</div><div id="log" style="font:12px/1.6 ui-monospace,Menlo,monospace;color:var(--muted);max-height:180px;overflow:auto"></div></div>
+
+<script>
+(function () {
+  var q = new URLSearchParams(location.search);
+  var FILES = { ziway: 'ziwayos-shell.js', jechan: 'jechan-shell.js', xso: 'xso-shell.js', cajob: 'cajob-shell.js' };
+  var brand = q.get('brand') || 'ziway';
+  var file = FILES[brand] || FILES.ziway;
+
+  var log = document.getElementById('log');
+  function line(s) { log.insertAdjacentHTML('afterbegin', '<div>' + s + '</div>'); }
+  ['shell:ready','shell:resume','shell:pause','shell:push-token','shell:push-received','shell:push-action','shell:deeplink','shell:network','shell:error','shell:end-changed'].forEach(function (e) {
+    window.addEventListener(e, function (ev) { line(e + ' · seq=' + ev.detail.seq); });
+  });
+
+  function row(k, v, cls) { return '<div class="row"><span class="k">' + k + '</span><span class="v ' + (cls || '') + '">' + v + '</span></div>'; }
+  function mark(ok) { return ok ? '<span class="s-ok">✓</span>' : '<span class="s-bad">✗</span>'; }
+
+  var STEPS = [
+    ['桥已注入', function () { return !!window.Shell; }],
+    ['握手可重放', function () { return window.Shell && window.Shell.bridge === '2'; }],
+    ['环境识别', function () { return window.Shell && (window.Shell.env === 'capacitor' ? window.Shell.platform : window.Shell.env); }],
+    ['能力字段完整', function () { return window.Shell && Object.keys(window.Shell.capabilities || {}).length >= 12; }],
+    ['品牌别名', function () { return window.Shell && window[window.Shell.brand === 'ziway' ? 'ziwayOS' : window.Shell.brand + 'OS'] === window.Shell; }]
+  ];
+
+  var script = document.createElement('script');
+  script.src = file;
+  script.defer = true;
+  script.onerror = function () { document.getElementById('env').innerHTML = row('桥加载', '404 · 请把 ' + file + ' 与自检页放同一目录', 's-bad'); };
+  script.onload = function () {
+    setTimeout(paint, 60);
+  };
+  document.head.appendChild(script);
+
+  function paint() {
+    var S = window.Shell;
+    var env = document.getElementById('env');
+    if (!S) { env.innerHTML = row('桥加载', '未注入', 's-bad'); return; }
+    env.innerHTML = row('品牌 / 版本', S.brand + ' · v' + S.version + ' · bridge ' + S.bridge)
+      + row('环境 / 平台', S.env + ' / ' + S.platform)
+      + row('移动壳', String(!!S.isMobileShell)) + row('桌面壳', String(!!S.isDesktopShell))
+      + row('自检项', STEPS.map(function (s) { var r; try { r = s[1](); } catch (e) { r = false; } return mark(!!r) + ' ' + s[0]; }).join(' &nbsp; '));
+
+    var caps = document.getElementById('caps');
+    caps.innerHTML = Object.keys(S.capabilities).sort().map(function (k) {
+      var v = S.capabilities[k];
+      var cls = v === '✓' ? 's-ok' : v === '◐' || v === 'web' ? 's-warn' : 'k';
+      return '<div class="cap"><b>' + k + '</b><span class="' + cls + '">' + v + '</span></div>';
+    }).join('');
+
+    var probe = document.getElementById('probe');
+    probe.innerHTML = '<button data-act="vibrate">震动</button>'
+      + '<button data-act="share">分享</button>'
+      + '<button data-act="location">定位</button>'
+      + '<button data-act="net">网络</button>'
+      + '<button data-act="status">状态栏</button>'
+      + '<button data-act="push">推送授权</button>'
+      + '<button data-act="handshake">握手</button>';
+    probe.onclick = function (ev) {
+      var act = ev.target.getAttribute('data-act');
+      if (!act) return;
+      if (act === 'vibrate') { S.vibrate(); line('vibrate · ok'); return; }
+      if (act === 'net') { S.call('core.net').then(function (r) { line('net · ' + JSON.stringify(r.data)); }); return; }
+      var method = { share: 'core.share', location: 'core.location', status: 'core.statusBar', push: 'core.push.request', handshake: 'core.handshake' }[act];
+      S.call(method, act === 'share' ? { title: '自检', text: '壳能力正常', url: location.href } : {}).then(function (r) {
+        line(method + ' · ' + (r.ok ? 'ok ' + JSON.stringify(r.data) : r.code));
+      });
+    };
+
+    var ends = document.getElementById('ends');
+    var list = S.ends || {};
+    if (!Object.keys(list).length) {
+      document.getElementById('endsCard').style.display = 'none';
+    } else {
+      ends.innerHTML = Object.keys(list).map(function (id) {
+        return '<button class="end" data-end="' + id + '">' + list[id].name + ' <span class="k">' + id + '</span></button>';
+      }).join('');
+      ends.onclick = function (ev) {
+        var id = ev.target.closest('[data-end]');
+        if (id) S.switchEnd(id.getAttribute('data-end'));
+      };
+    }
+  }
+})();
+</script>
+</body>
+</html>

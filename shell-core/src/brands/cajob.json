@@ -1,0 +1,12 @@
+{
+  "brand": "cajob",
+  "name": "Cajob · 头部职聘",
+  "project": "cajob-app-shell",
+  "file": "cajob-shell.js",
+  "alias": "cajobOS",
+  "prefix": "cajob",
+  "accent": "#0F1115",
+  "statusBarStyle": "light",
+  "endKey": "cajob.end",
+  "ends": {}
+}

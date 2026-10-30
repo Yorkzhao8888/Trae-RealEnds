@@ -1,95 +1,418 @@
+/*! Cajob · 头部职聘 · 品牌桥 v0.2.0 — 由 shell-core 生成，勿手改。
+
+  源：shell-core/src/core.js + shell-core/src/brands/cajob.json
+  契约：docs/shell-contract.md
+  重新生成：node shell-core/build.mjs
+*/
+
 /**
- * Cajob 原生桥运行时（无构建版本，直接以 <script> 引入）
+ * BTOS 真实端壳 · 共享运行时（shell-core）
  *
- * 为什么是纯 JS 而不是打包产物：
- *   壳以 server.url 直连 H5 根，本地 webDir 的入口页不会执行，
- *   因此桥必须是一份「可被远程页面直接加载」的自包含脚本，
- *   不能依赖打包器、不能 import。
+ * 契约：docs/shell-contract.md（v0.2.0）
+ * 形态：无构建依赖的自包含脚本，可被远程 H5 直接 <script> 引入。
  *
- * 引入方式（H5 根，任选其一）：
- *   A. 直接调用 Capacitor 原生插件（window.Capacitor.Plugins.*），不引本文件；
- *   B. <script src="/cajob-shell.js" defer></script>（与 H5 同域部署时）；
- *   C. 由壳注入（需原生侧配合），见 README「桥接入」。
+ * 设计要点：
+ *   1. 单一命名空间 window.Shell；品牌别名（ziwayOS / jechanOS / xsoOS / cajobOS）为兼容层。
+ *   2. 适配器按能力探测（Capacitor / Electron / 小程序 web-view / 浏览器），不靠 UA 猜。
+ *   3. 所有事件带 seq 与单调时间；握手可重放（Shell.call('core.handshake')）。
  *
- * 契约：window.cajobShell（幂等，重复引入不会覆盖）
+ * 本文件不含品牌配置：由 build.mjs 追加 config 片段后产出 <brand>-shell.js。
  */
 (function () {
   'use strict';
 
-  var VERSION = '0.2.2';
+  var CORE_VERSION = '0.2.0';
+  var BRIDGE_VERSION = '2';
+  var READY_TIMEOUT_MS = 1500;
 
-  // 幂等：已注册则直接返回，避免重复绑定监听导致事件翻倍
-  if (window.cajobShell) return;
+  if (window.Shell && window.Shell.__core) return;
 
-  function cap() {
-    return window.Capacitor;
+  // ---------------------------------------------------------------- 基础工具
+  var seq = 0;
+  function nowMonotonic() {
+    try {
+      if (window.performance && performance.now) return Math.round(performance.now());
+    } catch (e) {}
+    return Date.now();
   }
 
-  function plugins() {
-    var c = cap();
-    return (c && c.Plugins) || {};
+  function emit(event, detail) {
+    var payload = { event: event, seq: ++seq, at: nowMonotonic(), data: detail === undefined ? null : detail };
+    try {
+      window.dispatchEvent(new CustomEvent(event, { detail: payload }));
+    } catch (e) {}
+    var brandPrefix = state.config && state.config.prefix;
+    if (brandPrefix) {
+      // 品牌事件名沿用 v0.1 桥的既有命名，避免已上线的 H5 监听失效
+      var suffix = ALIAS_SUFFIX[event] || event.replace(/^shell:/, '');
+      try {
+        window.dispatchEvent(new CustomEvent(brandPrefix + ':' + suffix, { detail: payload }));
+      } catch (e) {}
+    }
+    listeners.forEach(function (entry) {
+      if (entry.event === event) safeCall(entry.fn, payload);
+    });
+    return payload;
   }
 
-  function platform() {
-    var c = cap();
-    if (c && typeof c.getPlatform === 'function') return c.getPlatform();
+  var listeners = [];
+  // 契约事件 → 品牌事件后缀（兼容 v0.1 命名）
+  var ALIAS_SUFFIX = {
+    'shell:ready': 'shell-ready',
+    'shell:resume': 'app-resume',
+    'shell:pause': 'app-pause',
+  };
+
+  function safeCall(fn, arg) {
+    try { fn(arg); } catch (e) { /* 订阅者异常不影响壳 */ }
+  }
+
+  // ---------------------------------------------------------------- 环境探测
+  function detect() {
+    if (window.ShellDesktop && window.ShellDesktop.isDesktopShell) return 'electron';
+    if (window.process && window.process.versions && window.process.versions.electron) return 'electron';
+    var c = window.Capacitor;
+    if (c && typeof c.getPlatform === 'function') {
+      var p = c.getPlatform();
+      if (p === 'ios' || p === 'android') return 'capacitor';
+    }
+    var q = parseQuery();
+    if (q.shell === 'mp' || /miniProgram/i.test(navigator.userAgent)) return 'mp';
     return 'web';
   }
 
-  function emit(name, detail) {
+  function parseQuery() {
+    var out = {};
     try {
-      window.dispatchEvent(new CustomEvent(name, { detail: detail }));
-    } catch (e) {
-      /* 老 WebView 不支持 CustomEvent 构造器：忽略 */
-    }
+      var s = (location.search || '').replace(/^\?/, '');
+      if (!s) return out;
+      s.split('&').forEach(function (kv) {
+        var i = kv.indexOf('=');
+        var k = decodeURIComponent(i < 0 ? kv : kv.slice(0, i));
+        var v = decodeURIComponent(i < 0 ? '' : kv.slice(i + 1));
+        out[k] = v;
+      });
+    } catch (e) {}
+    return out;
   }
 
-  /**
-   * 前台提示音：与通知渠道里的 res/raw/cajob_notify.wav 同音色（E6→B6 上行五度）。
-   * 现场合成而非加载音频文件，避免首屏多一个请求。
-   */
-  var audioCtx = null;
-  function chime() {
-    var AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
+  function plugins() {
+    var c = window.Capacitor;
+    return (c && c.Plugins) || {};
+  }
+
+  // ---------------------------------------------------------------- 能力矩阵
+  // 依据契约：✓ 支持 / ◐ 受限 / —— 仅占位（无实现）
+  function buildCapabilities(env, P) {
+    var has = function (k) { return !!(P && P[k]); };
+    var cap = {};
+
+    function set(name, mobile, desktop, mp) {
+      cap[name] = env === 'capacitor' ? mobile : env === 'electron' ? desktop : env === 'mp' ? mp : 'web';
+    }
+
+    var hasWeb = typeof navigator !== 'undefined' && !!navigator.vibrate;
+
+    set('vibrate', has('Haptics') || hasWeb ? '✓' : '◐', '─', '─');
+    set('share', has('Share') ? '✓' : '─', '─', '─');
+    set('geolocation', has('Geolocation') ? '✓' : '─', '─', '─');
+    set('push', has('PushNotifications') ? '✓' : '─', '─', '─');
+    set('haptics', has('Haptics') ? '✓' : '◐', '─', '─');
+    set('statusBar', has('StatusBar') ? '✓' : '◐', '─', '─');
+    set('splash', has('SplashScreen') ? '✓' : '◐', '─', '─');
+    set('backButton', env === 'capacitor' && window.Capacitor.getPlatform() === 'android' ? '✓' : '◐', '─', '─');
+    set('openExternal', has('Browser') ? '✓' : '◐', '✓', '◐');
+    set('deeplink', env === 'capacitor' || env === 'electron' ? '✓' : '─', '✓', '─');
+    set('network', true ? '✓' : '─', '✓', '◐');
+    set('safeArea', true ? '✓' : '─', '✓', '✓');
+    set('files', has('Filesystem') ? '✓' : '─', '✓', '─');
+    set('camera', has('Camera') ? '✓' : '─', '─', '◐');
+    set('biometric', has('BiometricAuth') ? '✓' : '─', '─', '─');
+    set('offlineQueue', '✓', '✓', '─');
+    set('subscribeMsg', '─', '─', '✓');
+
+    return cap;
+  }
+
+  // ---------------------------------------------------------------- 网络状态
+  function netState() {
+    var on = navigator.onLine !== false;
+    var type = 'unknown';
     try {
-      if (!audioCtx) audioCtx = new AC();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      var t0 = audioCtx.currentTime + 0.01;
-      var notes = [[1318.51, 0], [1975.53, 0.105]];
-      for (var i = 0; i < notes.length; i++) {
-        var osc = audioCtx.createOscillator();
-        var gain = audioCtx.createGain();
-        var at = t0 + notes[i][1];
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(notes[i][0], at);
-        gain.gain.setValueAtTime(0.0001, at);
-        gain.gain.exponentialRampToValueAtTime(0.16, at + 0.008);
-        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.38);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(at);
-        osc.stop(at + 0.4);
+      var c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (c && c.effectiveType) type = c.effectiveType;
+    } catch (e) {}
+    return { online: on, type: on ? type : 'offline', weak: !on || type === 'slow-2g' || type === '2g' };
+  }
+
+  // ---------------------------------------------------------------- 状态
+  var state = { config: null, env: null, ready: false, capabilities: {}, platform: 'web' };
+
+  // ---------------------------------------------------------------- 方法实现
+  var P;
+
+  function statusBar(opts) {
+    if (!P.StatusBar) return err('E_UNSUPPORTED', 'statusBar');
+    var o = opts || {};
+    try {
+      if (o.style) P.StatusBar.setStyle({ style: o.style === 'light' ? 'LIGHT' : 'DARK' });
+      if (o.color && typeof P.StatusBar.setBackgroundColor === 'function') {
+        P.StatusBar.setBackgroundColor({ color: o.color });
       }
+      return ok();
     } catch (e) {
-      /* 无音频权限或被系统静音：静默失败 */
+      return err('E_NATIVE', 'statusBar', e && e.message);
     }
   }
 
-  function buzz(pattern) {
+  function hideSplash() {
+    if (!P.SplashScreen) return;
+    try { P.SplashScreen.hide({ fadeOutDuration: 220 }); } catch (e) {}
+  }
+
+  var splashArmed = false;
+  function armSplash() {
+    if (splashArmed || !P.SplashScreen) return;
+    splashArmed = true;
+    requestAnimationFrame(function () {
+      requestAnimationFrame(hideSplash);
+    });
+    setTimeout(hideSplash, 1600);
+  }
+
+  function vibrate(duration) {
+    var single = typeof duration === 'number' && duration > 0;
+    var pattern = single ? [0, duration] : [0, 14, 70, 14];
+    if (navigator.vibrate) {
+      navigator.vibrate(pattern);
+      return ok();
+    }
+    if (!P.Haptics) return err('E_UNSUPPORTED', 'vibrate');
     try {
-      if (navigator.vibrate) navigator.vibrate(pattern);
+      if (single) {
+        P.Haptics.vibrate({ duration: duration });
+      } else {
+        var tap = function () {
+          return P.Haptics.impact ? P.Haptics.impact({ style: 'LIGHT' }) : P.Haptics.vibrate();
+        };
+        tap();
+        setTimeout(tap, 70);
+      }
+      return ok();
     } catch (e) {
-      /* 用户关闭了振动 */
+      return err('E_NATIVE', 'vibrate', e && e.message);
     }
   }
 
-  /**
-   * 原生端视觉打磨：只在壳内注入，浏览器/微信零影响。
-   * 目的：去掉 WebView 默认的灰色点击方块、橡皮筋与滚动条，把「网页感」压下去。
-   */
+  async function share(options) {
+    if (!P.Share) return err('E_UNSUPPORTED', 'share');
+    var o = options || {};
+    try {
+      await P.Share.share({ title: o.title, text: o.text, url: o.url });
+      return ok();
+    } catch (e) {
+      return err('E_CANCELLED', 'share', e && e.message);
+    }
+  }
+
+  async function getLocation(options) {
+    if (!P.Geolocation) return err('E_UNSUPPORTED', 'geolocation');
+    try {
+      var pos = await P.Geolocation.getCurrentPosition({
+        enableHighAccuracy: !!(options && options.highAccuracy),
+      });
+      return ok({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+    } catch (e) {
+      return err('E_DENIED', 'geolocation', e && e.message);
+    }
+  }
+
+  function openExternal(url) {
+    if (!url) return err('E_BAD_ARGS', 'openExternal');
+    if (P.Browser) {
+      try { P.Browser.open({ url: url }); return ok(); } catch (e) { return err('E_NATIVE', 'openExternal', e && e.message); }
+    }
+    try { window.open(url, '_system'); return ok(); } catch (e) { return err('E_UNSUPPORTED', 'openExternal'); }
+  }
+
+  function pushRequest() {
+    if (!P.PushNotifications) return err('E_UNSUPPORTED', 'push');
+    return P.PushNotifications.requestPermissions().then(function (r) {
+      if (r && r.receive === 'granted') {
+        return P.PushNotifications.register().then(function () { return ok({ granted: true }); });
+      }
+      return err('E_DENIED', 'push');
+    }).catch(function (e) {
+      return err('E_NATIVE', 'push', e && e.message);
+    });
+  }
+
+  function pushToken() {
+    return ok({ token: window.__shellPushToken__ || null });
+  }
+
+  function switchEnd(id) {
+    var ends = (state.config && state.config.ends) || {};
+    if (!ends[id]) return err('E_BAD_ARGS', 'switchEnd');
+    try { localStorage.setItem(state.config.endKey, id); } catch (e) {}
+    emit('shell:end-changed', { id: id });
+    location.replace(ends[id].url);
+    return ok({ id: id });
+  }
+
+  function currentEnd() {
+    var id = null;
+    try { id = localStorage.getItem(state.config.endKey); } catch (e) {}
+    if (!id) {
+      var q = parseQuery();
+      if (q.end) id = q.end;
+    }
+    return ok({ id: id });
+  }
+
+  // ---------------------------------------------------------------- 分发
+  var METHODS = {
+    'core.handshake': function () { return ok(handshakePayload()); },
+    'core.capabilities': function () { return ok(state.capabilities); },
+    'core.ready': function () { return ok({ ready: state.ready }); },
+    'core.statusBar': statusBar,
+    'core.splash': function () { hideSplash(); return ok(); },
+    'core.vibrate': function (a) { return vibrate(a && a.duration); },
+    'core.share': function (a) { return share(a); },
+    'core.location': function (a) { return getLocation(a); },
+    'core.openExternal': function (a) { return openExternal(a && a.url); },
+    'core.push.request': pushRequest,
+    'core.push.token': pushToken,
+    'core.net': function () { return ok(netState()); },
+    'core.end': function () { return currentEnd(); },
+    'core.switchEnd': function (a) { return switchEnd(a && a.id); },
+  };
+
+  function ok(data) { return { ok: true, data: data === undefined ? null : data, at: nowMonotonic() }; }
+  function err(code, method, message) { return { ok: false, code: code, method: method, message: message || '', at: nowMonotonic() }; }
+
+  function call(method, args) {
+    var fn = METHODS[method];
+    if (!fn) return Promise.resolve(err('E_UNSUPPORTED', method));
+    try {
+      return Promise.resolve(fn(args || {})).catch(function (e) {
+        return err('E_NATIVE', method, e && e.message);
+      });
+    } catch (e) {
+      return Promise.resolve(err('E_NATIVE', method, e && e.message));
+    }
+  }
+
+  function handshakePayload() {
+    return {
+      bridge: BRIDGE_VERSION,
+      version: CORE_VERSION,
+      brand: state.config.brand,
+      platform: state.platform,
+      env: state.env,
+      capabilities: state.capabilities,
+      ends: state.config.ends || {},
+      end: currentEnd().data.id,
+      accent: state.config.accent,
+    };
+  }
+
+  // ---------------------------------------------------------------- 事件绑定
+  function bindCapacitor() {
+    var App = P.App;
+    if (App && App.addListener) {
+      App.addListener('appStateChange', function (s) {
+        if (s && s.isActive) return emit('shell:resume');
+        emit('shell:pause');
+      });
+      App.addListener('appUrlOpen', function (d) { emit('shell:deeplink', { url: d && d.url }); });
+    }
+    if (state.env === 'capacitor' && P.App && window.Capacitor.getPlatform() === 'android') {
+      P.App.addListener('backButton', function (ev) {
+        if (ev && ev.canGoBack) return window.history.back();
+        if (typeof P.App.minimizeApp === 'function') P.App.minimizeApp();
+      });
+    }
+    if (P.PushNotifications) {
+      P.PushNotifications.addListener('registration', function (t) {
+        window.__shellPushToken__ = t && t.value ? t.value : null;
+        emit('shell:push-token', { token: window.__shellPushToken__ });
+      });
+      P.PushNotifications.addListener('registrationError', function (e) {
+        emit('shell:error', { code: 'E_PUSH', message: (e && e.message) || '' });
+      });
+      P.PushNotifications.addListener('pushNotificationReceived', function (n) {
+        emit('shell:push-received', n);
+        vibrate();
+      });
+      P.PushNotifications.addListener('pushNotificationActionPerformed', function (n) {
+        emit('shell:push-action', n);
+      });
+    }
+  }
+
+  function bindWeb() {
+    window.addEventListener('online', function () { emit('shell:network', netState()); });
+    window.addEventListener('offline', function () { emit('shell:network', netState()); });
+    document.addEventListener('visibilitychange', function () {
+      emit(document.hidden ? 'shell:pause' : 'shell:resume');
+    });
+  }
+
+  // ---------------------------------------------------------------- H5 版本同频（沿用旧壳行为）
+  function armH5Sync() {
+    var SYNC = { hiddenMs: 5 * 60 * 1000, gapMs: 10 * 60 * 1000 };
+    var hiddenAt = 0, syncing = false;
+    function chunkPaths(root) {
+      var list = (root || document).querySelectorAll('script[src*="/_next/static/chunks/"]');
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        var raw = list[i].getAttribute('src');
+        if (!raw) continue;
+        try { out.push(new URL(raw, location.href).pathname); } catch (e) {}
+      }
+      return out;
+    }
+    function hasNewBuild(doc) {
+      var remote = chunkPaths(doc);
+      if (!remote.length) return false;
+      var local = {};
+      var cur = chunkPaths(document);
+      for (var i = 0; i < cur.length; i++) local[cur[i]] = true;
+      for (var j = 0; j < remote.length; j++) if (!local[remote[j]]) return true;
+      return false;
+    }
+    function editing() {
+      var el = document.activeElement;
+      if (!el) return false;
+      var tag = (el.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+    function last() { try { return Number(sessionStorage.getItem('shell:h5-sync') || 0); } catch (e) { return 0; } }
+    function mark() { try { sessionStorage.setItem('shell:h5-sync', String(Date.now())); } catch (e) {} }
+    async function run() {
+      if (syncing || editing()) return;
+      if (Date.now() - hiddenAt < SYNC.hiddenMs) return;
+      if (Date.now() - last() < SYNC.gapMs) return;
+      syncing = true;
+      try {
+        var res = await fetch(location.pathname + location.search, { cache: 'no-store', credentials: 'same-origin' });
+        if (!res.ok) return;
+        var doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        if (hasNewBuild(doc)) { mark(); location.reload(); }
+      } catch (e) {}
+      finally { syncing = false; }
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) { hiddenAt = Date.now(); return; }
+      run();
+    });
+    window.addEventListener('shell:resume', run);
+  }
+
+  // ---------------------------------------------------------------- 视觉打磨
   function polish() {
-    if (document.getElementById('cajob-shell-css')) return;
+    if (document.getElementById('shell-core-css')) return;
     var css = [
       'html{-webkit-tap-highlight-color:transparent;overscroll-behavior:none}',
       'body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overscroll-behavior-y:none}',
@@ -98,284 +421,108 @@
       'a:active,button:active{transform:scale(.975);opacity:.85}',
     ].join('');
     var style = document.createElement('style');
-    style.id = 'cajob-shell-css';
+    style.id = 'shell-core-css';
     style.textContent = css;
     (document.head || document.documentElement).appendChild(style);
-    document.documentElement.classList.add('cajob-native');
+    document.documentElement.classList.add('shell-native');
   }
 
-  function init() {
-    var p = platform();
-    if (p !== 'ios' && p !== 'android') return;
-    if (window.cajobShell) return;
+  // ---------------------------------------------------------------- 启动
+  function create(config) {
+    if (window.Shell && window.Shell.__core) return window.Shell;
 
-    var P = plugins();
+    state.config = config;
+    state.env = detect();
+    P = plugins();
+    state.platform = state.env === 'capacitor' ? window.Capacitor.getPlatform() : state.env;
+    state.capabilities = buildCapabilities(state.env, P);
 
-    polish();
-
-    // ---- 系统栏：与 H5 背景同色，浅色图标；覆盖 WebView 不透内容 ----
-    if (P.StatusBar) {
-      try {
-        P.StatusBar.setStyle({ style: 'DARK' });
-        if (typeof P.StatusBar.setBackgroundColor === 'function') {
-          P.StatusBar.setBackgroundColor({ color: '#0F1115' });
-        }
-      } catch (e) {
-        /* iOS 不支持背景色，忽略 */
-      }
-    }
-
-    // ---- 返回键：能回退就回退，到底则退到后台而不是杀进程 ----
-    if (p === 'android' && P.App) {
-      P.App.addListener('backButton', function (ev) {
-        if (ev && ev.canGoBack) {
-          window.history.back();
-          return;
-        }
-        if (typeof P.App.minimizeApp === 'function') {
-          P.App.minimizeApp();
-        }
-      });
-    }
-
-    // ---- 推送：token 既缓存也广播，保证「取」和「推」两条路径都可用 ----
-    function bindPush() {
-      if (!P.PushNotifications) return;
-      P.PushNotifications.addListener('registration', function (token) {
-        window.__cajobPushToken__ = token && token.value ? token.value : null;
-        emit('cajob:push-token', window.__cajobPushToken__);
-      });
-      P.PushNotifications.addListener('registrationError', function (err) {
-        console.warn('[cajob-shell] push registrationError:', err);
-      });
-      P.PushNotifications.addListener('pushNotificationReceived', function (n) {
-        emit('cajob:push-received', n);
-        // 前台不走系统通知，用轻提示音 + 双短振代替，避免「叮一声很响」
-        chime();
-        buzz([0, 14, 70, 14]);
-      });
-      P.PushNotifications.addListener('pushNotificationActionPerformed', function (n) {
-        emit('cajob:push-action', n);
-      });
-    }
-
-    bindPush();
-
-    // ---- H5 版本同频：H5 每次发版会换 chunk 指纹，回到前台时对一次 ----
-    // 只比对当前路由的 /_next/static/chunks 路径，不碰业务数据；变了才整页重载。
-    var SYNC = { hiddenMs: 5 * 60 * 1000, gapMs: 10 * 60 * 1000 };
-    var hiddenAt = 0;
-    var syncing = false;
-
-    function chunkPaths(root) {
-      var list = (root || document).querySelectorAll('script[src*="/_next/static/chunks/"]');
-      var out = [];
-      for (var i = 0; i < list.length; i++) {
-        var raw = list[i].getAttribute('src');
-        if (!raw) continue;
-        try {
-          out.push(new URL(raw, location.href).pathname);
-        } catch (e) {
-          /* 非法 src：跳过 */
-        }
-      }
-      return out;
-    }
-
-    // 只判断「服务端多出本地没有的 chunk」：动态导入产生的额外本地 chunk 不算发版
-    function hasNewBuild(doc) {
-      var remote = chunkPaths(doc);
-      if (!remote.length) return false;
-      var local = {};
-      var cur = chunkPaths(document);
-      for (var i = 0; i < cur.length; i++) local[cur[i]] = true;
-      for (var j = 0; j < remote.length; j++) {
-        if (!local[remote[j]]) return true;
-      }
-      return false;
-    }
-
-    function editing() {
-      var el = document.activeElement;
-      if (!el) return false;
-      var tag = (el.tagName || '').toUpperCase();
-      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
-    }
-
-    function lastSyncAt() {
-      try {
-        return Number(sessionStorage.getItem('cajob:h5-sync') || 0);
-      } catch (e) {
-        return 0;
-      }
-    }
-
-    function markSync() {
-      try {
-        sessionStorage.setItem('cajob:h5-sync', String(Date.now()));
-      } catch (e) {
-        /* 无痕模式禁用 storage：只靠内存态兜底 */
-      }
-    }
-
-    async function syncH5() {
-      if (syncing || editing()) return;
-      if (Date.now() - hiddenAt < SYNC.hiddenMs) return;
-      if (Date.now() - lastSyncAt() < SYNC.gapMs) return;
-      syncing = true;
-      try {
-        var res = await fetch(location.pathname + location.search, {
-          cache: 'no-store',
-          credentials: 'same-origin',
-        });
-        if (!res.ok) return;
-        var doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-        if (hasNewBuild(doc)) {
-          markSync();
-          location.reload();
-        }
-      } catch (e) {
-        /* 网络抖动：下次回前台再试 */
-      } finally {
-        syncing = false;
-      }
-    }
-
-    document.addEventListener('visibilitychange', function () {
-      if (document.hidden) {
-        hiddenAt = Date.now();
-        return;
-      }
-      syncH5();
-    });
-    window.addEventListener('cajob:app-resume', syncH5);
-
-    // ---- 生命周期 ----
-    if (P.App) {
-      P.App.addListener('appStateChange', function (state) {
-        if (state && state.isActive) {
-          emit('cajob:app-resume');
-          return;
-        }
-        hiddenAt = Date.now();
-      });
-      P.App.addListener('appUrlOpen', function (data) {
-        emit('cajob:deeplink', data && data.url);
-      });
-    }
-
-    var bridge = {
-      platform: p,
-      isMobileShell: true,
-      shellVersion: VERSION,
-
-      requestPushPermission: async function () {
-        if (!P.PushNotifications) return false;
-        var r = await P.PushNotifications.requestPermissions();
-        if (r && r.receive === 'granted') {
-          await P.PushNotifications.register();
-          return true;
-        }
-        return false;
+    var Shell = {
+      __core: true,
+      version: CORE_VERSION,
+      bridge: BRIDGE_VERSION,
+      brand: config.brand,
+      platform: state.platform,
+      env: state.env,
+      isMobileShell: state.env === 'capacitor' || state.env === 'mp',
+      isDesktopShell: state.env === 'electron',
+      capabilities: state.capabilities,
+      ready: false,
+      accent: config.accent,
+      ends: config.ends,
+      call: call,
+      on: function (event, fn) {
+        if (typeof fn !== 'function') return function () {};
+        var entry = { event: event, fn: fn };
+        listeners.push(entry);
+        return function () {
+          var i = listeners.indexOf(entry);
+          if (i >= 0) listeners.splice(i, 1);
+        };
       },
-
-      // 只返回已缓存的 token；未注册成功前为 null（不伪造）
-      getPushToken: async function () {
-        return window.__cajobPushToken__ || null;
-      },
-
-      // 不传参：轻叩双短振（14ms + 70ms 间隔 + 14ms），传参则按指定时长单次
-      vibrate: async function (duration) {
-        var single = typeof duration === 'number' && duration > 0;
-        if (navigator.vibrate) {
-          navigator.vibrate(single ? [0, duration] : [0, 14, 70, 14]);
-          return;
-        }
-        if (!P.Haptics) return;
-        // iOS 不支持时长与节奏参数：用两次 LIGHT 冲击模拟同一个「双叩」
-        try {
-          if (single) {
-            await P.Haptics.vibrate({ duration: duration });
-            return;
-          }
-          var tap = function () {
-            return P.Haptics.impact ? P.Haptics.impact({ style: 'LIGHT' }) : P.Haptics.vibrate();
-          };
-          await tap();
-          await new Promise(function (r) { setTimeout(r, 70); });
-          await tap();
-        } catch (e) {
-          /* 用户关闭了系统触感：静默失败 */
-        }
-      },
-
-      share: async function (options) {
-        if (!P.Share) return;
-        var o = options || {};
-        try {
-          await P.Share.share({ title: o.title, text: o.text, url: o.url });
-        } catch (e) {
-          /* 用户取消：不视为错误 */
-        }
-      },
-
-      getLocation: async function () {
-        if (!P.Geolocation) return null;
-        try {
-          var pos = await P.Geolocation.getCurrentPosition({ enableHighAccuracy: false });
-          return { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        } catch (e) {
-          return null;
-        }
-      },
-
-      openExternal: async function (url) {
-        if (!P.Browser) {
-          window.open(url, '_system');
-          return;
-        }
-        await P.Browser.open({ url: url });
+      off: function (event, fn) {
+        listeners = listeners.filter(function (e) { return !(e.event === event && e.fn === fn); });
       },
     };
 
-    window.cajobShell = bridge;
+    // 便捷直调（契约示例用法）
+    Shell.openExternal = openExternal;
+    Shell.hideSplash = hideSplash;
+    Shell.statusBar = statusBar;
+    Shell.currentEnd = function () { return currentEnd().data.id; };
+    Shell.switchEnd = function (id) { return switchEnd(id).ok; };
 
-    // 收启动屏：双 rAF 确保首帧已绘制，避免「收早了露白」
-    if (P.SplashScreen) {
-      var splashHidden = false;
-      var hideSplash = function () {
-        if (splashHidden) return;
-        splashHidden = true;
-        try {
-          P.SplashScreen.hide({ fadeOutDuration: 220 });
-        } catch (e) {
-          /* 启动屏已自动隐藏 */
-        }
-      };
-      window.cajobShell.hideSplash = hideSplash;
-      requestAnimationFrame(function () {
-        requestAnimationFrame(hideSplash);
-      });
-      // 兜底：桥接成功但首帧异常时，不让启动屏长期驻留
-      setTimeout(hideSplash, 1600);
+    // 兼容 v0.1 品牌桥的直调签名（H5 已上线的调用不变）
+    Shell.shellVersion = CORE_VERSION;
+    Shell.requestPushPermission = function () {
+      return pushRequest().then(function (r) { return !!r.ok; });
+    };
+    Shell.getPushToken = function () {
+      return Promise.resolve(window.__shellPushToken__ || null);
+    };
+    Shell.getLocation = function () {
+      return getLocation().then(function (r) { return r.ok ? { lat: r.data.lat, lng: r.data.lng } : null; });
+    };
+    Shell.share = function (o) { return share(o).then(function () {}); };
+    Shell.vibrate = function (d) { vibrate(d); };
+
+    window.Shell = Shell;
+    if (config.alias) window[config.alias] = Shell;
+
+    if (state.env === 'capacitor') {
+      polish();
+      statusBar({ color: config.accent, style: config.statusBarStyle || 'dark' });
+      armSplash();
+      bindCapacitor();
     }
+    // 小程序 web-view 与浏览器：只上报能力，不触碰原生
+    bindWeb();
+    armH5Sync();
 
-    console.log('[cajob-shell] 原生桥就绪 v' + VERSION + ' (' + p + ')');
-    emit('cajob:shell-ready', { version: VERSION, platform: p });
+    // 握手：延迟一拍，保证 H5 侧脚本先挂好监听
+    setTimeout(function () {
+      Shell.ready = true;
+      emit('shell:ready', handshakePayload());
+    }, 0);
+
+    console.log('[shell-core] v' + CORE_VERSION + ' ready (' + state.env + ')');
+    return Shell;
   }
 
-  // Capacitor 的原生注入可能晚于本脚本：deviceready 后再兜一次
-  if (cap()) {
-    init();
-  } else {
-    document.addEventListener('deviceready', init, { once: true });
-    // 兜底：部分环境不派发 deviceready，轮询至多 3 秒
-    var tries = 0;
-    var timer = setInterval(function () {
-      if (cap() || ++tries > 30) {
-        clearInterval(timer);
-        if (cap()) init();
-      }
-    }, 100);
-  }
+  window.ShellCore = { version: CORE_VERSION, create: create, detect: detect };
+
+  // 配置由 build.mjs 追加在文件末尾：ShellCore.create(<config>);
 })();
+
+ShellCore.create({
+  "brand": "cajob",
+  "name": "Cajob · 头部职聘",
+  "project": "cajob-app-shell",
+  "file": "cajob-shell.js",
+  "alias": "cajobOS",
+  "prefix": "cajob",
+  "accent": "#0F1115",
+  "statusBarStyle": "light",
+  "endKey": "cajob.end",
+  "ends": {}
+});

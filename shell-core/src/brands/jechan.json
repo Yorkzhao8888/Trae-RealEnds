@@ -1,0 +1,17 @@
+{
+  "brand": "jechan",
+  "name": "捷才工友",
+  "project": "jechan-app-shell",
+  "file": "jechan-shell.js",
+  "alias": "jechanOS",
+  "prefix": "jechan",
+  "accent": "#1F6FEB",
+  "statusBarStyle": "dark",
+  "endKey": "jechan.end",
+  "ends": {
+    "hp": { "url": "https://hp.jechan.cewaysoft.com/", "name": "个人端 · 捷才工友" },
+    "cp": { "url": "https://cp.jechan.cewaysoft.com/", "name": "客户端 · 捷才需求方" },
+    "ep": { "url": "https://ep.jechan.cewaysoft.com/", "name": "企业端 · 捷才企业" },
+    "sp": { "url": "https://sp.jechan.cewaysoft.com/", "name": "生态端 · 捷才生态" }
+  }
+}
