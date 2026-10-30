@@ -1,5 +1,6 @@
 // 云根参考实现的库层：事件幂等接收、冲突判定、商品读模型。
 // 与 edge-store 一样用 Node 24 内置 SQLite，零第三方依赖。
+import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 const SCHEMA = `
@@ -11,6 +12,7 @@ CREATE TABLE IF NOT EXISTS grants (tenant_id TEXT NOT NULL, brand TEXT NOT NULL,
 CREATE TABLE IF NOT EXISTS activations (tenant_id TEXT NOT NULL, device_id TEXT NOT NULL, platform TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, revoked_at INTEGER, PRIMARY KEY (tenant_id, device_id));
 CREATE TABLE IF NOT EXISTS stores (tenant_id TEXT NOT NULL, store_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, PRIMARY KEY (tenant_id, store_id));
 CREATE TABLE IF NOT EXISTS downloads (item_id TEXT NOT NULL, channel TEXT NOT NULL DEFAULT 'stable', version TEXT NOT NULL DEFAULT '', tenant_id TEXT NOT NULL DEFAULT '', device_id TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS rollouts (item_id TEXT PRIMARY KEY, percent INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL);
 `;
 
 export function openDb(path = ':memory:') {
@@ -151,4 +153,54 @@ export function downloadStats(db, itemId = '') {
     : db.prepare('SELECT item_id, channel, COUNT(*) AS n FROM downloads GROUP BY item_id, channel ORDER BY item_id').all();
   const items = rows.map((r) => ({ itemId: r.item_id, channel: r.channel, count: Number(r.n) }));
   return { total: items.reduce((n, r) => n + r.count, 0), items };
+}
+
+// ── 商店 M2：按租户/设备的分桶灰度 ────────────────────────
+
+/** itemId + 身份 稳定散列到 0..99，同一身份永远同一个桶。 */
+function bucketOf(itemId, identity) {
+  const hex = createHash('sha256').update(`${itemId}|${identity}`).digest('hex').slice(0, 8);
+  return parseInt(hex, 16) % 100;
+}
+
+/** 设灰度比例 0..100；越界夹紧，非数字返回 null。 */
+export function setRollout(db, itemId, percent) {
+  const id = String(itemId || '').trim();
+  if (!id) return null;
+  const n = Number(percent);
+  if (!Number.isFinite(n)) return null;
+  const p = Math.max(0, Math.min(100, Math.round(n)));
+  db.prepare('INSERT INTO rollouts (item_id, percent, at) VALUES (?, ?, ?) ON CONFLICT(item_id) DO UPDATE SET percent = excluded.percent, at = excluded.at')
+    .run(id, p, Date.now());
+  return { itemId: id, percent: p };
+}
+
+/**
+ * 判定某条目对某身份是否放量。
+ * 身份优先用租户（同一租户所有设备结果一致），没有租户才退回设备；
+ * 两者都没有且比例 <100 时一律不命中（不拿 IP 猜身份）。
+ */
+export function rolloutOf(db, itemId, { tenantId = '', deviceId = '' } = {}) {
+  const id = String(itemId || '').trim();
+  if (!id) return { itemId: id, percent: 0, bucket: null, eligible: false, reason: 'bad_item' };
+  const row = db.prepare('SELECT percent FROM rollouts WHERE item_id = ?').get(id);
+  const percent = row ? Number(row.percent) : 0;
+  if (percent >= 100) return { itemId: id, percent, bucket: null, eligible: true, reason: 'percent_100' };
+  if (percent <= 0) return { itemId: id, percent, bucket: null, eligible: false, reason: 'percent_0' };
+
+  const identity = tenantId ? `tenant:${tenantId}` : deviceId ? `device:${deviceId}` : '';
+  if (!identity) return { itemId: id, percent, bucket: null, eligible: false, reason: 'no_identity' };
+
+  const bucket = bucketOf(id, identity);
+  const eligible = bucket < percent;
+  return { itemId: id, percent, bucket, eligible, reason: eligible ? 'in' : 'out' };
+}
+
+export function rolloutMany(db, itemIds = [], who = {}) {
+  return itemIds.map((id) => rolloutOf(db, id, who));
+}
+
+export function listRollouts(db) {
+  return db.prepare('SELECT item_id, percent, at FROM rollouts ORDER BY item_id').all()
+    .map((r) => ({ itemId: r.item_id, percent: Number(r.percent), at: Number(r.at) }));
 }

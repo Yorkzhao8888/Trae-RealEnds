@@ -180,7 +180,46 @@
 <script>
 (function () {
   var DATA = null;
-  var state = { channel: 'stable', brand: 'all', platform: 'all', q: '' };
+  var state = { channel: 'stable', brand: 'all', platform: 'all', q: '', rollout: {} };
+
+  // 设备标识：本机首次访问生成一次，仅用于灰度分桶
+  function deviceId() {
+    var key = 'store:device';
+    var v = localStorage.getItem(key);
+    if (!v) {
+      v = (window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : 'd-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(key, v);
+    }
+    return v;
+  }
+
+  function apiBase() {
+    return (localStorage.getItem('store:api') || '').replace(/\/$/, '');
+  }
+
+  // 灰度判定交给云根：把 beta 条目送过去，命中才在测试通道展示
+  function syncRollout() {
+    var ids = DATA.items.filter(function (it) { return it.status === 'beta'; })
+      .map(function (it) { return it.id; });
+    if (!ids.length) return;
+    var tk = localStorage.getItem('store:token') || '';
+    var headers = { 'content-type': 'application/json' };
+    if (tk) headers.authorization = 'Bearer ' + tk;
+    fetch(apiBase() + '/store/rollouts', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({ itemIds: ids, deviceId: deviceId() })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (b) {
+        if (!b || !Array.isArray(b.items)) return;
+        b.items.forEach(function (d) { state.rollout[d.itemId] = d; });
+        render();
+      })
+      .catch(function () { /* 接口不可达：测试通道保持空，不猜身份 */ });
+  }
 
   var PLATFORM_LABEL = {
     all: '全部',
@@ -251,8 +290,14 @@
   function visibleItems() {
     var q = state.q.trim().toLowerCase();
     return DATA.items.filter(function (it) {
-      // 通道：beta 只看 status=beta，其余（待上架/可下载）归稳定通道
-      if (state.channel === 'beta' ? it.status !== 'beta' : it.status === 'beta') return false;
+      // 通道：稳定通道不看 beta；测试通道需灰度命中（有无 beta 条目都成立）
+      if (state.channel === 'beta') {
+        if (it.status !== 'beta') return false;
+        var d = state.rollout[it.id];
+        if (!d || !d.eligible) return false;
+      } else if (it.status === 'beta') {
+        return false;
+      }
       if (state.brand !== 'all' && it.brand !== state.brand) return false;
       if (state.platform !== 'all' && it.platform !== state.platform) return false;
       if (!q) return true;
@@ -353,7 +398,9 @@
       ? channelName + '通道 共 ' + items.length + ' 条 · 版本以清单为准'
       : channelName + '通道暂无条目';
     if (!items.length) {
-      var empty = el('div', 'empty', '该通道暂无条目，可切换通道或调整筛选');
+      var empty = el('div', 'empty', state.channel === 'beta'
+        ? '测试通道暂无可用条目：灰度未命中，或灰度接口不可达'
+        : '该通道暂无条目，可切换通道或调整筛选');
       grid.appendChild(empty);
     }
   }
@@ -402,6 +449,7 @@
       renderChips();
       bind();
       render();
+      syncRollout();
     })
     .catch(function (e) {
       fail('清单加载失败：' + e.message + '。请通过 HTTP 访问本页（file:// 无法读取 data/apps.json）。');

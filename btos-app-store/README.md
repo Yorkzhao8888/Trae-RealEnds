@@ -174,8 +174,20 @@ cd ../cloud-root && CLOUD_TOKEN=dev-token CLOUD_ADMIN_TOKEN=adm-token CLOUD_DB=/
 
 **通道**：不新增清单字段，直接复用 `status`——`beta` 即测试通道，其余（`pending` / `available`）归稳定通道。页面顶部「通道」切换稳定版 / 测试版，默认稳定版；`beta` 条目在稳定通道不可见。
 
-- 灰度入口 = 把条目 `status` 改成 `beta` 并补齐 `url` / `sha256`；`beta` 只对切到测试通道的人可见。
-- **按百分比 / 按租户灰度暂不做**：需要端侧上报设备维度并由服务端分流，静态页做不到，别在页面上假装。
+**灰度（按租户 / 按设备）**：`beta` 条目能否在测试通道出现，由云根判定，不由页面猜测。
+
+1. 运营设比例：`PUT /store/rollouts/:itemId`，`percent` 0..100（0 = 关，100 = 全量），越界夹紧。
+2. 端侧批量问：`POST /store/rollouts`，带 `{itemIds[], deviceId}`；有租户令牌时按 **租户** 分桶（同租户各设备结果一致），没有才按 **设备**。
+3. 分桶规则：`sha256(itemId|tenant:<id> 或 device:<id>)` 取前 8 位十六进制 → `% 100`；同一身份永远同一桶，比例调大只放不放回。
+4. 匿名（无租户、无 `deviceId`）且比例 <100 时一律不命中，理由 `no_identity`——不拿 IP 猜身份。
+
+页面首次访问生成 `store:device`（UUID）存 `localStorage`，只用于分桶；页面把 `beta` 条目 id 送去 `/store/rollouts`，命中才渲染。接口不可达时测试通道保持空。
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| PUT | `/store/rollouts/:itemId` | 设放量比例（需 `CLOUD_ADMIN_TOKEN`） |
+| POST | `/store/rollouts` | 批量判定 `{itemIds[], deviceId}`，返回 `{bucket, eligible, reason}` |
+| GET | `/store/rollouts` | 查看全部放量配置（需 `CLOUD_ADMIN_TOKEN`） |
 
 **下载统计**：已上架条目点「下载」时向 `POST /store/downloads` 记一次——尽力而为，失败不影响下载；同源访问或把 `store:api` 指向云根。
 
@@ -186,7 +198,7 @@ cd ../cloud-root && CLOUD_TOKEN=dev-token CLOUD_ADMIN_TOKEN=adm-token CLOUD_DB=/
 
 **回滚**：清单是唯一真相——把 `version` / `size` / `sha256` / `url` 改回上一版并更新 `generatedAt` 即回滚。macOS 与 iOS 不支持自动降级，旧版用户需手动重装（细节见 `../cajob-pc-shell/BRIEF.md` §7）。
 
-**未做**（明确边界）：下载去重、按设备/租户的百分比灰度、CDN 访问日志对账、统计看板页。
+**未做**（明确边界）：下载去重、灰度放量自动化（按留存/崩溃率自动收缩）、CDN 访问日志对账、统计看板页。
 
 ## 与壳的闭环
 
@@ -201,7 +213,7 @@ cd ../cloud-root && CLOUD_TOKEN=dev-token CLOUD_ADMIN_TOKEN=adm-token CLOUD_DB=/
 |---|---|---|
 | M0 | 静态目录 + 清单 + 校验和 + 筛选 | 已完成 |
 | M1 | 授权与租户（座位数、许可下发、门店数） | 最小实现（`cloud-root` + 商店「我的许可」页，待接 OAS 身份） |
-| M2 | 更新通道 stable/beta、灰度比例、回滚、下载统计 | 最小实现（通道筛选 + 下载计数；按比例灰度未做） |
+| M2 | 更新通道 stable/beta、灰度比例、回滚、下载统计 | 最小实现（通道筛选 + 租户/设备分桶灰度 + 下载计数） |
 
 M1 起才需要登录，且必须共享 `oas_mother` 身份，不新建账号体系。
 

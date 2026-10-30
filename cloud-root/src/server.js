@@ -1,7 +1,7 @@
 // 云根参考实现（HTTP）：上行事件幂等接收 + 下行商品读模型 + 最小管理接口。
 // 契约见 docs/shell-contract.md §10；与 edge-store 对接时它就是"云根应答方"。
 import { createServer } from 'node:http';
-import { openDb, applyEvents, catalogSince, upsertCatalog, setStock, listEvents, recordDownload, downloadStats } from './db.js';
+import { openDb, applyEvents, catalogSince, upsertCatalog, setStock, listEvents, recordDownload, downloadStats, setRollout, rolloutMany, listRollouts } from './db.js';
 import { upsertTenant, entitlements, activate, deactivate, addStore, removeStore } from './store.js';
 
 const PORT = Number(process.env.CLOUD_PORT || 7331);
@@ -121,6 +121,32 @@ export function createCloud({ dbPath = ':memory:', token = TOKEN, adminToken = A
       if (req.method === 'GET' && path === '/store/downloads') {
         if (!adminToken || bearer(req) !== adminToken) return json(res, 403, { ok: false, code: 'admin_only' });
         return json(res, 200, { ok: true, ...downloadStats(db, url.searchParams.get('itemId') || '') });
+      }
+
+      // ── 商店 M2：百分比灰度 ────────────────────────────
+      // 设置放量比例（0=关，100=全量），运营侧
+      const putRollout = path.match(/^\/store\/rollouts\/([A-Za-z0-9_.-]+)$/);
+      if (req.method === 'PUT' && putRollout) {
+        if (!adminToken || bearer(req) !== adminToken) return json(res, 403, { ok: false, code: 'admin_only' });
+        const body = await readBody(req);
+        const r = setRollout(db, putRollout[1], body.percent);
+        if (!r) return json(res, 400, { ok: false, code: 'bad_request' });
+        return json(res, 200, { ok: true, ...r });
+      }
+
+      // 批量判定：端侧把 beta 条目 id 送来，返回命中与否；租户令牌优先
+      if (req.method === 'POST' && path === '/store/rollouts') {
+        const body = await readBody(req);
+        const ids = Array.isArray(body.itemIds) ? body.itemIds.slice(0, 100).map(String) : [];
+        if (!ids.length) return json(res, 400, { ok: false, code: 'bad_request' });
+        const who = { tenantId: tenantOf(req) || '', deviceId: String(body.deviceId || '') };
+        return json(res, 200, { ok: true, items: rolloutMany(db, ids, who) });
+      }
+
+      // 运营侧查看全部放量配置
+      if (req.method === 'GET' && path === '/store/rollouts') {
+        if (!adminToken || bearer(req) !== adminToken) return json(res, 403, { ok: false, code: 'admin_only' });
+        return json(res, 200, { ok: true, items: listRollouts(db) });
       }
       // ──────────────────────────────────────────────────
 

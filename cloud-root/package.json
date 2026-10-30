@@ -6,6 +6,6 @@
   "description": "BTOS 云根参考实现：上行事件幂等接收、冲突判定、下行商品读模型",
   "scripts": {
     "start": "node src/server.js",
-    "test": "node --test test/cloud.test.js test/store.test.js test/e2e.test.js"
+    "test": "node --test test/cloud.test.js test/store.test.js test/rollout.test.js test/e2e.test.js"
   }
 }

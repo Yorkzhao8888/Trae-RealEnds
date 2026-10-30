@@ -40,6 +40,9 @@ CLOUD_TOKEN=dev-token npm start
 | PUT | `/store/tenants/:id` | 管理：建租户与配额（需 `CLOUD_ADMIN_TOKEN`） |
 | POST | `/store/downloads` | 商店 M2：下载计数（公开，带租户令牌则留痕；无 `itemId` → 400） |
 | GET | `/store/downloads?itemId=` | 商店 M2：下载聚合（需 `CLOUD_ADMIN_TOKEN`） |
+| PUT | `/store/rollouts/:itemId` | 商店 M2：设灰度比例 0..100（需 `CLOUD_ADMIN_TOKEN`） |
+| POST | `/store/rollouts` | 商店 M2：批量判定 `{itemIds[], deviceId}`，租户优先分桶 |
+| GET | `/store/rollouts` | 商店 M2：查看放量配置（需 `CLOUD_ADMIN_TOKEN`） |
 
 ## 上行规则（对应店根的三条红线）
 
@@ -67,7 +70,7 @@ EDGE_CLOUD_URL=http://127.0.0.1:7331 EDGE_CLOUD_TOKEN=dev-token EDGE_TOKEN=dev-t
 npm test
 ```
 
-13 项：鉴权与健康、幂等重传、库存冲突停在冲突点、对账冲突、商品游标与删除；商店 M1 的租户配额与品牌授权、占座上限与幂等、门店配额、过期拦截、管理接口鉴权；商店 M2 下载计数（公开计数、租户留痕、未知通道归一、缺 `itemId` 拒绝、管理侧聚合与鉴权）；再加两项**真端到端**——店根租约+扣减+回传打到这里，云根商品再下行回店根；以及库存冲突 → 运营裁决 → 游标越过冲突。
+14 项：鉴权与健康、幂等重传、库存冲突停在冲突点、对账冲突、商品游标与删除；商店 M1 的租户配额与品牌授权、占座上限与幂等、门店配额、过期拦截、管理接口鉴权；商店 M2 下载计数（公开计数、租户留痕、未知通道归一、缺 `itemId` 拒绝、管理侧聚合与鉴权）与灰度分桶（比例设置、租户优先、匿名 `no_identity`、越界与鉴权）；再加两项**真端到端**——店根租约+扣减+回传打到这里，云根商品再下行回店根；以及库存冲突 → 运营裁决 → 游标越过冲突。
 
 ## 与生产云的差距
 
