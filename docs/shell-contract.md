@@ -272,7 +272,7 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 | `GET /edge/ui/conflicts` | 冲突复核运营页（静态免鉴权；页内数据接口仍要 token） |
 | `GET /edge/health` | 店根存活与云根连通性 |
 
-店根 ↔ 云根（服务端之间，双向游标、各自独立）：
+店根 ↔ 云根（服务端之间，双向游标、各自独立；参考实现见 `cloud-root/`）：
 
 | 接口 | 方向 | 作用 |
 |---|---|---|

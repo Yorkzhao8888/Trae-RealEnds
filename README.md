@@ -30,6 +30,7 @@
 | `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
 | `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型/冲突复核页 + UDP 发现；24 项测试通过 |
+| `cloud-root/` | 云根参考实现（联调/契约样板） | Node 24 + 内置 SQLite，零依赖 | **v0.1.0** 上行幂等接收/冲突判定/下行商品读模型/管理接口；与店根端到端打通，7 项测试通过。非生产实现 |
 
 ## 关键口径
 
@@ -61,3 +62,4 @@
 - 2026-10-30：`edge-store` 补「定时回传 + 指数退避」——配 `EDGE_CLOUD_URL` 即自动后台循环：成功归位 30s、失败 `30s→…→15min` 封顶、连续 3 次置 `cloudOffline`、409 冲突暂停等人裁决、4xx 直退最慢档；新增 `GET /edge/sync/status`、`POST /edge/sync/now`；测试增至 16 项。
 - 2026-10-30：`edge-store` 补「下行读模型」——`POST /edge/pull` 按游标拉 `/cloud/catalog`，整批落库后才推进 `catalogSeq`（失败不跳批），重复下发幂等不刷事件，`on/off/deleted` 三态，变化写 `catalog.upsert`/`catalog.delete` 供端壳经 `/edge/snapshot` 增量获取；调度器每次 tick 先拉后传，下行失败不污染上行退避；测试增至 23 项。
 - 2026-10-30：`edge-store` 补「冲突复核运营页」——`GET /edge/ui/conflicts` 免构建静态页，填 `EDGE_TOKEN` 后 4s 自动刷新，逐条 accept/reject/auto；资金类自动放行按钮直接禁用（服务端再拒一次）；页面免鉴权、数据接口仍要 token；测试增至 24 项。
+- 2026-10-30：新增 `cloud-root` 云根参考实现 —— 零依赖 Node 服务：`POST /cloud/events` 幂等接收（`(store,seq)` 主键）、冲突停在冲突点、库存不足/对账不符返回 409；`GET /cloud/catalog?since=` 下行商品增量；管理接口写商品与库存。与店根端到端打通（上行回传 + 下行落库 + 冲突裁决），7 项测试通过。
