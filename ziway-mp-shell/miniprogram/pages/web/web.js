@@ -7,6 +7,11 @@ const ENDS = {
 };
 // 离开超过 5 分钟后回来，强制重载一次，避免长期停留在旧版本 H5
 const STALE_MS = 5 * 60 * 1000;
+// 让 H5 侧的 shell-core 识别 web-view 环境（只上报能力，不触碰小程序 API）
+const SHELL_Q = 'shell=mp&brand=ziway&v=0.2.0';
+function withShell(url) {
+  return url + (url.indexOf('?') >= 0 ? '&' : '?') + SHELL_Q;
+}
 
 Page({
   data: {
@@ -24,9 +29,9 @@ Page({
           this.toError('当前无网络连接');
           return;
         }
-        this.setData({ src: ENDS[end].url });
+        this.setData({ src: withShell(ENDS[end].url) });
       },
-      fail: () => this.setData({ src: ENDS[end].url }),
+      fail: () => this.setData({ src: withShell(ENDS[end].url) }),
     });
   },
 
@@ -39,7 +44,7 @@ Page({
     if (Date.now() - this.awayAt < STALE_MS) return;
     this.awayAt = 0;
     // web-view 没有 reload API，换 src 才能重新拉取 H5
-    this.setData({ src: ENDS[this.end].url + '?__t=' + Date.now() });
+    this.setData({ src: withShell(ENDS[this.end].url) + '&__t=' + Date.now() });
   },
 
   onWebError(e) {

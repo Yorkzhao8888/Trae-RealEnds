@@ -48,6 +48,28 @@ for (const b of brands) {
   console.log(`${checkOnly ? '✓' : '→'} ${b.brand}: ${b.file} (${(body.length / 1024).toFixed(1)} KB)`);
 }
 
+// 桌面壳：preload 由模板生成（只换品牌别名与版本号）
+const DESKTOP = [
+  { brand: 'ziway', project: 'ziway-pc-shell', alias: 'ziwayOS' },
+  { brand: 'jechan', project: 'jechan-pc-shell', alias: 'jechanOS' },
+  { brand: 'xso', project: 'xso-pc-shell', alias: 'xsoOS' },
+];
+
+const preloadTpl = readFileSync(join(here, 'src/preload-template.js'), 'utf8');
+for (const d of DESKTOP) {
+  const pkgPath = join(root, d.project, 'package.json');
+  const version = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
+  const body = preloadTpl.replace('__ALIAS__', d.alias).replace('__VERSION__', version);
+  const target = join(root, d.project, 'preload.js');
+  if (checkOnly) {
+    const cur = existsSync(target) ? readFileSync(target, 'utf8') : '';
+    if (cur !== body) { console.error(`✗ preload 与模板不一致：${d.project}`); failed++; }
+  } else {
+    writeFileSync(target, body);
+  }
+  console.log(`${checkOnly ? '✓' : '→'} ${d.project}/preload.js (v${version})`);
+}
+
 // 自检页随后端发布，供真机验收用
 const selftest = join(here, 'src/selftest.html');
 if (existsSync(selftest)) {

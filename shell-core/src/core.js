@@ -222,10 +222,118 @@
 
   function openExternal(url) {
     if (!url) return err('E_BAD_ARGS', 'openExternal');
+    // 桌面壳：走 Electron 原生 shell.openExternal，避免在应用内开新窗口
+    if (window.ShellDesktop && typeof window.ShellDesktop.openExternal === 'function') {
+      try {
+        Promise.resolve(window.ShellDesktop.openExternal(url)).catch(function () {});
+        return ok();
+      } catch (e) {
+        return err('E_NATIVE', 'openExternal', e && e.message);
+      }
+    }
     if (P.Browser) {
       try { P.Browser.open({ url: url }); return ok(); } catch (e) { return err('E_NATIVE', 'openExternal', e && e.message); }
     }
     try { window.open(url, '_system'); return ok(); } catch (e) { return err('E_UNSUPPORTED', 'openExternal'); }
+  }
+
+  // ---------------------------------------------------------------- 桌面能力
+  var DESKTOP_METHODS = {
+    openExternal: true, openPath: true, revealFile: true, paths: true, writeTemp: true,
+  };
+
+  function desktopCapabilities() {
+    var d = window.ShellDesktop;
+    if (!d) return {};
+    var caps = {};
+    Object.keys(DESKTOP_METHODS).forEach(function (k) {
+      if (typeof d[k] === 'function') caps[k] = '✓';
+    });
+    return caps;
+  }
+
+  // ---------------------------------------------------------------- 离线队列（P0：只排队，不本地裁决）
+  // 条目：{ idem, method, url, body, at, tries }
+  // 规则：幂等键由端生成；联网后按入队顺序重放；4xx 视为永久失败并出队，5xx/网络错误保留重试。
+  var QUEUE_KEY = 'shell:offline-queue';
+  var flushing = false;
+
+  function queueRead() {
+    try {
+      var raw = localStorage.getItem(QUEUE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function queueWrite(list) {
+    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(list.slice(0, 200))); } catch (e) {}
+  }
+
+  function uuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'xxxxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0;
+      var v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    }) + '-' + Date.now();
+  }
+
+  function enqueue(item) {
+    var it = item || {};
+    if (!it.url || !it.method) return err('E_BAD_ARGS', 'offline.enqueue');
+    var entry = {
+      idem: it.idem || uuid(),
+      method: String(it.method).toUpperCase(),
+      url: it.url,
+      body: it.body === undefined ? null : it.body,
+      headers: it.headers || {},
+      at: Date.now(),
+      tries: 0,
+    };
+    var list = queueRead();
+    list.push(entry);
+    queueWrite(list);
+    emit('shell:queued', { idem: entry.idem, count: list.length });
+    if (netState().online) flush();
+    return ok({ idem: entry.idem, count: list.length });
+  }
+
+  async function flush() {
+    if (flushing || !netState().online) return ok({ flushed: 0 });
+    flushing = true;
+    var list = queueRead();
+    var kept = [];
+    var sent = 0;
+    try {
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        try {
+          var res = await fetch(e.url, {
+            method: e.method,
+            headers: Object.assign({ 'Content-Type': 'application/json', 'X-Idem-Key': e.idem }, e.headers || {}),
+            body: e.body === null ? undefined : JSON.stringify(e.body),
+            credentials: 'same-origin',
+          });
+          if (res.status >= 400 && res.status < 500) {
+            emit('shell:queue-failed', { idem: e.idem, status: res.status });
+            continue; // 4xx 永久失败，出队
+          }
+          if (!res.ok) throw new Error('status ' + res.status);
+          sent++;
+          emit('shell:queue-replayed', { idem: e.idem, status: res.status });
+        } catch (x) {
+          e.tries = (e.tries || 0) + 1;
+          kept.push(e);
+        }
+      }
+      queueWrite(kept);
+    } finally {
+      flushing = false;
+    }
+    if (sent) emit('shell:queue-drained', { sent: sent, left: kept.length });
+    return ok({ flushed: sent, left: kept.length });
   }
 
   function pushRequest() {
@@ -279,6 +387,17 @@
     'core.net': function () { return ok(netState()); },
     'core.end': function () { return currentEnd(); },
     'core.switchEnd': function (a) { return switchEnd(a && a.id); },
+    'offline.enqueue': function (a) { return enqueue(a); },
+    'offline.flush': function () { return flush(); },
+    'offline.list': function () { return ok(queueRead()); },
+    'desktop.paths': function () {
+      if (!window.ShellDesktop || typeof window.ShellDesktop.paths !== 'function') return err('E_UNSUPPORTED', 'desktop.paths');
+      try { return ok(window.ShellDesktop.paths()); } catch (e) { return err('E_NATIVE', 'desktop.paths', e && e.message); }
+    },
+    'desktop.revealFile': function (a) {
+      if (!window.ShellDesktop || typeof window.ShellDesktop.revealFile !== 'function') return err('E_UNSUPPORTED', 'desktop.revealFile');
+      try { window.ShellDesktop.revealFile(a && a.path); return ok(); } catch (e) { return err('E_NATIVE', 'desktop.revealFile', e && e.message); }
+    },
   };
 
   function ok(data) { return { ok: true, data: data === undefined ? null : data, at: nowMonotonic() }; }
@@ -345,7 +464,10 @@
   }
 
   function bindWeb() {
-    window.addEventListener('online', function () { emit('shell:network', netState()); });
+    window.addEventListener('online', function () {
+      emit('shell:network', netState());
+      flush();
+    });
     window.addEventListener('offline', function () { emit('shell:network', netState()); });
     document.addEventListener('visibilitychange', function () {
       emit(document.hidden ? 'shell:pause' : 'shell:resume');
@@ -428,7 +550,7 @@
     state.env = detect();
     P = plugins();
     state.platform = state.env === 'capacitor' ? window.Capacitor.getPlatform() : state.env;
-    state.capabilities = buildCapabilities(state.env, P);
+    state.capabilities = Object.assign(buildCapabilities(state.env, P), desktopCapabilities());
 
     var Shell = {
       __core: true,
@@ -480,7 +602,10 @@
     Shell.vibrate = function (d) { vibrate(d); };
 
     window.Shell = Shell;
-    if (config.alias) window[config.alias] = Shell;
+    if (config.alias) {
+      // Electron preload 通过 contextBridge 暴露的品牌对象是只读的：覆盖失败属预期，忽略即可
+      try { window[config.alias] = Shell; } catch (e) {}
+    }
 
     if (state.env === 'capacitor') {
       polish();
