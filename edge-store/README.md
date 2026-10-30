@@ -51,6 +51,7 @@ EDGE_TOKEN=dev-token npm start
 | GET | `/edge/catalog` | 店根本地商品读模型 + 下行游标 `cursor` |
 | GET | `/edge/conflicts` | 未处理的冲突 |
 | POST | `/edge/conflicts/:id/resolve` | `{action:'accept'\|'reject'\|'auto'}`，`auto` 仅限库存类 |
+| GET | `/edge/ui/conflicts` | 冲突复核运营页（静态，免鉴权；页内数据接口仍需 token） |
 
 返回约定：
 
@@ -80,7 +81,7 @@ const edge = await discover();         // 端侧：拿到 {storeId, port}
 npm test
 ```
 
-23 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记；回传游标推进、409 不跳过、资金类禁止自动放行、5xx 可重试；退避归位、连续失败置离线、恢复归零、冲突暂停、冲突解决后恢复；下行的首次落库与事件、增量带 `since`、下架/删除、重复下发幂等、5xx 与网络异常不动游标、下行失败不影响上行。
+24 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记；回传游标推进、409 不跳过、资金类禁止自动放行、5xx 可重试；退避归位、连续失败置离线、恢复归零、冲突暂停、冲突解决后恢复；下行的首次落库与事件、增量带 `since`、下架/删除、重复下发幂等、5xx 与网络异常不动游标、下行失败不影响上行；运营页免鉴权可开而数据接口仍要 token。
 
 ## 云根回传与冲突裁决
 
@@ -126,7 +127,15 @@ GET {cloud}/cloud/catalog?since=<catalogSeq>
 2. **重复下发幂等**：内容完全相同则 `unchanged`，不写事件，不刷事件流。
 3. **事件化**：有变化才写 `catalog.upsert` / `catalog.delete` 并 `bumpVersion`，端壳通过 `/edge/snapshot?since=` 增量拿到全量读模型。
 
+## 冲突复核运营页
+
+`GET /edge/ui/conflicts`（或 `GET /edge/ui` 自动跳转）：打开即用，无需构建、无外部依赖。
+
+- 顶部填 `EDGE_TOKEN` → 「保存」写入 `localStorage`，之后每 4 秒自动刷新。
+- 每行给出三个动作：**按云根为准**（accept）/ **作废**（reject，二次确认）/ **自动放行**（auto）。
+- 资金类（`money.*` / `member.points` / 未知类型）的「自动放行」按钮直接禁用，避免误点；服务端也会再拒一次（`400 manual_required`）。
+- 页面本身不鉴权（浏览器导航带不了 `Authorization`），页内调用的 `/edge/health`、`/edge/conflicts` 仍需 token。
+
 ## 尚未做
 
 - **云根侧接口**：`/cloud/events`（上行）与 `/cloud/catalog`（下行）需云根按同契约实现（幂等 + 409 冲突体 `{seq, reason}`）
-- **冲突复核界面**：只有 API，没有运营端页面

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>店根 · 冲突复核</title>
+<style>
+  :root {
+    --bg: #0E1218; --panel: #151A23; --line: #26303D;
+    --text: #E6EDF3; --muted: #8B97A8;
+    --amber: #F0A020; --blue: #1F6FEB; --green: #2EA043; --red: #E5534B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5;
+  }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  .spacer { flex: 1; }
+  .token { display: flex; gap: 6px; align-items: center; }
+  input[type=password], input[type=text] {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; font: inherit; width: 190px; outline: none;
+  }
+  input:focus { border-color: var(--blue); }
+  button {
+    font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); padding: 6px 12px;
+  }
+  button:hover { border-color: var(--blue); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  button.primary { background: var(--green); border-color: var(--green); color: #fff; }
+  button.danger { background: transparent; border-color: var(--red); color: var(--red); }
+  button.ghost { background: transparent; }
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px 4px; }
+  .pill {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 999px;
+    padding: 4px 11px; font-size: 12px; color: var(--muted);
+  }
+  .pill b { color: var(--text); font-weight: 600; margin-left: 4px; }
+  .pill.warn { border-color: rgba(240,160,32,.5); color: var(--amber); }
+  .pill.ok { border-color: rgba(46,160,67,.45); color: var(--green); }
+  .pill.bad { border-color: rgba(229,83,75,.5); color: var(--red); }
+  main { padding: 8px 20px 24px; }
+  .hint { color: var(--muted); font-size: 12px; padding: 6px 0 10px; }
+  .empty {
+    border: 1px dashed var(--line); border-radius: 10px; padding: 36px;
+    text-align: center; color: var(--muted);
+  }
+  .row {
+    display: flex; gap: 14px; align-items: flex-start;
+    border: 1px solid var(--line); background: var(--panel);
+    border-radius: 10px; padding: 14px; margin-bottom: 10px;
+  }
+  .row.manual { border-left: 3px solid var(--amber); }
+  .row.auto { border-left: 3px solid var(--blue); }
+  .id { color: var(--muted); font-variant-numeric: tabular-nums; padding-top: 2px; min-width: 40px; }
+  .grow { flex: 1; min-width: 0; }
+  .type { font-weight: 600; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; }
+  .tag.manual { color: var(--amber); }
+  .tag.auto { color: var(--blue); }
+  .reason { color: var(--text); margin-top: 4px; word-break: break-word; }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .acts { display: flex; gap: 8px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+  .toast {
+    position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+    background: var(--panel); border: 1px solid var(--line); color: var(--text);
+    padding: 9px 16px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  .toast.show { opacity: 1; }
+  .toast.err { border-color: var(--red); color: var(--red); }
+  @media (max-width: 720px) {
+    .row { flex-direction: column; }
+    .acts { width: 100%; justify-content: flex-start; }
+    input[type=password], input[type=text] { width: 140px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>店根 · 冲突复核</h1>
+  <span class="spacer"></span>
+  <div class="token">
+    <input id="token" type="password" placeholder="EDGE_TOKEN" autocomplete="off" />
+    <button id="save" class="ghost">保存</button>
+    <button id="refresh">刷新</button>
+  </div>
+</header>
+
+<div class="stats" id="stats">
+  <span class="pill">云根<b id="s-cloud">—</b></span>
+  <span class="pill">待处理冲突<b id="s-conf">—</b></span>
+  <span class="pill">待回传<b id="s-out">—</b></span>
+  <span class="pill">库存版本<b id="s-ver">—</b></span>
+</div>
+
+<main>
+  <div class="hint">资金类（<code>money.*</code> / <code>member.points</code>）必须人工裁决，不允许自动放行；库存类可自动放行。每 4 秒自动刷新。</div>
+  <div id="list"><div class="empty">加载中…</div></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const AUTO_TYPES = ['stock.dec', 'stock.inc', 'order.draft'];
+  const $ = (s) => document.querySelector(s);
+  const tokenEl = $('#token');
+  tokenEl.value = localStorage.getItem('edge:token') || '';
+
+  function fmt(t) {
+    const d = new Date(t);
+    const p = (n) => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  let toastTimer = null;
+  function toast(msg, isErr) {
+    const el = $('#toast');
+    el.textContent = msg;
+    el.className = 'toast show' + (isErr ? ' err' : '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.className = 'toast'; }, 2600);
+  }
+
+  async function api(path, method, body) {
+    const headers = {};
+    const tk = tokenEl.value.trim();
+    if (tk) headers.authorization = 'Bearer ' + tk;
+    if (body) headers['content-type'] = 'application/json';
+    const res = await fetch(path, { method: method || 'GET', headers, body: body ? JSON.stringify(body) : undefined });
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (res.status === 401) toast('令牌无效，请填写 EDGE_TOKEN', true);
+    return { status: res.status, body: data };
+  }
+
+  function renderStats(h) {
+    const cloud = $('#s-cloud');
+    cloud.textContent = h.cloudOffline ? '离线' : '在线';
+    cloud.parentElement.className = 'pill ' + (h.cloudOffline ? 'bad' : 'ok');
+    $('#s-conf').textContent = h.conflicts + ' 项';
+    $('#s-out').textContent = h.outbox + ' 条';
+    $('#s-ver').textContent = h.version;
+  }
+
+  function renderList(rows) {
+    const box = $('#list');
+    if (!rows.length) {
+      box.innerHTML = '<div class="empty">没有待处理的冲突。</div>';
+      return;
+    }
+    box.innerHTML = rows.map((c) => {
+      const auto = AUTO_TYPES.includes(c.type);
+      const kind = auto ? 'auto' : 'manual';
+      const label = auto ? '库存·可自动' : '资金/未知·人工';
+      return '<div class="row ' + kind + '">' +
+        '<div class="id">#' + c.id + '</div>' +
+        '<div class="grow">' +
+          '<div class="type">' + esc(c.type) + '<span class="tag ' + kind + '">' + label + '</span></div>' +
+          '<div class="reason">' + esc(c.reason || '（云根未给出原因）') + '</div>' +
+          '<div class="sub">seq ' + c.seq + ' · ' + fmt(c.at) + ' · ' + esc(c.status) + '</div>' +
+        '</div>' +
+        '<div class="acts">' +
+          '<button class="primary" data-act="accept" data-id="' + c.id + '">按云根为准</button>' +
+          '<button class="danger" data-act="reject" data-id="' + c.id + '">作废</button>' +
+          '<button class="ghost" data-act="auto" data-id="' + c.id + '"' + (auto ? '' : ' disabled title="资金类必须人工裁决"') + '>自动放行</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  async function load() {
+    const h = await api('/edge/health');
+    if (h.status === 200) renderStats(h.body);
+    const c = await api('/edge/conflicts');
+    if (c.status === 200) renderList(c.body.conflicts || []);
+    else if (c.status === 401) renderList([]);
+  }
+
+  async function resolve(id, action) {
+    if (action === 'reject' && !confirm('作废后该事件永久跳过，确定？')) return;
+    const r = await api('/edge/conflicts/' + id + '/resolve', 'POST', { action });
+    if (r.status === 200) {
+      toast('已处理：' + id + ' → ' + (r.body && r.body.status || action));
+      await load();
+    } else {
+      const code = (r.body && r.body.code) || r.status;
+      toast(code === 'manual_required' ? '资金类不允许自动放行' : '处理失败：' + code, true);
+    }
+  }
+
+  $('#list').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn || btn.disabled) return;
+    resolve(btn.dataset.id, btn.dataset.act);
+  });
+
+  $('#save').addEventListener('click', () => {
+    localStorage.setItem('edge:token', tokenEl.value.trim());
+    toast('令牌已保存');
+    load();
+  });
+  $('#refresh').addEventListener('click', load);
+
+  load();
+  setInterval(() => { if (!document.hidden) load(); }, 4000);
+})();
+</script>
+</body>
+</html>

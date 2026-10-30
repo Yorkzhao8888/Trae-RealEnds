@@ -115,6 +115,21 @@ test('云根 5xx 可重试且游标不动', async () => {
   await app.close();
 });
 
+test('冲突复核页免鉴权可打开，数据接口仍需 token', async () => {
+  const { app, base } = await boot();
+
+  const page = await fetch(base + '/edge/ui/conflicts');
+  assert.equal(page.status, 200);
+  assert.equal((page.headers.get('content-type') || '').includes('text/html'), true);
+  const html = await page.text();
+  assert.equal(html.includes('/edge/conflicts'), true);
+  assert.equal(html.includes('/edge/health'), true);
+
+  const noTk = await fetch(base + '/edge/conflicts');
+  assert.equal(noTk.status, 401);
+  await app.close();
+});
+
 test('云根未配置直接拒绝', async () => {
   const { app, api } = await boot();
   const r = await api('POST', '/edge/sync', {});

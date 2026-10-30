@@ -29,7 +29,7 @@
 | `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0** 目录/清单/校验和/筛选；入口 `h5.cewaycloud.com`（DNS 在、证书待重签） |
 | `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
-| `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型 + UDP 发现；23 项测试通过 |
+| `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型/冲突复核页 + UDP 发现；24 项测试通过 |
 
 ## 关键口径
 
@@ -60,3 +60,4 @@
 - 2026-10-30：`edge-store` 升 P2 —— 云根 outbox 回传（409 停在冲突点、不跳过）、冲突分级（库存自动 / 资金人工）、`/edge/outbox` `/edge/sync` `/edge/conflicts`；测试增至 11 项。`shell-core` 同步接入 `edge.*` 适配器（3s 超时、租约缓存、`E_STOCK` 映射、可回落离线队列）。
 - 2026-10-30：`edge-store` 补「定时回传 + 指数退避」——配 `EDGE_CLOUD_URL` 即自动后台循环：成功归位 30s、失败 `30s→…→15min` 封顶、连续 3 次置 `cloudOffline`、409 冲突暂停等人裁决、4xx 直退最慢档；新增 `GET /edge/sync/status`、`POST /edge/sync/now`；测试增至 16 项。
 - 2026-10-30：`edge-store` 补「下行读模型」——`POST /edge/pull` 按游标拉 `/cloud/catalog`，整批落库后才推进 `catalogSeq`（失败不跳批），重复下发幂等不刷事件，`on/off/deleted` 三态，变化写 `catalog.upsert`/`catalog.delete` 供端壳经 `/edge/snapshot` 增量获取；调度器每次 tick 先拉后传，下行失败不污染上行退避；测试增至 23 项。
+- 2026-10-30：`edge-store` 补「冲突复核运营页」——`GET /edge/ui/conflicts` 免构建静态页，填 `EDGE_TOKEN` 后 4s 自动刷新，逐条 accept/reject/auto；资金类自动放行按钮直接禁用（服务端再拒一次）；页面免鉴权、数据接口仍要 token；测试增至 24 项。

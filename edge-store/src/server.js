@@ -1,6 +1,7 @@
 // 店根 HTTP 服务：契约 §店根 API（/edge/health /edge/lease /edge/commit /edge/snapshot）
 // 无第三方依赖，默认监听 0.0.0.0:7321（门店局域网），通过 EDGE_TOKEN 做最小鉴权。
 import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
 import { openDb, createLease, aliveLeases, commit, snapshot, metaGet, metaSet, version, catalogList } from './db.js';
 import { syncOnce, openConflicts, resolveConflict, pending } from './sync.js';
 import { pullOnce } from './pull.js';
@@ -12,6 +13,10 @@ const TOKEN = process.env.EDGE_TOKEN || '';
 const STORE_ID = process.env.EDGE_STORE_ID || 'store-local';
 const LEASE_TTL = Number(process.env.EDGE_LEASE_TTL_MS || 15 * 60 * 1000);
 const MAX_QTY = Number(process.env.EDGE_MAX_QTY || 20);
+
+// 运营页（静态）：浏览器导航无法携带 Authorization，因此页面本身不鉴权，
+// 页面里调用的数据接口仍然要 token。
+const UI_PAGES = { '/edge/ui/conflicts': 'conflicts.html' };
 
 function json(res, code, body) {
   const buf = Buffer.from(JSON.stringify(body));
@@ -79,6 +84,21 @@ export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://edge');
     const path = url.pathname;
+
+    if (req.method === 'GET' && path === '/edge/ui') {
+      res.writeHead(302, { location: '/edge/ui/conflicts' });
+      return res.end();
+    }
+
+    if (req.method === 'GET' && UI_PAGES[path]) {
+      try {
+        const html = await readFile(new URL('./public/' + UI_PAGES[path], import.meta.url), 'utf8');
+        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'content-length': Buffer.byteLength(html), 'cache-control': 'no-store' });
+        return res.end(html);
+      } catch (e) {
+        return json(res, 500, { ok: false, code: 'ui_missing' });
+      }
+    }
 
     if (token) {
       const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');

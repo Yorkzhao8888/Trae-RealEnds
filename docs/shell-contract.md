@@ -269,6 +269,7 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 | `POST /edge/commit` | 原子提交 `{leaseId, ops[]}`，整批成功或整批失败 |
 | `GET /edge/snapshot?since=` | 拉取店内读模型增量 |
 | `GET /edge/catalog` | 店根商品读模型 + 下行游标 |
+| `GET /edge/ui/conflicts` | 冲突复核运营页（静态免鉴权；页内数据接口仍要 token） |
 | `GET /edge/health` | 店根存活与云根连通性 |
 
 店根 ↔ 云根（服务端之间，双向游标、各自独立）：
