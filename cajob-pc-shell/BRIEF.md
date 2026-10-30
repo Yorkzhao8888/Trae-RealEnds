@@ -58,7 +58,7 @@ v0.2.2 的体验改动只通过语法与配置校验，**未在本机运行 GUI*
 
 **Phase 3 自动更新**
 - `electron-updater@^6.8.9`（dependencies，已确认打进 app.asar）
-- `publish`: generic 源 → `https://h5.cewaycloud.com/download/latest/`
+- `publish`: generic 源 → `https://cajob.cewaysoft.com/download/latest/`
 - 行为：仅打包态启用；启动 10s 后首检 + 每 30min 轮询；自动下载，完成后弹窗询问重启；错误静默不阻塞
 - 菜单新增「检查更新…」
 
@@ -129,7 +129,7 @@ v0.2.2 的体验改动只通过语法与配置校验，**未在本机运行 GUI*
 3. **Windows 必须 Authenticode 签名**：未签名 exe 会触发 SmartScreen「未知发布者」拦截，安装转化率断崖。
    凭据：`WIN_CSC_LINK` / `WIN_CSC_PASSWORD`，`release.sh` 检测到即自动启用。
 4. **DMG 必须在沙箱外构建**（写 `/Volumes`）。
-5. **分发红线**：终端下载一律走已备案渠道 `https://h5.cewaycloud.com/download/latest/`，本仓只做源码协作。
+5. **分发红线**：终端下载一律走已备案渠道 `https://cajob.cewaysoft.com/download/latest/`，本仓只做源码协作。
 
 ---
 
@@ -144,11 +144,11 @@ v0.2.2 的体验改动只通过语法与配置校验，**未在本机运行 GUI*
 
 ```bash
 # 1. 线上元数据是否存在、版本是多少
-curl -sI  https://h5.cewaycloud.com/download/latest/latest-mac.yml | head -1
-curl -s   https://h5.cewaycloud.com/download/latest/latest-mac.yml | grep -m1 '^version:'
+curl -sI  https://cajob.cewaysoft.com/download/latest/latest-mac.yml | head -1
+curl -s   https://cajob.cewaysoft.com/download/latest/latest-mac.yml | grep -m1 '^version:'
 
 # 2. 元数据里指的文件是否真存在（404 是最常见的坑）
-curl -s   https://h5.cewaycloud.com/download/latest/latest-mac.yml | grep -m1 '^path:'
+curl -s   https://cajob.cewaysoft.com/download/latest/latest-mac.yml | grep -m1 '^path:'
 
 # 3. 客户端版本（用户反馈时核对）
 #    mac：应用 → 关于 Cajob
@@ -202,7 +202,7 @@ curl -s   https://h5.cewaycloud.com/download/latest/latest-mac.yml | grep -m1 '^
 
 ### 8.1 契约
 
-壳是纯容器：`loadURL('https://h5.cewaycloud.com/')`，业务、路由、SSR 全在 H5。
+壳是纯容器：`loadURL('https://cajob.cewaysoft.com/')`，业务、路由、SSR 全在 H5。
 这意味着 **H5 发版即刻影响所有存量壳**，而壳只能靠应用商店更新——两端节奏天然不同步。
 
 | H5 侧变更 | 对壳的影响 | 处置 |
@@ -210,7 +210,7 @@ curl -s   https://h5.cewaycloud.com/download/latest/latest-mac.yml | grep -m1 '^
 | 新增页面 / 改样式 | 无 | H5 自行发布 |
 | 新增 API | 无 | 同上 |
 | 修改已有 API 契约 | **老壳直接报错**（页面在壳内，无法回退） | 服务端保留旧字段 ≥ 2 个壳版本 |
-| 改登录/回跳路径 | 登录中断（白名单 = `h5` / `oas` + 任意 `*.cewaycloud.com`；换域或降为 http 即被外抛到系统浏览器） | 需壳发版或确认回跳仍在白名单内 |
+| 改登录/回跳路径 | 登录中断（白名单 = `h5` / `oas` + 任意 `*.cewaysoft.com`；换域或降为 http 即被外抛到系统浏览器） | 需壳发版或确认回跳仍在白名单内 |
 | 新增原生能力依赖（相机/推送） | 老壳无对应权限，调用即失败 | 必须做能力检测，不可硬依赖 |
 | 依赖微信 JSSDK | 壳内不可用 | 必须降级到 `cajobShell.share()` |
 
@@ -228,15 +228,15 @@ curl -s   https://h5.cewaycloud.com/download/latest/latest-mac.yml | grep -m1 '^
 
 ## 9. 会话链路验收
 
-壳内登录走 `oas.cewaycloud.com`，会话依赖 `xoas_session` + `oas_session` **成对有效**。
+壳内登录走 `oas.cewaysoft.com`，会话依赖 `xoas_session` + `oas_session` **成对有效**。
 
 ### 9.1 验收步骤
 
 | # | 操作 | 预期 |
 |---|---|---|
-| 1 | 冷启动 Cajob | 加载 `h5.cewaycloud.com`，无白屏 |
-| 2 | 未登录访问需登录页 | 跳 `oas.cewaycloud.com/oauth/login?txn=...`，**不新开外部浏览器** |
-| 3 | 完成登录 | 回跳 `h5.cewaycloud.com`，落地原目标页 |
+| 1 | 冷启动 Cajob | 加载 `cajob.cewaysoft.com`，无白屏 |
+| 2 | 未登录访问需登录页 | 跳 `oas.cewaysoft.com/oauth/login?txn=...`，**不新开外部浏览器** |
+| 3 | 完成登录 | 回跳 `cajob.cewaysoft.com`，落地原目标页 |
 | 4 | 完全退出应用后重启 | 仍为登录态（`persist:cajob` 分区持久化生效） |
 | 5 | 主动退出登录 | 再访问受限页重新跳 oas |
 | 6 | 域外链接（如 `https://github.com`） | 交给系统浏览器，壳内不导航 |

@@ -1,16 +1,16 @@
 // Cajob 真实端 H5 根 PC 壳 —— Electron 主进程
 // v0.2.2：三端体验统一（窗口记忆、主题跟随、下载/更新进度、崩溃自恢复、跨平台快捷键）
-const { app, BrowserWindow, shell, Menu, session, nativeImage, dialog, screen, nativeTheme } = require('electron');
+const { app, BrowserWindow, shell, Menu, session, nativeImage, dialog, screen, nativeTheme, powerMonitor } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-const HOME_URL = 'https://h5.cewaycloud.com/';
+const HOME_URL = 'https://cajob.cewaysoft.com/';
 // 品牌图标（窗口图标：Windows/Linux 开发模式；打包后由安装器内嵌图标接管）
 const APP_ICON = path.join(__dirname, 'build', 'icon.png');
 // 允许在壳内导航的域（登录/授权链路会跳到 A门）；P4-1 收紧：仅 https
 const ALLOWED_HOSTS = new Set([
-  'h5.cewaycloud.com',
-  'oas.cewaycloud.com',
+  'cajob.cewaysoft.com',
+  'oas.cewaysoft.com',
 ]);
 
 const THEME_BG = { dark: '#0F1115', light: '#FFFFFF' };
@@ -74,7 +74,7 @@ function isAllowed(urlStr) {
     // P4-1 仅允许 https（http 明文不放行）
     if (u.protocol !== 'https:') return false;
     const host = u.hostname.toLowerCase();
-    return ALLOWED_HOSTS.has(host) || host.endsWith('.cewaycloud.com');
+    return ALLOWED_HOSTS.has(host) || host.endsWith('.cewaysoft.com');
   } catch {
     return false;
   }
@@ -104,6 +104,59 @@ code{font-size:11px;color:#9aa1ad}
 <code>${escapeHtml(code)} ${escapeHtml(desc || '')}</code><br>
 <button onclick="location.replace('${HOME_URL}')">重新加载</button>
 </div></body></html>`;
+}
+
+// ── H5 版本同频：离开一段时间后回到窗口，比对 chunk 指纹，变了才重载 ──
+const SYNC_MIN_AWAY = 5 * 60 * 1000;
+const SYNC_MIN_GAP = 10 * 60 * 1000;
+let blurredAt = 0;
+let lastSyncAt = 0;
+let syncingH5 = false;
+
+// 只取 /_next/static/chunks/ 的路径；判断服务端是否多出本地没有的 chunk
+function chunkPathsFromHtml(html, base) {
+  const out = [];
+  const re = /<script[^>]+src="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(html))) {
+    try {
+      const u = new URL(m[1], base);
+      if (u.pathname.includes('/_next/static/chunks/')) out.push(u.pathname);
+    } catch { /* 忽略非法 src */ }
+  }
+  return out;
+}
+
+async function syncH5Version() {
+  if (syncingH5 || !mainWindow || mainWindow.isDestroyed()) return;
+  if (Date.now() - lastSyncAt < SYNC_MIN_GAP) return;
+  const url = mainWindow.webContents.getURL();
+  if (!/^https:\/\/cajob\.cewaysoft\.com\//.test(url)) return;
+
+  syncingH5 = true;
+  lastSyncAt = Date.now();
+  try {
+    // 必须用窗口自己的 session 取，否则拿不到登录态，会被重定向到登录页
+    const res = await mainWindow.webContents.session.fetch(url, { cache: 'no-store' });
+    if (!res.ok) return;
+    const remote = chunkPathsFromHtml(await res.text(), url);
+    const local = await mainWindow.webContents.executeJavaScript(
+      `Array.from(document.scripts).map(s => s.getAttribute('src') || '').filter(s => s.indexOf('/_next/static/chunks/') >= 0).map(s => new URL(s, location.href).pathname)`,
+      true
+    );
+    if (!local || !local.length || !remote.length) return;
+    const localSet = new Set(local);
+    if (!remote.some((p) => !localSet.has(p))) return;
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.reload();
+  } catch { /* 网络异常：下次回到前台再试 */ }
+  finally { syncingH5 = false; }
+}
+
+function syncH5IfAway() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.webContents.isLoading()) return;
+  if (Date.now() - blurredAt < SYNC_MIN_AWAY) return;
+  syncH5Version();
 }
 
 function createWindow() {
@@ -138,7 +191,14 @@ function createWindow() {
   }
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
+  blurredAt = Date.now();
   mainWindow.loadURL(HOME_URL);
+
+  // 离开 ≥5 分钟再回到窗口：与线上 H5 对一次版本，变了静默重载
+  mainWindow.on('blur', () => { blurredAt = Date.now(); });
+  mainWindow.on('focus', syncH5IfAway);
+  mainWindow.on('minimize', () => { blurredAt = Date.now(); });
+  mainWindow.on('restore', syncH5IfAway);
 
   // 窗口尺寸/位置变化时落盘（拖动过程中节流，关闭时再存一次兜底）
   let saveTimer = null;
@@ -151,7 +211,7 @@ function createWindow() {
   mainWindow.on('maximize', scheduleSave);
   mainWindow.on('unmaximize', scheduleSave);
 
-  // 站内导航：cewaycloud.com 域内放行（OAuth 回跳链），其余交给系统浏览器
+  // 站内导航：cewaysoft.com 域内放行（OAuth 回跳链），其余交给系统浏览器
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (!isAllowed(url)) {
       event.preventDefault();
@@ -391,9 +451,19 @@ app.whenReady().then(() => {
   createWindow();
   setupAutoUpdate();
 
+  // 系统休眠唤醒后也做一次同频检查（唤醒时窗口可能没触发 blur/focus）
+  powerMonitor.on('resume', () => {
+    blurredAt = 0;
+    syncH5IfAway();
+  });
+
   app.on('activate', () => {
     // macOS：点击 Dock 图标时若无窗口则重建
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else if (mainWindow) {
+      mainWindow.focus();
+      syncH5IfAway();
+    }
   });
 });
 

@@ -30,7 +30,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://h5.cewaycloud.com/download/latest/"
+        "url": "https://cajob.cewaysoft.com/download/latest/"
       }
     ],
     "artifactName": "${productName}-${os}-${arch}.${ext}",

@@ -1,5 +1,5 @@
 // 加载失败页：给出原因、重试与复制入口
-const HOME = 'https://h5.cewaycloud.com/';
+const HOME = 'https://cajob.cewaysoft.com/';
 
 Page({
   data: {

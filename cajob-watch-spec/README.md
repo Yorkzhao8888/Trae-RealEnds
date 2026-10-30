@@ -14,7 +14,7 @@
   │
   │  HTTPS API + device_token 或 App 内共享 session
   ▼
-h5.cewaycloud.com/api/backend/*
+cajob.cewaysoft.com/api/backend/*
 ```
 
 ## 为什么用 Widget 而不是独立手表壳
@@ -73,7 +73,7 @@ struct CajobProvider: TimelineProvider {
         // 方案 B：走 device_token 直调 API（需要后端支持）
         // 这里用 URLSession 示例，token 从 App Group UserDefaults 读
         let token = UserDefaults(suiteName: "group.com.cewaycloud.cajob")?.string(forKey: "deviceToken") ?? ""
-        var req = URLRequest(url: URL(string: "https://h5.cewaycloud.com/api/backend/widget/overview")!)
+        var req = URLRequest(url: URL(string: "https://cajob.cewaysoft.com/api/backend/widget/overview")!)
         req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         URLSession.shared.dataTask(with: req) { data, _, _ in
             if let data = data, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {

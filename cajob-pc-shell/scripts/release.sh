@@ -16,7 +16,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-BASE_URL="${BASE_URL:-https://h5.cewaycloud.com/download/latest}"
+BASE_URL="${BASE_URL:-https://cajob.cewaysoft.com/download/latest}"
 ARTIFACTS_MAC="Cajob-mac-arm64.dmg Cajob-mac-x64.dmg Cajob-mac-arm64.zip Cajob-mac-x64.zip"
 ARTIFACTS_WIN="Cajob-Setup.exe Cajob-win-x64.zip"
 METADATA="latest-mac.yml latest.yml"

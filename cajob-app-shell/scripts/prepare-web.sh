@@ -6,7 +6,7 @@
 #   offline.html    server.errorPath 指向的断网兜底页
 #   shell/          原生桥运行时（由 H5 根按需引入）
 #
-# 业务页面不在此组装：真实业务始终来自 https://h5.cewaycloud.com。
+# 业务页面不在此组装：真实业务始终来自 https://cajob.cewaysoft.com。
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

@@ -124,7 +124,7 @@ Authorization: Bearer <device_token> 或普通 OAuth cookie
   "scopes": ["chat:read", "order:read", "order:write", "profile:read"],
   "iat": 1729386000,
   "exp": 1744938000,             // 180 天
-  "iss": "https://oas.cewaycloud.com"
+  "iss": "https://oas.cewaysoft.com"
 }
 ```
 

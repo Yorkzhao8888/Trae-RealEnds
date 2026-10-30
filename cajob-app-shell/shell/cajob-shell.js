@@ -161,10 +161,103 @@
 
     bindPush();
 
+    // ---- H5 版本同频：H5 每次发版会换 chunk 指纹，回到前台时对一次 ----
+    // 只比对当前路由的 /_next/static/chunks 路径，不碰业务数据；变了才整页重载。
+    var SYNC = { hiddenMs: 5 * 60 * 1000, gapMs: 10 * 60 * 1000 };
+    var hiddenAt = 0;
+    var syncing = false;
+
+    function chunkPaths(root) {
+      var list = (root || document).querySelectorAll('script[src*="/_next/static/chunks/"]');
+      var out = [];
+      for (var i = 0; i < list.length; i++) {
+        var raw = list[i].getAttribute('src');
+        if (!raw) continue;
+        try {
+          out.push(new URL(raw, location.href).pathname);
+        } catch (e) {
+          /* 非法 src：跳过 */
+        }
+      }
+      return out;
+    }
+
+    // 只判断「服务端多出本地没有的 chunk」：动态导入产生的额外本地 chunk 不算发版
+    function hasNewBuild(doc) {
+      var remote = chunkPaths(doc);
+      if (!remote.length) return false;
+      var local = {};
+      var cur = chunkPaths(document);
+      for (var i = 0; i < cur.length; i++) local[cur[i]] = true;
+      for (var j = 0; j < remote.length; j++) {
+        if (!local[remote[j]]) return true;
+      }
+      return false;
+    }
+
+    function editing() {
+      var el = document.activeElement;
+      if (!el) return false;
+      var tag = (el.tagName || '').toUpperCase();
+      return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+    }
+
+    function lastSyncAt() {
+      try {
+        return Number(sessionStorage.getItem('cajob:h5-sync') || 0);
+      } catch (e) {
+        return 0;
+      }
+    }
+
+    function markSync() {
+      try {
+        sessionStorage.setItem('cajob:h5-sync', String(Date.now()));
+      } catch (e) {
+        /* 无痕模式禁用 storage：只靠内存态兜底 */
+      }
+    }
+
+    async function syncH5() {
+      if (syncing || editing()) return;
+      if (Date.now() - hiddenAt < SYNC.hiddenMs) return;
+      if (Date.now() - lastSyncAt() < SYNC.gapMs) return;
+      syncing = true;
+      try {
+        var res = await fetch(location.pathname + location.search, {
+          cache: 'no-store',
+          credentials: 'same-origin',
+        });
+        if (!res.ok) return;
+        var doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        if (hasNewBuild(doc)) {
+          markSync();
+          location.reload();
+        }
+      } catch (e) {
+        /* 网络抖动：下次回前台再试 */
+      } finally {
+        syncing = false;
+      }
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        hiddenAt = Date.now();
+        return;
+      }
+      syncH5();
+    });
+    window.addEventListener('cajob:app-resume', syncH5);
+
     // ---- 生命周期 ----
     if (P.App) {
       P.App.addListener('appStateChange', function (state) {
-        if (state && state.isActive) emit('cajob:app-resume');
+        if (state && state.isActive) {
+          emit('cajob:app-resume');
+          return;
+        }
+        hiddenAt = Date.now();
       });
       P.App.addListener('appUrlOpen', function (data) {
         emit('cajob:deeplink', data && data.url);

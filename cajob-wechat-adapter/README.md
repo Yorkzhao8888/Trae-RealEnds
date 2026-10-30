@@ -1,6 +1,6 @@
 # 微信 H5 适配 Checklist
 
-> 加载目标：`https://h5.cewaycloud.com/`（在微信内置浏览器里直接打开）
+> 加载目标：`https://cajob.cewaysoft.com/`（在微信内置浏览器里直接打开）
 > 壳角色：**微信自己是壳，我们只在 H5 上加微信 SDK 适配**
 
 ## 一、微信公众平台侧（运维/后台）
@@ -8,9 +8,9 @@
 - [ ] 注册微信公众号（服务号，需企业资质）
 - [ ] 后台 → 开发 → 基本配置 → 获取 `AppID` + `AppSecret`
 - [ ] 后台 → 开发 → 公众号设置 → 功能设置：
-  - [ ] **JS 接口安全域名**：填 `h5.cewaycloud.com`
-  - [ ] **业务域名**：填 `h5.cewaycloud.com` + 下载校验文件 `MP_verify_xxx.txt` 放根目录（Caddy 配 `handle_path /MP_verify_*.txt`）
-  - [ ] **网页授权域名**：填 `h5.cewaycloud.com`（OAuth2 用）
+  - [ ] **JS 接口安全域名**：填 `cajob.cewaysoft.com`
+  - [ ] **业务域名**：填 `cajob.cewaysoft.com` + 下载校验文件 `MP_verify_xxx.txt` 放根目录（Caddy 配 `handle_path /MP_verify_*.txt`）
+  - [ ] **网页授权域名**：填 `cajob.cewaysoft.com`（OAuth2 用）
 - [ ] 后台 → 开发 → 订阅消息 → 添加模板（需要审核）→ 记下模板 ID
 - [ ] 微信支付商户号（JSAPI 支付需要）
 
@@ -18,7 +18,7 @@
 
 - [ ] 新增微信授权源（类似已有的 xoas）：
   - 微信 OAuth2 授权地址：`https://open.weixin.qq.com/connect/oauth2/authorize`
-  - 回调地址：`https://h5.cewaycloud.com/api/backend/wechat/callback`
+  - 回调地址：`https://cajob.cewaysoft.com/api/backend/wechat/callback`
   - scope：`snsapi_userinfo`（获取 openid + nickname + avatar）
 - [ ] 新增接口 `GET /api/backend/wechat/jsapi-config?url=xxx`
   - 服务端用 `jsapi_ticket`（Access Token 换的，7200s 过期需缓存）签名传入的 URL
@@ -44,26 +44,26 @@
 | 坑 | 表现 | 解法 |
 |---|---|---|
 | JS-SDK 签名失败 | `wx.config fail: invalid signature` | URL 必须是 `window.location.href.split('#')[0]`（带 # 之后的路径签名对不上）；签名算法官方文档里有 |
-| 业务域名校验失败 | 微信里页面显示「该网址未授权」 | 校验文件必须在根目录可直接访问：`https://h5.cewaycloud.com/MP_verify_xxx.txt` 200 |
+| 业务域名校验失败 | 微信里页面显示「该网址未授权」 | 校验文件必须在根目录可直接访问：`https://cajob.cewaysoft.com/MP_verify_xxx.txt` 200 |
 | open-type="getUserInfo" 废弃 | 微信开发者工具控制台警告 | 改用 `<button open-type="chooseAvatar">` + `<input type="nickname">` |
 | Service Worker | 微信内置浏览器不支持 SW | H5 根不要依赖 SW 做离线缓存 |
 | 微信里不能下载文件 | `window.open` 会跳浏览器 | 下载改为跳系统分享面板或引导用浏览器打开 |
-| H5 域名 https 必填 | 微信 JSSDK 不支持 http | h5.cewaycloud.com 已是 https，OK |
+| H5 域名 https 必填 | 微信 JSSDK 不支持 http | cajob.cewaysoft.com 已是 https，OK |
 | 公众号未认证 | 高级接口用不了（扫一扫/支付/订阅消息） | 企业资质认证（300 元/年） |
 
 ## 五、测试方法
 
 ```bash
 # 1. 检查业务域名校验文件
-curl -I https://h5.cewaycloud.com/MP_verify_xxx.txt
+curl -I https://cajob.cewaysoft.com/MP_verify_xxx.txt
 
 # 2. 检查签名接口（需要后端先实现）
-curl -s "https://h5.cewaycloud.com/api/backend/wechat/jsapi-config?url=https%3A%2F%2Fh5.cewaycloud.com%2F" \
+curl -s "https://cajob.cewaysoft.com/api/backend/wechat/jsapi-config?url=https%3A%2F%2Fcajob.cewaysoft.com%2F" \
   -b cookie.txt | python3 -m json.tool
 # 预期：{ "appId": "...", "timestamp": 172xxxx, "nonceStr": "...", "signature": "..." }
 
 # 3. 微信开发者工具
-#    扫码打开 h5.cewaycloud.com → Console 看 "wechat-adapter ✅"
+#    扫码打开 cajob.cewaysoft.com → Console 看 "wechat-adapter ✅"
 #    调试器 → Storage → Cookies / LocalStorage 看值
 
 # 4. 真机测试

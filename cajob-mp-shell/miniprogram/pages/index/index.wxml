@@ -1,7 +1,7 @@
 <view class="brand {{ready ? 'brand-leave' : ''}}">
-  <image class="logo" src="/assets/logo.png" mode="aspectFit" />
-  <text class="name">Cajob</text>
-  <text class="slogan">捷才智通</text>
+  <view class="logo-card">
+    <image class="logo" src="/assets/logo-lockup-navy.png" mode="widthFix" />
+  </view>
 </view>
 
 <web-view

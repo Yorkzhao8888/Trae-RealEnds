@@ -4,7 +4,7 @@
 
 当前覆盖两个品牌：
 
-- **Cajob**（`https://h5.cewaycloud.com/`，H5 已下线，壳仅存档）
+- **Cajob**（`https://cajob.cewaysoft.com/`，2026-10-30 起从已停用的 `h5.cewaycloud.com` 迁移）
 - **知味工场 ZiwayOS**（`https://ziway-hp.ziway.cewaycloud.com/shop`）
 
 ## 目录
@@ -22,10 +22,10 @@
 
 ## 关键口径
 
-1. **分发红线**：终端用户下载分发一律走已备案国内渠道 `https://h5.cewaycloud.com/download/latest/`（稳定文件名，不带版本号）；本仓只做**源码协作**，不承担用户下载分发。
+1. **分发红线**：终端用户下载分发一律走已备案国内渠道 `https://cajob.cewaysoft.com/download/latest/`（稳定文件名，不带版本号）；本仓只做**源码协作**，不承担用户下载分发。
 2. **PC 壳自动更新**：`electron-updater` generic 源指向上述 `/download/latest/`；**发布时 `latest-mac.yml` / `latest.yml` 必须与五产物同版本上传**，缺 yml = updater 静默 404、永不升级。发布用 `cajob-pc-shell/scripts/release.sh`（构建→上传→字节校验）。
 3. **签名**：mac 需有效 Developer ID + 公证凭据，win 需 Authenticode——`release.sh` 凭据齐备自动启用，缺失降级未签名构建（仅内测）。
-4. **会话/鉴权**：壳内 OAuth 链路跳转 `oas.cewaycloud.com`（ALLOWED_HOSTS 白名单）；多域会话依赖 `xoas_session` + `oas_session` 成对有效。
+4. **会话/鉴权**：壳内 OAuth 链路跳转 `oas.cewaysoft.com`（ALLOWED_HOSTS 白名单）；多域会话依赖 `xoas_session` + `oas_session` 成对有效。
 
 ## 各壳详细说明
 
@@ -39,3 +39,4 @@
 - 2026-10-20：建仓。导入 PC 壳 v0.2.0、移动壳、微信适配、IoT/手表规范。
 - 2026-10-21：壳封装收口。修 CI 构建链；移动壳改用 `server.errorPath` 兜底、补齐原生桥运行时与权限/隐私声明；PC 壳发布脚本改为双架构构建 + 缺失产物硬失败；离线页输入转义。
 - 2026-10-30：新增「知味工场 ZiwayOS」生态三端（`ziway-app-shell` / `ziway-mp-shell` / `ziway-pc-shell`），统一包名 `com.cewaycloud.ziwayos` 与品牌色 `#F97316`。
+- 2026-10-30：Cajob 四端入口迁移到新根 `https://cajob.cewaysoft.com/`（旧根 `h5.cewaycloud.com` 已停用），OAS 同步为 `oas.cewaysoft.com`，白名单与更新源一并更新；小程序业务域名与校验文件需按新域重新配置。

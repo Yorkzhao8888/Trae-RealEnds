@@ -1,6 +1,6 @@
 # Cajob App Shell · iOS / Android 桌面壳
 
-> 版本 0.2.2 · 加载目标：`https://h5.cewaycloud.com`
+> 版本 0.2.2 · 加载目标：`https://cajob.cewaysoft.com`
 > 壳不做业务，所有页面/逻辑在 H5 根；原生能力通过 Capacitor 插件桥接
 
 ## 架构
@@ -10,13 +10,13 @@
 │           iOS App / Android App                      │
 │  ┌─────────────────────────────────────────────┐    │
 │  │  Capacitor App Shell (这个工程)             │    │
-│  │  - 加载 https://h5.cewaycloud.com          │    │
+│  │  - 加载 https://cajob.cewaysoft.com          │    │
 │  │  - 原生桥: window.cajobShell.*              │    │
 │  │  - 推送/定位/分享/震动 通过插件供给          │    │
 │  └──────────────────────┬──────────────────────┘    │
 │                         │ HTTPS WebView              │
 │  ┌──────────────────────▼──────────────────────┐    │
-│  │  h5.cewaycloud.com  (Next.js App Router)    │    │
+│  │  cajob.cewaysoft.com  (Next.js App Router)    │    │
 │  │  业务逻辑 / SSR / CSR / API                  │    │
 │  └─────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────┘
@@ -51,7 +51,7 @@ cajob-app-shell/
 
 ## 关键前提：server.url 模式下本地入口页不执行
 
-壳配置了 `server.url`，Capacitor 会**直接加载** `https://h5.cewaycloud.com`，
+壳配置了 `server.url`，Capacitor 会**直接加载** `https://cajob.cewaysoft.com`，
 本地 `index.html` 的启动逻辑不会运行。因此：
 
 | 能力 | 承载位置 |
@@ -109,12 +109,12 @@ if (window.cajobShell?.isMobileShell) {
   await window.cajobShell.share({
     title: 'Cajob - 真实端职聘',
     text: '下载 Cajob 找工友',
-    url: 'https://h5.cewaycloud.com/download',
+    url: 'https://cajob.cewaysoft.com/download',
   });
   // 定位
   const loc = await window.cajobShell.getLocation();
   // 打开系统浏览器
-  await window.cajobShell.openExternal('https://oas.cewaycloud.com/...');
+  await window.cajobShell.openExternal('https://oas.cewaysoft.com/...');
 }
 ```
 
@@ -193,7 +193,7 @@ android {
 | 微信 JS-SDK | ❌ 壳里不可用 | 微信 SDK 只在微信内置浏览器生效；壳里用 `window.cajobShell.share()` 替代 |
 | 支付 | ⚠️ 待接 | 需 Capacitor Stripe 插件或自建 |
 | Service Worker | ❌ 默认禁用 | Capacitor WebView 环境 SW 有坑，H5 根不要依赖 |
-| 热更新 | ❌ 未接 | 发版走商店；可接 Capacitor Live Updates 做 H5 热更 |
+| 热更新 | ⚠️ 版本同频 | H5 发版后，壳在回到前台时比对 chunk 指纹并重载；原生包本身仍走商店更新 |
 | iPad | ✅ 自动覆盖 | Capacitor iOS 壳自动生成 iPhone + iPad target |
 | 鸿蒙 NEXT | ✅ 官方支持 | `npm install @capacitor/harmonyos`（等 HarmonyOS NEXT 正式版） |
 

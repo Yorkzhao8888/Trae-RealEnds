@@ -3,13 +3,13 @@
   "appName": "Cajob",
   "webDir": "dist",
   "server": {
-    "url": "https://h5.cewaycloud.com",
+    "url": "https://cajob.cewaysoft.com",
     "cleartext": false,
     "errorPath": "offline.html",
     "allowNavigation": [
-      "h5.cewaycloud.com",
-      "oas.cewaycloud.com",
-      "*.cewaycloud.com"
+      "cajob.cewaysoft.com",
+      "oas.cewaysoft.com",
+      "*.cewaysoft.com"
     ]
   },
   "plugins": {
