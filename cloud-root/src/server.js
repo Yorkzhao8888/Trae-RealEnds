@@ -2,10 +2,12 @@
 // 契约见 docs/shell-contract.md §10；与 edge-store 对接时它就是"云根应答方"。
 import { createServer } from 'node:http';
 import { openDb, applyEvents, catalogSince, upsertCatalog, setStock, listEvents } from './db.js';
+import { upsertTenant, entitlements, activate, deactivate, addStore, removeStore } from './store.js';
 
 const PORT = Number(process.env.CLOUD_PORT || 7331);
 const HOST = process.env.CLOUD_HOST || '0.0.0.0';
 const TOKEN = process.env.CLOUD_TOKEN || '';
+const ADMIN_TOKEN = process.env.CLOUD_ADMIN_TOKEN || '';
 
 function json(res, code, body) {
   const buf = Buffer.from(JSON.stringify(body));
@@ -29,19 +31,79 @@ function readBody(req) {
   });
 }
 
-export function createCloud({ dbPath = ':memory:', token = TOKEN } = {}) {
+export function createCloud({ dbPath = ':memory:', token = TOKEN, adminToken = ADMIN_TOKEN } = {}) {
   const db = openDb(dbPath);
+
+  const bearer = (req) => (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+
+  // 身份解析：生产替换为 OAS（oas_mother）的 userinfo/introspect；
+  // 参考实现用 `dev:<tenantId>`，不新建账号体系。
+  const tenantOf = (req) => {
+    const m = bearer(req).match(/^dev:([A-Za-z0-9_-]+)$/);
+    return m ? m[1] : null;
+  };
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://cloud');
     const path = url.pathname;
 
-    if (token) {
-      const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-      if (got !== token) return json(res, 401, { ok: false, code: 'unauthorized' });
+    if (token && path.startsWith('/cloud/')) {
+      if (bearer(req) !== token) return json(res, 401, { ok: false, code: 'unauthorized' });
     }
 
     try {
+      // ── 商店 M1：授权与租户 ─────────────────────────────
+      if (req.method === 'GET' && path === '/store/entitlements') {
+        const tid = tenantOf(req);
+        if (!tid) return json(res, 401, { ok: false, code: 'unauthorized' });
+        const e = entitlements(db, tid);
+        if (!e) return json(res, 404, { ok: false, code: 'tenant_unknown' });
+        return json(res, 200, { ok: true, ...e });
+      }
+
+      if (req.method === 'POST' && path === '/store/activate') {
+        const tid = tenantOf(req);
+        if (!tid) return json(res, 401, { ok: false, code: 'unauthorized' });
+        const body = await readBody(req);
+        const r = activate(db, tid, { deviceId: body.deviceId, platform: body.platform });
+        return json(res, r.ok ? 200 : r.code === 'tenant_unknown' ? 404 : 409, r);
+      }
+
+      if (req.method === 'POST' && path === '/store/deactivate') {
+        const tid = tenantOf(req);
+        if (!tid) return json(res, 401, { ok: false, code: 'unauthorized' });
+        const body = await readBody(req);
+        const r = deactivate(db, tid, body.deviceId);
+        return json(res, r.ok ? 200 : 404, r);
+      }
+
+      if (req.method === 'POST' && path === '/store/stores') {
+        const tid = tenantOf(req);
+        if (!tid) return json(res, 401, { ok: false, code: 'unauthorized' });
+        const body = await readBody(req);
+        const r = addStore(db, tid, { storeId: body.storeId, name: body.name });
+        return json(res, r.ok ? 200 : r.code === 'tenant_unknown' ? 404 : 409, r);
+      }
+
+      const delStore = path.match(/^\/store\/stores\/([A-Za-z0-9_-]+)$/);
+      if (req.method === 'DELETE' && delStore) {
+        const tid = tenantOf(req);
+        if (!tid) return json(res, 401, { ok: false, code: 'unauthorized' });
+        const r = removeStore(db, tid, delStore[1]);
+        return json(res, r.ok ? 200 : 404, r);
+      }
+
+      // 管理：建租户 + 配额 + 授权品牌（运营侧）
+      const putTenant = path.match(/^\/store\/tenants\/([A-Za-z0-9_-]+)$/);
+      if (req.method === 'PUT' && putTenant) {
+        if (!adminToken || bearer(req) !== adminToken) return json(res, 403, { ok: false, code: 'admin_only' });
+        const body = await readBody(req);
+        const t = upsertTenant(db, { ...body, id: putTenant[1] });
+        if (!t) return json(res, 400, { ok: false, code: 'bad_request' });
+        return json(res, 200, { ok: true, tenant: t });
+      }
+      // ──────────────────────────────────────────────────
+
       if (req.method === 'GET' && path === '/cloud/health') {
         return json(res, 200, { ok: true, role: 'cloud-root', stores: db.prepare('SELECT COUNT(DISTINCT store_id) AS n FROM cloud_events').get().n, at: Date.now() });
       }

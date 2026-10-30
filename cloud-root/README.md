@@ -15,7 +15,8 @@ CLOUD_TOKEN=dev-token npm start
 |---|---|---|
 | `CLOUD_PORT` | 7331 | 监听端口 |
 | `CLOUD_HOST` | 0.0.0.0 | 监听地址 |
-| `CLOUD_TOKEN` | 空 | 非空时要求 `Authorization: Bearer <token>` |
+| `CLOUD_TOKEN` | 空 | 非空时要求 `Authorization: Bearer <token>`（仅 `/cloud/*`） |
+| `CLOUD_ADMIN_TOKEN` | 空 | 建租户等管理接口所需（`PUT /store/tenants/:id`） |
 | `CLOUD_DB` | ./cloud.db | 本地库路径（Node 24 内置 SQLite） |
 
 ## API
@@ -28,6 +29,15 @@ CLOUD_TOKEN=dev-token npm start
 | POST | `/cloud/stock` | 管理：设云根库存（`{sku, onHand}`） |
 | GET | `/cloud/events?storeId=` | 观测：某店已接收事件（调试） |
 | GET | `/cloud/health` | 存活 |
+
+商店 M1（授权与租户，见 [../btos-app-store/README.md](../btos-app-store/README.md#m1-授权与租户最小实现)）：
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET | `/store/entitlements` | 座位/门店配额、品牌授权、有效期 |
+| POST | `/store/activate` / `/store/deactivate` | 设备占座/退座（幂等） |
+| POST | `/store/stores`；DELETE `/store/stores/:id` | 门店注册/注销（受配额） |
+| PUT | `/store/tenants/:id` | 管理：建租户与配额（需 `CLOUD_ADMIN_TOKEN`） |
 
 ## 上行规则（对应店根的三条红线）
 
@@ -55,7 +65,7 @@ EDGE_CLOUD_URL=http://127.0.0.1:7331 EDGE_CLOUD_TOKEN=dev-token EDGE_TOKEN=dev-t
 npm test
 ```
 
-7 项：鉴权与健康、幂等重传、库存冲突停在冲突点、对账冲突、商品游标与删除；再加两项**真端到端**——店根租约+扣减+回传打到这里，云根商品再下行回店根；以及库存冲突 → 运营裁决 → 游标越过冲突。
+12 项：鉴权与健康、幂等重传、库存冲突停在冲突点、对账冲突、商品游标与删除；商店 M1 的租户配额与品牌授权、占座上限与幂等、门店配额、过期拦截、管理接口鉴权；再加两项**真端到端**——店根租约+扣减+回传打到这里，云根商品再下行回店根；以及库存冲突 → 运营裁决 → 游标越过冲突。
 
 ## 与生产云的差距
 

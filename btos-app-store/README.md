@@ -113,6 +113,43 @@ curl -sI http://h5.cewaycloud.com | head -5
 
 结论：**M1 不应被这张证书卡住**。商店先落 `cajob.cewaysoft.com/store/`，证书问题独立推进。
 
+## M1 授权与租户（最小实现）
+
+接口落在 `../cloud-root/`（参考实现），身份**不新建**，生产由 OAS（`oas_mother`）校验后下发租户 ID；参考实现用 `Authorization: Bearer dev:<tenantId>` 模拟。
+
+| 方法 | 路径 | 作用 |
+|---|---|---|
+| GET | `/store/entitlements` | 许可总览：座位/门店配额、已授权品牌与端、有效期 |
+| POST | `/store/activate` | `{deviceId, platform}` 设备占座；到上限 `409 seat_exhausted` |
+| POST | `/store/deactivate` | `{deviceId}` 退座释放 |
+| POST | `/store/stores` | `{storeId, name}` 注册门店；超配额 `409 store_quota` |
+| DELETE | `/store/stores/:storeId` | 注销门店 |
+| PUT | `/store/tenants/:id` | **管理**：建租户、配额、品牌授权（需 `CLOUD_ADMIN_TOKEN`） |
+
+规则：
+
+1. **占座幂等**：同一 `deviceId` 重复激活返回 `replayed:true`，不重复占位。
+2. **配额硬约束**：座位与门店都以服务端计数为准，前端只展示；超额一律 `409`，不静默降级。
+3. **过期即拒**：`expires` 到期后 `entitlements.expired=true`，激活与建店全部 `409 expired`。
+4. **身份单一来源**：租户 ID 来自 OAS，不在本服务建账号、不存密码。
+
+调用示例：
+
+```bash
+# 运营侧建租户（20 座、3 家门店、授权 ziway 四端）
+curl -X PUT http://127.0.0.1:7331/store/tenants/t-ziway-cs1 \
+  -H 'Authorization: Bearer <CLOUD_ADMIN_TOKEN>' -H 'content-type: application/json' \
+  -d '{"name":"知味长沙一店","seats":20,"stores":3,"brands":[{"brand":"ziway","ends":["hp","cp","ep","sp"]}]}'
+
+# 端侧查许可并激活
+curl http://127.0.0.1:7331/store/entitlements -H 'Authorization: Bearer dev:t-ziway-cs1'
+curl -X POST http://127.0.0.1:7331/store/activate \
+  -H 'Authorization: Bearer dev:t-ziway-cs1' -H 'content-type: application/json' \
+  -d '{"deviceId":"pos-001","platform":"android"}'
+```
+
+**落地待办**：OAS 侧提供 OAuth 客户端与 userinfo（或 introspect）端点；本服务把 `tenantOf()` 从 `dev:` 换成真实校验即可，其余逻辑不动。
+
 ## 与壳的闭环
 
 - PC 壳自动更新源 → 本站 `/download/latest/`。
@@ -125,7 +162,7 @@ curl -sI http://h5.cewaycloud.com | head -5
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M0 | 静态目录 + 清单 + 校验和 + 筛选 | 已完成 |
-| M1 | 授权与租户（座位数、许可下发、门店数） | 未启动 |
+| M1 | 授权与租户（座位数、许可下发、门店数） | 最小实现（`cloud-root` 参考，待接 OAS 身份） |
 | M2 | 更新通道 stable/beta、灰度比例、回滚、下载统计 | 未启动 |
 
 M1 起才需要登录，且必须共享 `oas_mother` 身份，不新建账号体系。

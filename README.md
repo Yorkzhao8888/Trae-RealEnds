@@ -30,7 +30,7 @@
 | `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
 | `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型/冲突复核页 + UDP 发现；24 项测试通过 |
-| `cloud-root/` | 云根参考实现（联调/契约样板） | Node 24 + 内置 SQLite，零依赖 | **v0.1.0** 上行幂等接收/冲突判定/下行商品读模型/管理接口；与店根端到端打通，7 项测试通过。非生产实现 |
+| `cloud-root/` | 云根参考实现（联调/契约样板） | Node 24 + 内置 SQLite，零依赖 | **v0.1.1** 上行幂等接收/冲突判定/下行商品读模型 + 商店 M1 授权（租户/座位/门店配额/过期）；与店根端到端打通，12 项测试通过。非生产实现 |
 
 ## 关键口径
 
@@ -64,3 +64,4 @@
 - 2026-10-30：`edge-store` 补「冲突复核运营页」——`GET /edge/ui/conflicts` 免构建静态页，填 `EDGE_TOKEN` 后 4s 自动刷新，逐条 accept/reject/auto；资金类自动放行按钮直接禁用（服务端再拒一次）；页面免鉴权、数据接口仍要 token；测试增至 24 项。
 - 2026-10-30：新增 `cloud-root` 云根参考实现 —— 零依赖 Node 服务：`POST /cloud/events` 幂等接收（`(store,seq)` 主键）、冲突停在冲突点、库存不足/对账不符返回 409；`GET /cloud/catalog?since=` 下行商品增量；管理接口写商品与库存。与店根端到端打通（上行回传 + 下行落库 + 冲突裁决），7 项测试通过。
 - 2026-10-30：商店 M1 解除证书阻塞 —— 商店改挂 `cajob.cewaysoft.com/store/`（复用 47 边缘已有效证书，Caddy `handle_path` 一行接入），页面保持相对路径可任意子路径部署；`apps.json` 的 `store.entry` 从已停用的 `h5.cewaycloud.com` 修正为 `cajob.cewaysoft.com`。h5 独立域名的补证诊断与两条路径写入 `btos-app-store/README.md`。
+- 2026-10-30：商店 M1 最小实现 —— `cloud-root` 新增 `/store/*`：许可总览、设备占座/退座（幂等）、门店注册/注销（配额）、管理建租户（`CLOUD_ADMIN_TOKEN`）；座位与门店以服务端计数硬约束（`409 seat_exhausted`/`store_quota`），过期即拒；身份复用 OAS，参考实现用 `dev:<tenantId>` 模拟。测试增至 12 项。
