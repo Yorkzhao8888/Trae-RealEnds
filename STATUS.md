@@ -34,8 +34,11 @@
 - 入口：**https://cajob.cewaysoft.com/store/**（M0 静态页已上线；主站 `/` 未受影响）
 - 落点：ECS `i-uf6ctneanpjturpbp3j5`（`47.117.131.103`，cn-shanghai），TLS 由该机 Caddy 容器 `baitos-caddy` 终止
 - 文件：宿主机 `/opt/baitos/caddy/data/store/` → 容器 `/data/store/`；**发布只需覆盖文件，无需 reload**
-- 配置：`cajob.cewaysoft.com` 块内 `redir /store /store/ 308` + `handle_path /store/*`
-- 回滚：`cat /opt/baitos/caddy/Caddyfile.bak-store-20261030-172601 | docker exec -i baitos-caddy sh -c 'cat > /etc/caddy/Caddyfile'` 后 reload
+- 配置：`cajob.cewaysoft.com` 块内 `redir /store /store/ 308` + `handle_path /store/*`（静态页）
+- API 路由：同一站点块内 `@storeapi` 匹配 `/store/entitlements`、`/activate`、`/deactivate`、`/stores`、`/downloads`、`/rollouts`、`/tenants/*`，`reverse_proxy 172.18.0.1:7331`，**位于静态 `handle_path` 之前**，页面无需配置接口地址（同源）
+- 服务端：`cloud-root` 由 systemd 常驻（`cloud-root.service`），二进制 `/opt/node24/bin/node`（v24.8.0，宿主机自带 Node 20 不支持 `node:sqlite`，故独立安装），监听 `172.18.0.1:7331`，代码 `/opt/baitos/cloud-root`，DB `/opt/baitos/cloud-root/data/cloud.db`，密钥在 `/opt/baitos/cloud-root/cloud.env`（0600，不入库）
+- 演示租户：`t-demo`（20 座 / 3 店 / ziway 四端 + cajob hp），许可页用 `Authorization: Bearer dev:t-demo` 可直接看到数据
+- 回滚：`cat /opt/baitos/caddy/Caddyfile.bak-store-20261030-172601 | docker exec -i baitos-caddy sh -c 'cat > /etc/caddy/Caddyfile'` 后 reload（API 接入前的备份是 `Caddyfile.bak-storeapi-20261030-175710`）
 - 坑：`/etc/caddy/Caddyfile` 是单文件 bind mount，宿主机改写换 inode 容器读不到，必须就地写入
   （细节见 [btos-app-store/README.md](btos-app-store/README.md#上线状态2026-10-30)）
 
@@ -94,7 +97,7 @@ cd btos-app-store && python3 -m http.server 8099
 | 事项 | 卡点 | 谁给 |
 |---|---|---|
 | OAS 真实身份接入 | 需 OAuth 客户端 ID、授权/回调地址、userinfo 或 introspect 端点；接入点集中在 `cloud-root/src/server.js` 的 `tenantOf()` | 平台方 |
-| 商店 M1/M2 接口上线 | 需在 47 机上部署 `cloud-root`（systemd/Docker）+ Caddy 反代 `/store/*` | 需授权 |
+| 商店 M1/M2 接口上线 | ~~需部署 `cloud-root` + 反代~~ → **已完成 2026-10-30**（systemd + Caddy `@storeapi`） | 已闭环 |
 | 安装包分发 | 清单 19 条仍全为 `pending`；需签名包 + SHA-256 + `/download/<brand>/<version>/` | 发行团队 |
 | iOS / macOS 真机包 | 需 Apple 开发者账号与公证凭据 | 账号方 |
 | h5.cewaycloud.com 独立域名 | 443 无证书，DNS/证书不在当前账号；已改用 cajob 子路径，仅作可选 | 边缘维护方 |
@@ -102,7 +105,7 @@ cd btos-app-store && python3 -m http.server 8099
 ## 7. 协作约定
 
 1. **契约先行**：改能力/事件/接口先改 `docs/shell-contract.md`（唯一真相），再改实现；契约版本语义化递增。
-2. **测试门槛**：`edge-store`、`cloud-root` 改动后 `npm test` 必须全过，新增行为补用例。
+2. **测试门槛**：`edge-store`、`cloud-root` 改动后 `npm test` 必须全过，新增行为补用例；两者已接入 GitHub Actions（`.github/workflows/tests.yml`，Node 24），PR 必须绿。
 3. **提交**：`feat|fix|docs(scope): 中文简述`，一次提交一个主题；文档与代码同批提交。
 4. **不落凭证**：仓库内不提交任何 token / AccessKey / 证书私钥；线上配置走环境变量。
 5. **商店清单是唯一真相**：`btos-app-store/data/apps.json` 的 `status` 未置 `available` 时，页面按钮不可点，不允许前端自行放开。

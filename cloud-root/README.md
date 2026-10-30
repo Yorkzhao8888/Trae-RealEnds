@@ -4,6 +4,26 @@
 
 契约见 [docs/shell-contract.md](../docs/shell-contract.md) §10。
 
+## 线上部署（47 边缘机）
+
+自 2026-10-30 起在 `i-uf6ctneanpjturpbp3j5`（`47.117.131.103`）常驻，服务 `https://cajob.cewaysoft.com/store/*` 的同源 API。
+
+- 运行时：`/opt/node24/bin/node`（v24.8.0）。宿主机自带 Node 20 没有 `node:sqlite`，必须用独立安装的 24。
+- 代码：`/opt/baitos/cloud-root`（`src/` + `package.json`）
+- 配置：`/opt/baitos/cloud-root/cloud.env`（`0600`，含 `CLOUD_TOKEN` / `CLOUD_ADMIN_TOKEN` / `CLOUD_HOST=172.18.0.1` / `CLOUD_PORT=7331` / `CLOUD_DB`）
+- 服务：`systemctl restart cloud-root`；日志 `journalctl -u cloud-root -n 50`
+- 反向代理：Caddy 容器 `baitos-caddy` 内 `cajob.cewaysoft.com` 站点块用 `@storeapi` 匹配 API 路径 → `reverse_proxy 172.18.0.1:7331`（必须排在静态 `handle_path /store/*` 之前）
+- 只监听 Docker 网桥 `172.18.0.1:7331`，不暴露公网端口
+
+发布新版本：
+
+```bash
+# 本地打包（不要 node_modules，本服务零依赖）
+tar -czf /tmp/cloud-root.tgz -C cloud-root src package.json
+# 上传解包后
+systemctl restart cloud-root
+```
+
 ## 启动
 
 ```bash

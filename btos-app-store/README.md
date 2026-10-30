@@ -108,7 +108,11 @@ curl -s  https://cajob.cewaysoft.com/store/data/apps.json | head -c 120
 - **发布**：直接覆盖 `/opt/baitos/caddy/data/store/` 下文件即可，`file_server` 即时生效，无需 reload。
 - **改配置坑**：`/etc/caddy/Caddyfile` 是单文件 bind mount，宿主机原地改写会换 inode，容器仍读旧文件（表现为改完 `validate` 通过但路由不生效）。正确做法是就地写：`cat Caddyfile | docker exec -i baitos-caddy sh -c 'cat > /etc/caddy/Caddyfile'`，再 `docker exec baitos-caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` 与 `docker exec baitos-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`。
 - **回滚**：`cat /opt/baitos/caddy/Caddyfile.bak-store-20261030-172601 | docker exec -i baitos-caddy sh -c 'cat > /etc/caddy/Caddyfile'` 后 reload，`/store/` 回到 404，主站不受影响。
-- **范围**：本次只上线 M0 静态页；「我的许可」「运营台」所需接口（`/store/entitlements` 等）尚未部署 `cloud-root`，页面会显示接口不可达（预期）。
+- **范围**：静态页（M0）+ 云根接口（M1/M2）均已上线。API 走同源路径，页面不需要填接口地址：
+  - `cajob.cewaysoft.com` 站点块内，静态 `handle_path /store/*` **之前**加 `@storeapi` 匹配 `/store/entitlements`、`/store/activate`、`/store/deactivate`、`/store/stores`、`/store/downloads`、`/store/rollouts`、`/store/tenants/*`，`reverse_proxy 172.18.0.1:7331`；
+  - `cloud-root` 由 systemd（`cloud-root.service`）常驻，Node 24.8.0 装在 `/opt/node24`（宿主自带 Node 20 无 `node:sqlite`），代码 `/opt/baitos/cloud-root`，DB `data/cloud.db`，密钥 `/opt/baitos/cloud-root/cloud.env`（0600，不入库）；
+  - 备份：API 接入前的 Caddyfile 为 `Caddyfile.bak-storeapi-20261030-175710`；
+  - 演示租户 `t-demo`（20 座 / 3 店 / ziway 四端 + cajob hp），许可页填 `dev:t-demo` 可直接看到数据。
 
 ## 如果坚持独立域名（h5.cewaycloud.com）
 
