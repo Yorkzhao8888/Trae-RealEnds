@@ -88,6 +88,28 @@ curl -s  https://cajob.cewaysoft.com/store/data/apps.json | head -c 120
 
 安装包目录同域挂在 `/download/`，保证下载计数与清单同源。
 
+## 上线状态（2026-10-30）
+
+- 入口：`https://cajob.cewaysoft.com/store/`，公网 200；`/store/`、`index.html`、`tenant.html`、`ops.html`、`data/apps.json` 全部可达，主站 `/` 回归 200。
+- 落点：`i-uf6ctneanpjturpbp3j5`（`47.117.131.103`，cn-shanghai），TLS 由该机 Caddy 容器 `baitos-caddy` 终止。
+- 路径：宿主机 `/opt/baitos/caddy/data/store/` → 容器 `/data/store/`。
+- 站点块（`cajob.cewaysoft.com` 内，位于 `encode gzip` 之前）：
+
+  ```caddyfile
+  redir /store /store/ 308
+  handle_path /store/* {
+      root * /data/store
+      file_server
+      header /data/apps.json "Cache-Control no-cache, max-age=0, must-revalidate"
+  }
+  ```
+
+- 配置备份：`/opt/baitos/caddy/Caddyfile.bak-store-20261030-172601`。
+- **发布**：直接覆盖 `/opt/baitos/caddy/data/store/` 下文件即可，`file_server` 即时生效，无需 reload。
+- **改配置坑**：`/etc/caddy/Caddyfile` 是单文件 bind mount，宿主机原地改写会换 inode，容器仍读旧文件（表现为改完 `validate` 通过但路由不生效）。正确做法是就地写：`cat Caddyfile | docker exec -i baitos-caddy sh -c 'cat > /etc/caddy/Caddyfile'`，再 `docker exec baitos-caddy caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile` 与 `docker exec baitos-caddy caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`。
+- **回滚**：`cat /opt/baitos/caddy/Caddyfile.bak-store-20261030-172601 | docker exec -i baitos-caddy sh -c 'cat > /etc/caddy/Caddyfile'` 后 reload，`/store/` 回到 404，主站不受影响。
+- **范围**：本次只上线 M0 静态页；「我的许可」「运营台」所需接口（`/store/entitlements` 等）尚未部署 `cloud-root`，页面会显示接口不可达（预期）。
+
 ## 如果坚持独立域名（h5.cewaycloud.com）
 
 该域现状是**死结**，不是"补一张证书"那么简单：A 记录指向 `182.92.105.231`，80 返回 308，**443 握手失败（无可用证书）**；阿里云账号内既无该域 DNS 托管、也无任何证书。必须先判定 443 由谁应答：
