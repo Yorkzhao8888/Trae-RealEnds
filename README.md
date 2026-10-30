@@ -1,11 +1,12 @@
-# Trae-RealEnds · 真实端壳收集仓（Cajob / 知味工场 ZiwayOS）
+# Trae-RealEnds · 真实端壳收集仓（Cajob / 知味工场 ZiwayOS / XSO）
 
 收集「真实端 H5 根」之上所有端的薄壳与适配层。**壳不做业务**，只承载 H5 根 + 各端原生能力适配；业务全部在 H5 侧（H5 根 + 多端薄壳统一架构）。
 
-当前覆盖两个品牌：
+当前覆盖三个品牌：
 
 - **Cajob**（`https://cajob.cewaysoft.com/`，2026-10-30 起从已停用的 `h5.cewaycloud.com` 迁移）
 - **知味工场 ZiwayOS**（`https://ziway-hp.ziway.cewaycloud.com/shop`）
+- **XSO 智慧企业**（`https://xso.cewaysoft.com/`，企业工作台）
 
 ## 目录
 
@@ -19,6 +20,8 @@
 | `ziway-app-shell/` | iOS / Android | Capacitor 6 | **v0.1.0** 壳工程就绪（`com.cewaycloud.ziwayos`，图标/启动图/桥/推送渠道） |
 | `ziway-mp-shell/` | 微信小程序 | 原生小程序 + `web-view` | **v0.1.0** 单页壳；AppID 为 `touristappid` 占位，业务域名校验待配置 |
 | `ziway-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 同一套代码出 Windows/macOS；更新源 `download/latest/` 待部署 |
+| `xso-app-shell/` | iOS / Android | Capacitor 6 | **v0.1.0** 壳工程就绪（`com.cewaycloud.xso`，深底 `#0E1218` + 蓝标 `#1F6FEB`） |
+| `xso-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 一套代码出 Windows/macOS；更新源 `download/latest/` 待部署 |
 
 ## 关键口径
 
@@ -40,3 +43,4 @@
 - 2026-10-21：壳封装收口。修 CI 构建链；移动壳改用 `server.errorPath` 兜底、补齐原生桥运行时与权限/隐私声明；PC 壳发布脚本改为双架构构建 + 缺失产物硬失败；离线页输入转义。
 - 2026-10-30：新增「知味工场 ZiwayOS」生态三端（`ziway-app-shell` / `ziway-mp-shell` / `ziway-pc-shell`），统一包名 `com.cewaycloud.ziwayos` 与品牌色 `#F97316`。
 - 2026-10-30：Cajob 四端入口迁移到新根 `https://cajob.cewaysoft.com/`（旧根 `h5.cewaycloud.com` 已停用），OAS 同步为 `oas.cewaysoft.com`，白名单与更新源一并更新；小程序业务域名与校验文件需按新域重新配置。
+- 2026-10-30：新增「XSO 智慧企业」两端（`xso-app-shell` / `xso-pc-shell`），包名 `com.cewaycloud.xso`，深底 `#0E1218` + 蓝标 `#1F6FEB`。

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>teamID</key>
+	<string>5CQX9Q589B</string>
+	<key>signingStyle</key>
+	<string>manual</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>destination</key>
+	<string>export</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<!-- 首次导出前需在 Apple Developer 后台为该 bundle id 新建 Distribution 描述文件，并把名字填到这里 -->
+		<key>com.cewaycloud.xso</key>
+		<string>XSO ASC</string>
+	</dict>
+</dict>
+</plist>

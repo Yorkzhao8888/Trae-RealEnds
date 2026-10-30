@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌底色：与 H5 根深色底 #0E1218 一致，避免状态栏与页面割裂 -->
+    <color name="xso_bg">#0E1218</color>
+    <!-- 启动页与图标底色：同为品牌深底 -->
+    <color name="xso_splash">#0E1218</color>
+    <color name="xso_surface">#EAF2FF</color>
+    <!-- 强调色：与 H5 根 --primary #1F6FEB 一致 -->
+    <color name="xso_accent">#1F6FEB</color>
+    <color name="xso_accent_soft">#9EC1FF</color>
+</resources>
