@@ -1,0 +1,17 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/error/error"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#1F6FEB",
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "捷才工友",
+    "backgroundColor": "#1F6FEB",
+    "backgroundTextStyle": "dark",
+    "enablePullDownRefresh": false
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

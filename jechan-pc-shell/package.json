@@ -1,0 +1,63 @@
+{
+  "name": "jechan-pc-shell",
+  "version": "0.1.0",
+  "description": "捷才工友 PC 桌面壳（Electron）· Windows / macOS",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac --arm64 --x64 --publish never",
+    "dist:win": "electron-builder --win --x64 --publish never",
+    "dist": "npm run dist:mac && npm run dist:win"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.cewaycloud.jechan",
+    "productName": "捷才工友",
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/icon.png"
+    ],
+    "directories": {
+      "output": "dist-release"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://hp.jechan.cewaysoft.com/download/latest/"
+      }
+    ],
+    "artifactName": "JECHAN-${os}-${arch}.${ext}",
+    "mac": {
+      "category": "public.app-category.business",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "artifactName": "JECHAN-mac-${arch}.${ext}",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "JECHAN-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "捷才工友",
+      "artifactName": "JECHAN-Setup.${ext}"
+    }
+  }
+}

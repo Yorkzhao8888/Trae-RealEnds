@@ -1,0 +1,21 @@
+.brand {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1F6FEB;
+  transition: opacity 240ms ease;
+}
+
+/* web-view 挂载后启动层淡出，不抢焦点 */
+.brand-leave {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 品牌组合图自带白底徽标，直接落在蓝色启动层上，不再套白卡片 */
+.logo {
+  width: 560rpx;
+  display: block;
+}

@@ -1,0 +1,6 @@
+/* 与 App / PC 同一品牌底色，切换页面时不露白 */
+page {
+  background: #1F6FEB;
+  color: #FFFFFF;
+  font-family: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+}

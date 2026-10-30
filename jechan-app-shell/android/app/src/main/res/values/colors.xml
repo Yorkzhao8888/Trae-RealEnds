@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌底色：站点 --bg 为纯白，状态栏/导航栏与页面同色不割裂 -->
+    <color name="jechan_bg">#FFFFFF</color>
+    <!-- 启动页底色：品牌蓝 --brand，图标为白色 J 标记 -->
+    <color name="jechan_splash">#1F6FEB</color>
+    <color name="jechan_surface">#F6F9FD</color>
+    <!-- 强调色：与站点 --brand #1F6FEB 一致；深色渐变端 --brand-2 #0B3F9E -->
+    <color name="jechan_accent">#1F6FEB</color>
+    <color name="jechan_accent_soft">#BCD3F5</color>
+    <color name="jechan_brand2">#0B3F9E</color>
+</resources>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1F6FEB">
+<title>捷才工友</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #fff; }
+  .wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
+           font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .logo { font-size: 44px; font-weight: 700; color: #1F6FEB; }
+  .sub { color: #999; font-size: 14px; margin-top: 8px; }
+  .loader { margin-top: 30px; width: 30px; height: 30px; border: 3px solid #fde6d2;
+            border-top-color: #1F6FEB; border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">捷才工友</div>
+  <div class="sub">JECHAN · 正在加载</div>
+  <div class="loader"></div>
+</div>
+
+<!--
+  说明：壳在 server.url 模式下直接加载 https://hp.jechan.cewaysoft.com，
+  本页只在 webDir 被独立打开时生效（如 cap serve），因此这里不含任何
+  启动探测逻辑；断网兜底由 server.errorPath = offline.html 承担。
+-->
+<script>
+  if (location.protocol.startsWith('http')) {
+    location.replace('https://hp.jechan.cewaysoft.com');
+  }
+</script>
+</body>
+</html>

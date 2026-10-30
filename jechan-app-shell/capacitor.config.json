@@ -1,0 +1,51 @@
+{
+  "appId": "com.cewaycloud.jechan",
+  "appName": "捷才工友",
+  "webDir": "dist",
+  "server": {
+    "url": "https://hp.jechan.cewaysoft.com",
+    "cleartext": false,
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "hp.jechan.cewaysoft.com",
+      "oas.cewaysoft.com",
+      "*.cewaysoft.com"
+    ]
+  },
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": [
+        "badge",
+        "sound",
+        "alert"
+      ]
+    },
+    "Keyboard": {
+      "resize": "native"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#1F6FEB",
+      "overlaysWebView": false
+    },
+    "SplashScreen": {
+      "launchShowDuration": 1200,
+      "launchAutoHide": true,
+      "launchFadeOutDuration": 260,
+      "backgroundColor": "#1F6FEB",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false
+    }
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  },
+  "ios": {
+    "contentInset": "never",
+    "scrollEnabled": true,
+    "webContentsDebuggingEnabled": false,
+    "preferredContentMode": "mobile"
+  }
+}

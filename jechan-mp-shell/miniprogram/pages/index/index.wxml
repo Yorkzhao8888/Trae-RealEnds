@@ -1,0 +1,9 @@
+<view class="brand {{ready ? 'brand-leave' : ''}}">
+  <image class="logo" src="/assets/logo-lockup.png" mode="widthFix" />
+</view>
+
+<web-view
+  wx:if="{{ready}}"
+  src="{{src}}"
+  binderror="onWebError"
+></web-view>
