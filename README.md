@@ -26,7 +26,7 @@
 | `jechan-app-shell/` | iOS / Android | Capacitor 6 | **v0.1.0** 壳就绪（`com.cewaycloud.jechan`，蓝渐变 `#1F6FEB→#0B3F9E`） |
 | `jechan-mp-shell/` | 微信小程序 | 原生小程序 + `web-view` | **v0.1.0** 单页壳；AppID 占位，业务域名待配置 |
 | `jechan-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 一套代码出 Windows/macOS；更新源待部署 |
-| `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0** 目录/清单/校验和/筛选；入口 `h5.cewaycloud.com`（DNS 在、证书待重签） |
+| `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0** 目录/清单/校验和/筛选；入口 `https://cajob.cewaysoft.com/store/`（复用现有证书，零新增） |
 | `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
 | `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型/冲突复核页 + UDP 发现；24 项测试通过 |
@@ -63,3 +63,4 @@
 - 2026-10-30：`edge-store` 补「下行读模型」——`POST /edge/pull` 按游标拉 `/cloud/catalog`，整批落库后才推进 `catalogSeq`（失败不跳批），重复下发幂等不刷事件，`on/off/deleted` 三态，变化写 `catalog.upsert`/`catalog.delete` 供端壳经 `/edge/snapshot` 增量获取；调度器每次 tick 先拉后传，下行失败不污染上行退避；测试增至 23 项。
 - 2026-10-30：`edge-store` 补「冲突复核运营页」——`GET /edge/ui/conflicts` 免构建静态页，填 `EDGE_TOKEN` 后 4s 自动刷新，逐条 accept/reject/auto；资金类自动放行按钮直接禁用（服务端再拒一次）；页面免鉴权、数据接口仍要 token；测试增至 24 项。
 - 2026-10-30：新增 `cloud-root` 云根参考实现 —— 零依赖 Node 服务：`POST /cloud/events` 幂等接收（`(store,seq)` 主键）、冲突停在冲突点、库存不足/对账不符返回 409；`GET /cloud/catalog?since=` 下行商品增量；管理接口写商品与库存。与店根端到端打通（上行回传 + 下行落库 + 冲突裁决），7 项测试通过。
+- 2026-10-30：商店 M1 解除证书阻塞 —— 商店改挂 `cajob.cewaysoft.com/store/`（复用 47 边缘已有效证书，Caddy `handle_path` 一行接入），页面保持相对路径可任意子路径部署；`apps.json` 的 `store.entry` 从已停用的 `h5.cewaycloud.com` 修正为 `cajob.cewaysoft.com`。h5 独立域名的补证诊断与两条路径写入 `btos-app-store/README.md`。

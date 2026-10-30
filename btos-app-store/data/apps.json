@@ -4,7 +4,7 @@
   "store": {
     "name": "百泰OS 应用商店",
     "nameEn": "BTOS App Store",
-    "entry": "https://h5.cewaycloud.com/",
+    "entry": "https://cajob.cewaysoft.com/",
     "contractVersion": "0.2.0",
     "operator": "百泰生态 · 分发中心",
     "notice": "本站为百泰生态自有端的内部分发与版本中心，非 Apple 或任何第三方商店。iOS 安装一律经 App Store / TestFlight 完成。"

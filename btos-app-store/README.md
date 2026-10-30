@@ -1,6 +1,6 @@
 # 百泰OS 应用商店 · BTOS App Store（M0）
 
-生态自有端的**分发与版本中心**，部署入口 `https://h5.cewaycloud.com/`（复用原 H5 域名）。
+生态自有端的**分发与版本中心**，部署入口 `https://cajob.cewaysoft.com/store/`（复用已备案、证书有效的 cajob 域，不再依赖已停用的 `h5.cewaycloud.com`）。
 
 ## 定位（先说清，避免误解）
 
@@ -54,21 +54,64 @@ btos-app-store/
 
 > 清单变更即发布。`status` 未填 `available` 时，页面按钮为「待上架」且不可点。
 
-## 部署
+## 部署（推荐路径：挂到已有效的 cajob 域）
 
-静态托管即可（Caddy / Nginx / OSS + CDN）：
+页面只用相对路径（`./data/apps.json`），可挂**任意子路径**，不需要独立域名，也不需要新证书。
+
+前置事实：`cajob.cewaysoft.com` 的 TLS 由 `47.117.131.103` 边缘终止，证书有效；该站点的 Caddy 用 `tls internal` 回源，仅在 `remote_ip 47.117.131.103` 时可达。因此商店直接作为该站点的子路径即可：
 
 ```caddyfile
-h5.cewaycloud.com {
-  root * /srv/btos-app-store
-  file_server
-  header Cache-Control "public, max-age=60"
-  header /data/apps.json "Cache-Control no-cache, max-age=0, must-revalidate"
+https://cajob.cewaysoft.com {
+  tls internal
+  @edge remote_ip 47.117.131.103
+  # 商店：挂子路径，不与主站冲突
+  handle_path /store/* {
+    root * /srv/btos-app-store
+    file_server
+    header Cache-Control "public, max-age=60"
+    header /data/apps.json "Cache-Control no-cache, max-age=0, must-revalidate"
+  }
+  # … 原有主站业务 handle 保持不变
 }
 ```
 
-必需前置：该域名 **DNS 已解析**（`182.92.105.231`），HTTP 308 已指向 HTTPS，但 **443 无可用证书**（TLS 握手失败），站点此前被有意下线。复用即等于复活：需重新签发证书并把 `btos-app-store/` 挂到该站点的 root 或子路径。
-安装包目录建议同域挂在 `/download/`，保证下载计数与清单同源。
+`handle_path` 会剥掉 `/store` 前缀，页面里的 `./data/apps.json` 正好落到 `/srv/btos-app-store/data/apps.json`。
+
+验证（在 ECS 上）：
+
+```bash
+curl -sI https://cajob.cewaysoft.com/store/            # 期望 200 + text/html
+curl -s  https://cajob.cewaysoft.com/store/data/apps.json | head -c 120
+```
+
+安装包目录同域挂在 `/download/`，保证下载计数与清单同源。
+
+## 如果坚持独立域名（h5.cewaycloud.com）
+
+该域现状是**死结**，不是"补一张证书"那么简单：A 记录指向 `182.92.105.231`，80 返回 308，**443 握手失败（无可用证书）**；阿里云账号内既无该域 DNS 托管、也无任何证书。必须先判定 443 由谁应答：
+
+```bash
+dig +short h5.cewaycloud.com A
+echo | openssl s_client -connect h5.cewaycloud.com:443 -servername h5.cewaycloud.com 2>&1 | head -20
+curl -sI http://h5.cewaycloud.com | head -5
+```
+
+- 若 443 由 `47.117.131.103` 边缘应答（与 cajob 同一入口）→ 让边缘维护方把 `h5.cewaycloud.com` 加进该证书的 SAN（或单独签发），再按上面同一段 Caddy 挂站点。
+- 若 443 落在 ECS 的 Caddy 且 80 可达公网 → 给 Caddy 加站点块，用 **HTTP-01** 自动签：
+
+  ```caddyfile
+  h5.cewaycloud.com {
+    root * /srv/btos-app-store
+    file_server
+    encode gzip
+  }
+  # Caddy 默认自动 ACME；前提：80 不被边缘/防火墙拦截，且 308 重定向不能吞掉
+  # /.well-known/acme-challenge/
+  ```
+
+- 若 80 被前置 308 吞掉或 DNS 不可写 → HTTP-01 与 DNS-01 都做不了，只能回到"边缘补证书"或继续用 cajob 子路径。
+
+结论：**M1 不应被这张证书卡住**。商店先落 `cajob.cewaysoft.com/store/`，证书问题独立推进。
 
 ## 与壳的闭环
 
