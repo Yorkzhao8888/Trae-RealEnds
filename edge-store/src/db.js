@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS stock (sku TEXT PRIMARY KEY, on_hand INTEGER NOT NULL
 CREATE TABLE IF NOT EXISTS lease (id TEXT PRIMARY KEY, device TEXT NOT NULL, expires INTEGER NOT NULL, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS idem (key TEXT PRIMARY KEY, result TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, payload TEXT NOT NULL, at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, seq INTEGER NOT NULL, type TEXT NOT NULL, payload TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL, at INTEGER NOT NULL);
 `;
 
 export function openDb(path = ':memory:') {
@@ -16,6 +17,7 @@ export function openDb(path = ':memory:') {
   db.exec(SCHEMA);
   db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run('version', '0');
   db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run('cloudOffline', '0');
+  db.prepare('INSERT OR IGNORE INTO meta (k, v) VALUES (?, ?)').run('syncedSeq', '0');
   return db;
 }
 

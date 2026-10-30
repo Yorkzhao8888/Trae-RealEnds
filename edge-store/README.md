@@ -41,6 +41,10 @@ EDGE_TOKEN=dev-token npm start
 | POST | `/edge/commit` | `{leaseId, ops:[{idem,op:'dec'\|'inc',sku,qty}]}`，整批成功或整批失败 |
 | GET | `/edge/snapshot?since=` | 事件增量 + 当前库存 + 版本号 |
 | POST | `/edge/cloud` | `{offline}` 由探针写入云根连通性 |
+| GET | `/edge/outbox` | 待回传事件（游标之后的批次） |
+| POST | `/edge/sync` | `{cloudUrl, token}` 触发回传；`200` 完成、`409` 冲突、`502` 可重试 |
+| GET | `/edge/conflicts` | 未处理的冲突 |
+| POST | `/edge/conflicts/:id/resolve` | `{action:'accept'\|'reject'\|'auto'}`，`auto` 仅限库存类 |
 
 返回约定：
 
@@ -70,10 +74,21 @@ const edge = await discover();         // 端侧：拿到 {storeId, port}
 npm test
 ```
 
-7 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记。
+11 项覆盖：鉴权、租约、幂等重放、整批回滚、过期拒单、单笔上限、快照游标、云根离线标记，以及回传游标推进、409 不跳过、资金类禁止自动放行、5xx 可重试。
+
+## 云根回传与冲突裁决
+
+店根先本地提交，再异步回传（outbox 游标 `syncedSeq`）。三条不可妥协：
+
+1. **不跳过**：云根 409 时游标停在冲突事件之前，不允许"跳过继续传"。
+2. **不动资金账**：`money.settle` / `money.refund` / `member.points` 一律 `manual_pending`，`auto` 解析会返回 `400 manual_required`。
+3. **未知类型保守**：未登记的事件类型按资金类处理，宁可人工复核。
+
+库存类（`stock.dec` / `stock.inc` / `order.draft`）可自动放行；云根 5xx 视为可重试、游标不动。
 
 ## 尚未做
 
-- 与云根的**增量同步**（当前只记录事件，不回传）
-- **冲突裁决**（`money` 类仍需人工复核，契约已定，代码未实现）
-- 端壳侧的 `edge.storeRoot` 适配器（`shell-core` 里尚未接入这套 API）
+- **云根侧接口**：`/cloud/events` 目前由店根调用，需云根按同契约实现（幂等 + 409 冲突体 `{seq, reason}`）
+- **定时回传**：现为手动 `POST /edge/sync` 触发，未做后台定时器与退避
+- **读模型下发**：只有上行事件，没有云根把商品/价格变更推到店根（`/edge/pull`）
+- **冲突复核界面**：只有 API，没有运营端页面
