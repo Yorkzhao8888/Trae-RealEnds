@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-30T14:45:00+08:00",
+  "store": {
+    "name": "百泰OS 应用商店",
+    "nameEn": "BTOS App Store",
+    "entry": "https://h5.cewaysoft.com/",
+    "contractVersion": "0.2.0",
+    "operator": "百泰生态 · 分发中心",
+    "notice": "本站为百泰生态自有端的内部分发与版本中心，非 Apple 或任何第三方商店。iOS 安装一律经 App Store / TestFlight 完成。"
+  },
+  "brands": [
+    { "id": "ziway", "name": "知味工场", "nameEn": "ZiwayOS", "accent": "#F97316", "ends": ["hp", "cp", "ep", "sp"] },
+    { "id": "jechan", "name": "捷才工友", "nameEn": "Jechan", "accent": "#1F6FEB", "ends": ["hp", "cp", "ep", "sp"] },
+    { "id": "xso", "name": "XSO 智慧企业", "nameEn": "XSO", "accent": "#3D8BFF", "ends": ["org"] },
+    { "id": "cajob", "name": "Cajob 头部职聘", "nameEn": "Cajob", "accent": "#2F81F7", "ends": ["hp", "cp", "ep", "sp"] }
+  ],
+  "items": [
+    {
+      "id": "ziway-app-android", "brand": "ziway", "end": "hp",
+      "platform": "android", "platformLabel": "Android APK",
+      "packageId": "com.cewaycloud.ziwayos", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "四端选择页；待签名与 Firebase 配置"
+    },
+    {
+      "id": "ziway-app-ios", "brand": "ziway", "end": "hp",
+      "platform": "ios", "platformLabel": "iOS",
+      "packageId": "com.cewaycloud.ziwayos", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 TestFlight 或 App Store 分发"
+    },
+    {
+      "id": "ziway-mp-weixin", "brand": "ziway", "end": "hp",
+      "platform": "mp-weixin", "platformLabel": "微信小程序",
+      "packageId": "待配置 AppID", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "四端选择层 + web-view 承载页；需业务域名校验"
+    },
+    {
+      "id": "ziway-pc-win", "brand": "ziway", "end": "hp",
+      "platform": "win32", "platformLabel": "Windows",
+      "packageId": "com.cewaycloud.ziwayos", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "Electron；自动更新源 /download/latest/"
+    },
+    {
+      "id": "ziway-pc-mac", "brand": "ziway", "end": "hp",
+      "platform": "darwin", "platformLabel": "macOS",
+      "packageId": "com.cewaycloud.ziwayos", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 Apple 公证（notarize）"
+    },
+
+    {
+      "id": "jechan-app-android", "brand": "jechan", "end": "hp",
+      "platform": "android", "platformLabel": "Android APK",
+      "packageId": "com.cewaycloud.jechan", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "四端选择页；待签名"
+    },
+    {
+      "id": "jechan-app-ios", "brand": "jechan", "end": "hp",
+      "platform": "ios", "platformLabel": "iOS",
+      "packageId": "com.cewaycloud.jechan", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 TestFlight 或 App Store 分发"
+    },
+    {
+      "id": "jechan-mp-weixin", "brand": "jechan", "end": "hp",
+      "platform": "mp-weixin", "platformLabel": "微信小程序",
+      "packageId": "touristappid（占位）", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "待换正式 AppID 与业务域名"
+    },
+    {
+      "id": "jechan-pc-win", "brand": "jechan", "end": "hp",
+      "platform": "win32", "platformLabel": "Windows",
+      "packageId": "com.cewaycloud.jechan", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "Electron；自动更新源 /download/latest/"
+    },
+    {
+      "id": "jechan-pc-mac", "brand": "jechan", "end": "hp",
+      "platform": "darwin", "platformLabel": "macOS",
+      "packageId": "com.cewaycloud.jechan", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 Apple 公证（notarize）"
+    },
+
+    {
+      "id": "xso-app-android", "brand": "xso", "end": "org",
+      "platform": "android", "platformLabel": "Android APK",
+      "packageId": "com.cewaycloud.xso", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "B2B 后台端；待签名"
+    },
+    {
+      "id": "xso-app-ios", "brand": "xso", "end": "org",
+      "platform": "ios", "platformLabel": "iOS",
+      "packageId": "com.cewaycloud.xso", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 TestFlight 或 App Store 分发"
+    },
+    {
+      "id": "xso-pc-win", "brand": "xso", "end": "org",
+      "platform": "win32", "platformLabel": "Windows",
+      "packageId": "com.cewaycloud.xso", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "Electron；自动更新源 /download/latest/"
+    },
+    {
+      "id": "xso-pc-mac", "brand": "xso", "end": "org",
+      "platform": "darwin", "platformLabel": "macOS",
+      "packageId": "com.cewaycloud.xso", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 Apple 公证（notarize）"
+    },
+
+    {
+      "id": "cajob-app-android", "brand": "cajob", "end": "hp",
+      "platform": "android", "platformLabel": "Android APK",
+      "packageId": "com.cewaycloud.cajob", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "入口已切至 cajob.cewaysoft.com"
+    },
+    {
+      "id": "cajob-app-ios", "brand": "cajob", "end": "hp",
+      "platform": "ios", "platformLabel": "iOS",
+      "packageId": "com.cewaycloud.cajob", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 TestFlight 或 App Store 分发"
+    },
+    {
+      "id": "cajob-mp-weixin", "brand": "cajob", "end": "hp",
+      "platform": "mp-weixin", "platformLabel": "微信小程序",
+      "packageId": "待配置 AppID", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "业务域名需换 new 根并放校验文件"
+    },
+    {
+      "id": "cajob-pc-win", "brand": "cajob", "end": "hp",
+      "platform": "win32", "platformLabel": "Windows",
+      "packageId": "com.cewaycloud.cajob", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "更新源已指向 cajob.cewaysoft.com/download/latest/"
+    },
+    {
+      "id": "cajob-pc-mac", "brand": "cajob", "end": "hp",
+      "platform": "darwin", "platformLabel": "macOS",
+      "packageId": "com.cewaycloud.cajob", "version": "0.1.0",
+      "contractVersion": "0.2.0", "size": null, "sha256": null,
+      "url": null, "status": "pending",
+      "notes": "需 Apple 公证（notarize）"
+    }
+  ]
+}

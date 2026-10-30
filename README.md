@@ -26,10 +26,12 @@
 | `jechan-app-shell/` | iOS / Android | Capacitor 6 | **v0.1.0** 壳就绪（`com.cewaycloud.jechan`，蓝渐变 `#1F6FEB→#0B3F9E`） |
 | `jechan-mp-shell/` | 微信小程序 | 原生小程序 + `web-view` | **v0.1.0** 单页壳；AppID 占位，业务域名待配置 |
 | `jechan-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 一套代码出 Windows/macOS；更新源待部署 |
+| `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0** 目录/清单/校验和/筛选；入口 `h5.cewaysoft.com` 待配 DNS 与证书 |
+| `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 
 ## 关键口径
 
-1. **分发红线**：终端用户下载分发一律走已备案国内渠道 `https://cajob.cewaysoft.com/download/latest/`（稳定文件名，不带版本号）；本仓只做**源码协作**，不承担用户下载分发。
+1. **分发红线**：终端用户下载分发一律走已备案国内渠道 `https://cajob.cewaysoft.com/download/latest/`（稳定文件名，不带版本号）；`btos-app-store/` 只做**索引与校验**（版本/包名/SHA-256），安装包仍在各品牌 `/download/<brand>/<version>/`；本仓只做**源码协作**，不承担用户下载分发。
 2. **PC 壳自动更新**：`electron-updater` generic 源指向上述 `/download/latest/`；**发布时 `latest-mac.yml` / `latest.yml` 必须与五产物同版本上传**，缺 yml = updater 静默 404、永不升级。发布用 `cajob-pc-shell/scripts/release.sh`（构建→上传→字节校验）。
 3. **签名**：mac 需有效 Developer ID + 公证凭据，win 需 Authenticode——`release.sh` 凭据齐备自动启用，缺失降级未签名构建（仅内测）。
 4. **会话/鉴权**：壳内 OAuth 链路跳转 `oas.cewaysoft.com`（ALLOWED_HOSTS 白名单）；多域会话依赖 `xoas_session` + `oas_session` 成对有效。

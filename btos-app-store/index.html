@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B0F17">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234C8DFF'/%3E%3Ctext x='16' y='22' font-size='16' font-family='sans-serif' font-weight='700' fill='%23fff' text-anchor='middle'%3E百%3C/text%3E%3C/svg%3E">
+<title>百泰OS 应用商店 · BTOS App Store</title>
+<meta name="description" content="百泰生态自有端的应用分发与版本中心：知味工场、捷才工友、XSO、Cajob 的 App / 小程序 / PC 客户端。">
+<style>
+  :root {
+    --bg: #0B0F17;
+    --panel: #121826;
+    --panel-2: #171F30;
+    --line: rgba(255,255,255,.08);
+    --line-strong: rgba(255,255,255,.16);
+    --text: #E8ECF4;
+    --muted: #8E99AB;
+    --accent: #4C8DFF;
+    --accent-soft: rgba(76,141,255,.12);
+    --ok: #2ED3A0;
+    --warn: #E8A33D;
+    --radius: 8px;
+    --radius-card: 14px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); }
+  body {
+    font: 400 14px/1.55 -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+          "Microsoft YaHei", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  /* 顶栏 */
+  .top { display: flex; align-items: center; gap: 12px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+  .logo {
+    width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+    background: linear-gradient(150deg, #2C5FD6, #4C8DFF); color: #fff;
+    font-weight: 700; font-size: 20px; flex: 0 0 auto;
+  }
+  .top b { font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+  .top .sub { color: var(--muted); font-size: 12px; letter-spacing: 1.5px; margin-top: 1px; }
+  .top .meta { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--line-strong); color: var(--muted); font-size: 12px; white-space: nowrap;
+  }
+  .pill i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); display: block; }
+
+  /* 概要 */
+  .hero { padding: 26px 0 8px; }
+  .hero h1 { font-size: 26px; line-height: 1.3; margin: 0 0 8px; letter-spacing: .3px; }
+  .hero p { margin: 0; color: var(--muted); max-width: 720px; }
+  .stats { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 20px; }
+  .stat b { display: block; font-size: 22px; font-weight: 600; letter-spacing: .5px; }
+  .stat span { color: var(--muted); font-size: 12px; }
+
+  /* 过滤 */
+  .filters { margin-top: 24px; display: grid; gap: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row .lbl { color: var(--muted); font-size: 12px; min-width: 40px; }
+  .chip {
+    appearance: none; cursor: pointer; padding: 6px 12px; border-radius: 999px;
+    background: transparent; border: 1px solid var(--line); color: var(--muted);
+    font: inherit; font-size: 13px; transition: background .12s, color .12s, border-color .12s;
+  }
+  .chip:hover { border-color: var(--line-strong); color: var(--text); }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: #CFE0FF; }
+  .search {
+    margin-left: auto; display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; min-width: 220px;
+  }
+  .search input { flex: 1; background: transparent; border: 0; outline: 0; color: var(--text); font: inherit; }
+  .search input::placeholder { color: var(--muted); }
+
+  /* 列表 */
+  .hint { color: var(--muted); font-size: 12px; margin: 18px 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-card);
+    padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    transition: border-color .12s, background .12s;
+  }
+  .card:hover { border-color: var(--line-strong); background: var(--panel-2); }
+  .card-hd { display: flex; align-items: center; gap: 12px; }
+  .icon {
+    width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center;
+    font-weight: 700; font-size: 18px; color: #fff; flex: 0 0 auto;
+  }
+  .card-hd .nm { font-weight: 600; font-size: 15px; }
+  .card-hd .pk { color: var(--muted); font-size: 11.5px; word-break: break-all; }
+  .badge {
+    margin-left: auto; font-size: 11.5px; padding: 3px 8px; border-radius: 999px;
+    border: 1px solid var(--line-strong); color: var(--muted); white-space: nowrap;
+  }
+  .badge.pending { color: var(--warn); border-color: rgba(232,163,61,.4); }
+  .badge.available { color: var(--ok); border-color: rgba(46,211,160,.4); }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12.5px; }
+  .kv div { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); }
+  .kv strong { color: var(--text); font-weight: 500; }
+  .notes { color: var(--muted); font-size: 12px; min-height: 18px; }
+  .actions { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+  .btn {
+    appearance: none; cursor: pointer; font: inherit; font-size: 13px; padding: 7px 14px;
+    border-radius: var(--radius); border: 1px solid var(--accent); background: var(--accent-soft);
+    color: #CFE0FF; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn[aria-disabled="true"] { cursor: not-allowed; opacity: .5; border-color: var(--line-strong);
+    background: transparent; color: var(--muted); }
+  .btn-plain { border-color: var(--line-strong); background: transparent; color: var(--muted); }
+  .empty { padding: 40px 0; text-align: center; color: var(--muted); }
+
+  /* 页脚 */
+  .foot { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.8; }
+  .foot b { color: var(--text); font-weight: 500; }
+  .loaderr { margin-top: 18px; padding: 14px 16px; border: 1px solid rgba(232,163,61,.4); border-radius: var(--radius); color: var(--warn); font-size: 13px; }
+  @media (max-width: 560px) {
+    .hero h1 { font-size: 22px; }
+    .search { margin-left: 0; width: 100%; }
+    .kv { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="logo">百</div>
+    <div>
+      <b>百泰OS 应用商店</b>
+      <div class="sub">BTOS APP STORE</div>
+    </div>
+    <div class="meta">
+      <span class="pill"><i></i>生态分发 · 版本中心</span>
+      <span class="pill" id="contractPill">壳契约 v0.2.0</span>
+    </div>
+  </header>
+
+  <section class="hero">
+    <h1>生态自有端，一处取件</h1>
+    <p>知味工场、捷才工友、XSO、Cajob 的 App、微信小程序与 PC 客户端。全部条目遵循《真实端壳契约》，页面只做索引与校验，安装包一律走官方渠道分发。</p>
+    <div class="stats">
+      <div class="stat"><b id="sBrands">–</b><span>品牌</span></div>
+      <div class="stat"><b id="sItems">–</b><span>分发条目</span></div>
+      <div class="stat"><b id="sReady">–</b><span>可下载</span></div>
+      <div class="stat"><b id="sUpdated">–</b><span>清单更新时间</span></div>
+    </div>
+  </section>
+
+  <section class="filters">
+    <div class="row" id="brandRow">
+      <span class="lbl">品牌</span>
+    </div>
+    <div class="row" id="platformRow">
+      <span class="lbl">平台</span>
+    </div>
+    <div class="row">
+      <label class="search" aria-label="搜索">
+        <input id="q" type="search" placeholder="搜索品牌、包名或备注">
+      </label>
+    </div>
+  </section>
+
+  <div class="hint" id="hint">加载中…</div>
+  <div id="listWrap"><div class="grid" id="grid"></div></div>
+
+  <footer class="foot">
+    <div><b>分发规则</b>：iOS 安装经 App Store / TestFlight 完成；微信小程序经微信内跳转或扫码；Android 与 PC 客户端由本站提供安装包与 SHA-256 校验。</div>
+    <div><b>合规说明</b>：本站为百泰生态自有端的内部分发页，与 Apple Inc. 及其 App Store 服务无关；“App Store” 为其权利人标识，本站不提供任何第三方应用上架。</div>
+    <div><b>清单</b>：<a href="./data/apps.json">data/apps.json</a>（schemaVersion 1）· 版本以清单为准，页面不做二次判断</div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var DATA = null;
+  var state = { brand: 'all', platform: 'all', q: '' };
+
+  var PLATFORM_LABEL = {
+    all: '全部',
+    android: 'Android',
+    ios: 'iOS',
+    'mp-weixin': '小程序',
+    win32: 'Windows',
+    darwin: 'macOS'
+  };
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+
+  function brandOf(id) {
+    for (var i = 0; i < DATA.brands.length; i++) if (DATA.brands[i].id === id) return DATA.brands[i];
+    return { name: id, accent: '#4C8DFF', nameEn: id };
+  }
+
+  function initial(name) {
+    var t = (name || '?').replace(/\s+/g, '');
+    return /^[A-Za-z]/.test(t) ? t.charAt(0).toUpperCase() : t.charAt(0);
+  }
+
+  function renderChips() {
+    var brandRow = document.getElementById('brandRow');
+    var platformRow = document.getElementById('platformRow');
+    var bAll = el('button', 'chip', '全部');
+    bAll.setAttribute('aria-pressed', 'true');
+    bAll.dataset.kind = 'brand';
+    bAll.dataset.v = 'all';
+    brandRow.appendChild(bAll);
+    DATA.brands.forEach(function (b) {
+      var c = el('button', 'chip', b.name);
+      c.setAttribute('aria-pressed', 'false');
+      c.dataset.kind = 'brand';
+      c.dataset.v = b.id;
+      brandRow.appendChild(c);
+    });
+
+    var pAll = el('button', 'chip', '全部');
+    pAll.setAttribute('aria-pressed', 'true');
+    pAll.dataset.kind = 'platform';
+    pAll.dataset.v = 'all';
+    platformRow.appendChild(pAll);
+    ['android', 'ios', 'mp-weixin', 'win32', 'darwin'].forEach(function (p) {
+      var c = el('button', 'chip', PLATFORM_LABEL[p]);
+      c.setAttribute('aria-pressed', 'false');
+      c.dataset.kind = 'platform';
+      c.dataset.v = p;
+      platformRow.appendChild(c);
+    });
+  }
+
+  function visibleItems() {
+    var q = state.q.trim().toLowerCase();
+    return DATA.items.filter(function (it) {
+      if (state.brand !== 'all' && it.brand !== state.brand) return false;
+      if (state.platform !== 'all' && it.platform !== state.platform) return false;
+      if (!q) return true;
+      var b = brandOf(it.brand);
+      return [b.name, b.nameEn, it.packageId, it.platformLabel, it.notes, it.id]
+        .join(' ').toLowerCase().indexOf(q) >= 0;
+    });
+  }
+
+  function card(it) {
+    var b = brandOf(it.brand);
+    var c = el('article', 'card');
+
+    var hd = el('div', 'card-hd');
+    var ic = el('div', 'icon', initial(b.nameEn || b.name));
+    ic.style.background = b.accent;
+    hd.appendChild(ic);
+
+    var mid = el('div');
+    mid.appendChild(el('div', 'nm', b.name + ' · ' + it.platformLabel));
+    mid.appendChild(el('div', 'pk', it.packageId));
+    hd.appendChild(mid);
+
+    var badge = el('span', 'badge ' + it.status,
+      it.status === 'available' ? '可下载' : (it.status === 'beta' ? '测试' : '待上架'));
+    hd.appendChild(badge);
+    c.appendChild(hd);
+
+    var kv = el('div', 'kv');
+    [['版本', it.version], ['壳契约', it.contractVersion], ['大小', it.size || '—'], ['SHA-256', it.sha256 ? it.sha256.slice(0, 12) + '…' : '—']]
+      .forEach(function (pair) {
+        var row = el('div');
+        row.appendChild(el('span', null, pair[0]));
+        row.appendChild(el('strong', null, pair[1]));
+        kv.appendChild(row);
+      });
+    c.appendChild(kv);
+
+    c.appendChild(el('div', 'notes', it.notes || ''));
+
+    var ac = el('div', 'actions');
+    if (it.url && it.status !== 'pending') {
+      var a = el('a', 'btn', '下载');
+      a.href = it.url;
+      a.rel = 'noopener nofollow';
+      ac.appendChild(a);
+    } else {
+      var dis = el('button', 'btn', '待上架');
+      dis.setAttribute('aria-disabled', 'true');
+      dis.disabled = true;
+      ac.appendChild(dis);
+    }
+    if (it.platform === 'ios') {
+      var note = el('span', null, '经 App Store / TestFlight');
+      note.style.color = 'var(--muted)';
+      note.style.fontSize = '11.5px';
+      ac.appendChild(note);
+    }
+    if (it.platform === 'mp-weixin') {
+      var note2 = el('span', null, '微信内打开或扫码');
+      note2.style.color = 'var(--muted)';
+      note2.style.fontSize = '11.5px';
+      ac.appendChild(note2);
+    }
+    c.appendChild(ac);
+    return c;
+  }
+
+  function render() {
+    var grid = document.getElementById('grid');
+    grid.textContent = '';
+    var items = visibleItems();
+    items.forEach(function (it) { grid.appendChild(card(it)); });
+
+    var hint = document.getElementById('hint');
+    hint.textContent = items.length
+      ? '共 ' + items.length + ' 条 · 版本以清单为准'
+      : '';
+    if (!items.length) {
+      var empty = el('div', 'empty', '没有匹配的条目');
+      grid.appendChild(empty);
+    }
+  }
+
+  function bind() {
+    document.addEventListener('click', function (ev) {
+      var chip = ev.target.closest('.chip');
+      if (!chip) return;
+      var kind = chip.dataset.kind;
+      state[kind] = chip.dataset.v;
+      var row = chip.parentElement;
+      Array.prototype.forEach.call(row.querySelectorAll('.chip'), function (c) {
+        c.setAttribute('aria-pressed', String(c === chip));
+      });
+      render();
+    });
+    var q = document.getElementById('q');
+    q.addEventListener('input', function () { state.q = q.value; render(); });
+  }
+
+  function stats() {
+    document.getElementById('sBrands').textContent = DATA.brands.length;
+    document.getElementById('sItems').textContent = DATA.items.length;
+    document.getElementById('sReady').textContent = DATA.items.filter(function (i) { return i.status === 'available'; }).length;
+    var d = new Date(DATA.generatedAt);
+    document.getElementById('sUpdated').textContent =
+      (d.getMonth() + 1) + '/' + d.getDate();
+    document.getElementById('contractPill').textContent = '壳契约 v' + DATA.store.contractVersion;
+  }
+
+  function fail(msg) {
+    document.getElementById('hint').textContent = '';
+    var box = el('div', 'loaderr', msg);
+    document.getElementById('listWrap').insertBefore(box, document.getElementById('grid'));
+  }
+
+  fetch('./data/apps.json', { cache: 'no-cache' })
+    .then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function (d) {
+      DATA = d;
+      if (!DATA || !Array.isArray(DATA.items) || !Array.isArray(DATA.brands)) throw new Error('清单格式不正确');
+      stats();
+      renderChips();
+      bind();
+      render();
+    })
+    .catch(function (e) {
+      fail('清单加载失败：' + e.message + '。请通过 HTTP 访问本页（file:// 无法读取 data/apps.json）。');
+    });
+})();
+</script>
+</body>
+</html>
