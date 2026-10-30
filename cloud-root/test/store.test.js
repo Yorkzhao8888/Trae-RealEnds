@@ -122,3 +122,38 @@ test('租户过期：激活与建店都被拒', async () => {
   assert.equal(st.body.code, 'expired');
   await app.close();
 });
+
+test('下载统计：公开计数、租户留痕、管理侧聚合与鉴权', async () => {
+  const { app, api } = await boot();
+
+  const a1 = await api('POST', '/store/downloads', { itemId: 'cajob-pc-win', version: '0.1.0' }, '');
+  assert.equal(a1.status, 200);
+  assert.equal(a1.body.channel, 'stable');
+
+  const a2 = await api('POST', '/store/downloads', { itemId: 'cajob-pc-win', channel: 'beta', version: '0.2.0' }, 'dev:t1');
+  assert.equal(a2.status, 200);
+  assert.equal(a2.body.channel, 'beta');
+
+  // 未知通道归一到 stable
+  const a3 = await api('POST', '/store/downloads', { itemId: 'ziway-app-android', channel: 'nightly' }, '');
+  assert.equal(a3.body.channel, 'stable');
+
+  const bad = await api('POST', '/store/downloads', {}, '');
+  assert.equal(bad.status, 400);
+  assert.equal(bad.body.code, 'bad_item');
+
+  const denied = await api('GET', '/store/downloads', undefined, 'dev:t1');
+  assert.equal(denied.status, 403);
+  assert.equal(denied.body.code, 'admin_only');
+
+  const all = await api('GET', '/store/downloads', undefined, 'atk');
+  assert.equal(all.status, 200);
+  assert.equal(all.body.total, 3);
+  const cajob = all.body.items.filter((i) => i.itemId === 'cajob-pc-win');
+  assert.deepEqual(cajob.map((i) => [i.channel, i.count]).sort(), [['beta', 1], ['stable', 1]]);
+
+  const one = await api('GET', '/store/downloads?itemId=ziway-app-android', undefined, 'atk');
+  assert.equal(one.body.total, 1);
+  assert.equal(one.body.items[0].itemId, 'ziway-app-android');
+  await app.close();
+});

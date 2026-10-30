@@ -151,6 +151,9 @@
   </section>
 
   <section class="filters">
+    <div class="row" id="channelRow">
+      <span class="lbl">通道</span>
+    </div>
     <div class="row" id="brandRow">
       <span class="lbl">品牌</span>
     </div>
@@ -177,7 +180,7 @@
 <script>
 (function () {
   var DATA = null;
-  var state = { brand: 'all', platform: 'all', q: '' };
+  var state = { channel: 'stable', brand: 'all', platform: 'all', q: '' };
 
   var PLATFORM_LABEL = {
     all: '全部',
@@ -206,8 +209,18 @@
   }
 
   function renderChips() {
+    var channelRow = document.getElementById('channelRow');
     var brandRow = document.getElementById('brandRow');
     var platformRow = document.getElementById('platformRow');
+
+    [['stable', '稳定版'], ['beta', '测试版']].forEach(function (pair) {
+      var c = el('button', 'chip', pair[1]);
+      c.setAttribute('aria-pressed', String(state.channel === pair[0]));
+      c.dataset.kind = 'channel';
+      c.dataset.v = pair[0];
+      channelRow.appendChild(c);
+    });
+
     var bAll = el('button', 'chip', '全部');
     bAll.setAttribute('aria-pressed', 'true');
     bAll.dataset.kind = 'brand';
@@ -238,6 +251,8 @@
   function visibleItems() {
     var q = state.q.trim().toLowerCase();
     return DATA.items.filter(function (it) {
+      // 通道：beta 只看 status=beta，其余（待上架/可下载）归稳定通道
+      if (state.channel === 'beta' ? it.status !== 'beta' : it.status === 'beta') return false;
       if (state.brand !== 'all' && it.brand !== state.brand) return false;
       if (state.platform !== 'all' && it.platform !== state.platform) return false;
       if (!q) return true;
@@ -245,6 +260,25 @@
       return [b.name, b.nameEn, it.packageId, it.platformLabel, it.notes, it.id]
         .join(' ').toLowerCase().indexOf(q) >= 0;
     });
+  }
+
+  // 下载计数：尽力而为，失败不阻塞下载；同源或 store:api 指向云根
+  function trackDownload(it) {
+    var base = (localStorage.getItem('store:api') || '').replace(/\/$/, '');
+    var payload = JSON.stringify({
+      itemId: it.id,
+      channel: it.status === 'beta' ? 'beta' : 'stable',
+      version: it.version,
+      deviceId: localStorage.getItem('store:device') || ''
+    });
+    try {
+      fetch(base + '/store/downloads', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: payload,
+        keepalive: true
+      }).catch(function () {});
+    } catch (e) { /* 统计失败不影响下载 */ }
   }
 
   function card(it) {
@@ -283,6 +317,7 @@
       var a = el('a', 'btn', '下载');
       a.href = it.url;
       a.rel = 'noopener nofollow';
+      a.addEventListener('click', function () { trackDownload(it); });
       ac.appendChild(a);
     } else {
       var dis = el('button', 'btn', '待上架');
@@ -313,11 +348,12 @@
     items.forEach(function (it) { grid.appendChild(card(it)); });
 
     var hint = document.getElementById('hint');
+    var channelName = state.channel === 'beta' ? '测试版' : '稳定版';
     hint.textContent = items.length
-      ? '共 ' + items.length + ' 条 · 版本以清单为准'
-      : '';
+      ? channelName + '通道 共 ' + items.length + ' 条 · 版本以清单为准'
+      : channelName + '通道暂无条目';
     if (!items.length) {
-      var empty = el('div', 'empty', '没有匹配的条目');
+      var empty = el('div', 'empty', '该通道暂无条目，可切换通道或调整筛选');
       grid.appendChild(empty);
     }
   }

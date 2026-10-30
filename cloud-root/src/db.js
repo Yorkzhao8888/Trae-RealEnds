@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS tenants (id TEXT PRIMARY KEY, name TEXT NOT NULL, pla
 CREATE TABLE IF NOT EXISTS grants (tenant_id TEXT NOT NULL, brand TEXT NOT NULL, ends TEXT NOT NULL DEFAULT '[]', at INTEGER NOT NULL, PRIMARY KEY (tenant_id, brand));
 CREATE TABLE IF NOT EXISTS activations (tenant_id TEXT NOT NULL, device_id TEXT NOT NULL, platform TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, revoked_at INTEGER, PRIMARY KEY (tenant_id, device_id));
 CREATE TABLE IF NOT EXISTS stores (tenant_id TEXT NOT NULL, store_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL, PRIMARY KEY (tenant_id, store_id));
+CREATE TABLE IF NOT EXISTS downloads (item_id TEXT NOT NULL, channel TEXT NOT NULL DEFAULT 'stable', version TEXT NOT NULL DEFAULT '', tenant_id TEXT NOT NULL DEFAULT '', device_id TEXT NOT NULL DEFAULT '', at INTEGER NOT NULL);
 `;
 
 export function openDb(path = ':memory:') {
@@ -130,4 +131,24 @@ export function listEvents(db, storeId, limit = 100) {
   return db.prepare('SELECT seq, type, payload, at FROM cloud_events WHERE store_id = ? ORDER BY seq DESC LIMIT ?')
     .all(storeId, limit)
     .map((r) => ({ seq: Number(r.seq), type: r.type, data: JSON.parse(r.payload), at: Number(r.at) }));
+}
+
+/** 商店 M2：下载计数。缺 itemId 直接拒，其余字段只做留痕。 */
+export function recordDownload(db, { itemId, channel = 'stable', version = '', tenantId = '', deviceId = '' } = {}) {
+  const id = String(itemId || '').trim();
+  if (!id) return { ok: false, code: 'bad_item' };
+  const ch = String(channel) === 'beta' ? 'beta' : 'stable';
+  db.prepare('INSERT INTO downloads (item_id, channel, version, tenant_id, device_id, at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(id, ch, String(version || ''), String(tenantId || ''), String(deviceId || ''), Date.now());
+  return { ok: true, itemId: id, channel: ch };
+}
+
+/** 下载聚合：按条目 + 通道计数；给定 itemId 只看该条目。 */
+export function downloadStats(db, itemId = '') {
+  const id = String(itemId || '');
+  const rows = id
+    ? db.prepare('SELECT item_id, channel, COUNT(*) AS n FROM downloads WHERE item_id = ? GROUP BY item_id, channel').all(id)
+    : db.prepare('SELECT item_id, channel, COUNT(*) AS n FROM downloads GROUP BY item_id, channel ORDER BY item_id').all();
+  const items = rows.map((r) => ({ itemId: r.item_id, channel: r.channel, count: Number(r.n) }));
+  return { total: items.reduce((n, r) => n + r.count, 0), items };
 }

@@ -1,7 +1,7 @@
 // 云根参考实现（HTTP）：上行事件幂等接收 + 下行商品读模型 + 最小管理接口。
 // 契约见 docs/shell-contract.md §10；与 edge-store 对接时它就是"云根应答方"。
 import { createServer } from 'node:http';
-import { openDb, applyEvents, catalogSince, upsertCatalog, setStock, listEvents } from './db.js';
+import { openDb, applyEvents, catalogSince, upsertCatalog, setStock, listEvents, recordDownload, downloadStats } from './db.js';
 import { upsertTenant, entitlements, activate, deactivate, addStore, removeStore } from './store.js';
 
 const PORT = Number(process.env.CLOUD_PORT || 7331);
@@ -101,6 +101,26 @@ export function createCloud({ dbPath = ':memory:', token = TOKEN, adminToken = A
         const t = upsertTenant(db, { ...body, id: putTenant[1] });
         if (!t) return json(res, 400, { ok: false, code: 'bad_request' });
         return json(res, 200, { ok: true, tenant: t });
+      }
+
+      // ── 商店 M2：下载统计 ───────────────────────────────
+      // 计数：公开（未登录也能下载），带租户令牌则一并留痕；失败不影响下载
+      if (req.method === 'POST' && path === '/store/downloads') {
+        const body = await readBody(req);
+        const r = recordDownload(db, {
+          itemId: body.itemId,
+          channel: body.channel,
+          version: body.version,
+          tenantId: tenantOf(req) || '',
+          deviceId: body.deviceId,
+        });
+        return json(res, r.ok ? 200 : 400, r);
+      }
+
+      // 聚合：运营侧查看，需管理令牌
+      if (req.method === 'GET' && path === '/store/downloads') {
+        if (!adminToken || bearer(req) !== adminToken) return json(res, 403, { ok: false, code: 'admin_only' });
+        return json(res, 200, { ok: true, ...downloadStats(db, url.searchParams.get('itemId') || '') });
       }
       // ──────────────────────────────────────────────────
 
