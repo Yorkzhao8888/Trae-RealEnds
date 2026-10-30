@@ -58,3 +58,16 @@ jechan-mp-shell/
 
 - `AppSecret` **不得写入本仓库、不得进小程序代码**，只能放服务端环境变量。
 - 本壳不含任何密钥；`project.config.json` 只有 AppID（公开信息）。
+
+## 四端（本次变更）
+
+首页改为四端选择层，点选后进入 `pages/web/web` 承载对应 H5；从承载页返回即回到选择层。
+
+| 端 | 入口 |
+|---|---|
+| 个人端 | `https://hp.jechan.cewaysoft.com/` |
+| 客户端 | `https://cp.jechan.cewaysoft.com/` |
+| 企业端 | `https://ep.jechan.cewaysoft.com/` |
+| 生态端 | `https://sp.jechan.cewaysoft.com/` |
+
+注意：`web-view` 业务域名需把这四个域名全部加入小程序后台白名单。

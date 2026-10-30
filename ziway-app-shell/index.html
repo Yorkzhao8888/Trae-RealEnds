@@ -4,34 +4,104 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#F97316">
-<title>知味工场</title>
+<title>知味工场 · 选择身份</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #fff; }
-  .wrap { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
-           font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
-  .logo { font-size: 44px; font-weight: 700; color: #F97316; }
-  .sub { color: #999; font-size: 14px; margin-top: 8px; }
-  .loader { margin-top: 30px; width: 30px; height: 30px; border: 3px solid #fde6d2;
-            border-top-color: #F97316; border-radius: 50%; animation: spin .8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  :root { --brand: #F97316; --brand-2: #EA580C; --ink: #1A1A1A; --ink-2: #555; --ink-3: #8A8A8A; --soft: #FFF7ED; --line: #F3E3D3; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #fff; color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif; }
+  .page { min-height: 100%; display: flex; flex-direction: column; padding: 32px 22px calc(28px + env(safe-area-inset-bottom)); }
+  .head { display: flex; align-items: center; gap: 12px; margin: 18px 0 34px; }
+  .mark { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(160deg, var(--brand), var(--brand-2));
+    color: #fff; font-weight: 700; font-size: 24px; display: flex; align-items: center; justify-content: center; }
+  .head b { font-size: 19px; letter-spacing: .5px; }
+  .head span { display: block; font-size: 12px; color: var(--ink-3); letter-spacing: 2px; margin-top: 2px; }
+  h1 { font-size: 24px; margin: 0 0 6px; }
+  .tip { color: var(--ink-3); font-size: 13.5px; margin-bottom: 22px; }
+  .grid { display: grid; gap: 12px; }
+  .card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--line);
+    border-radius: 16px; background: var(--soft); text-decoration: none; color: inherit; transition: transform .12s, border-color .12s; }
+  .card:active { transform: scale(.985); border-color: var(--brand); }
+  .ico { width: 40px; height: 40px; border-radius: 12px; background: #fff; border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: var(--brand); flex: 0 0 auto; }
+  .txt b { font-size: 15.5px; }
+  .txt i { display: block; font-style: normal; font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+  .arrow { margin-left: auto; color: var(--ink-3); font-size: 18px; }
+  .foot { margin-top: auto; padding-top: 26px; text-align: center; color: var(--ink-3); font-size: 12px; line-height: 1.7; }
+  .offline { display: none; margin: 0 0 18px; padding: 12px 14px; border-radius: 12px; background: #FFF4ED;
+    color: #9A3412; font-size: 13px; }
+  body.is-offline .offline { display: block; }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="logo">知味工场</div>
-  <div class="sub">ZiwayOS · 正在加载</div>
-  <div class="loader"></div>
+<div class="page">
+  <div class="head">
+    <div class="mark">味</div>
+    <div><b>知味工场</b><span>ZIWAYOS</span></div>
+  </div>
+
+  <div class="offline" id="offline">当前网络不可用，请连网后再选择身份。</div>
+
+  <h1>选择你的身份</h1>
+  <div class="tip">四种身份对应四个独立工作台，可随时返回本页切换。</div>
+
+  <div class="grid" id="ends">
+    <a class="card" data-end="hp">
+      <div class="ico">铺</div>
+      <div class="txt"><b>个人端 · 铺主工作台</b><i>选品、上架、接单与结算</i></div>
+      <div class="arrow">›</div>
+    </a>
+    <a class="card" data-end="cp">
+      <div class="ico">客</div>
+      <div class="txt"><b>客户端 · 通用大市场</b><i>买东西、找供给、加盟与采购</i></div>
+      <div class="arrow">›</div>
+    </a>
+    <a class="card" data-end="ep">
+      <div class="ico">企</div>
+      <div class="txt"><b>企业端 · 企业版</b><i>多店协同、供应链与组织管理</i></div>
+      <div class="arrow">›</div>
+    </a>
+    <a class="card" data-end="sp">
+      <div class="ico">态</div>
+      <div class="txt"><b>生态端 · 生态版</b><i>渠道接入、服务商与生态协作</i></div>
+      <div class="arrow">›</div>
+    </a>
+  </div>
+
+  <div class="foot">知味工场 · ZiwayOS<br>选择将记在本机，下次启动直接进入</div>
 </div>
 
-<!--
-  说明：壳在 server.url 模式下直接加载 https://ziway-hp.ziway.cewaycloud.com/shop，
-  本页只在 webDir 被独立打开时生效（如 cap serve），因此这里不含任何
-  启动探测逻辑；断网兜底由 server.errorPath = offline.html 承担。
--->
 <script>
-  if (location.protocol.startsWith('http')) {
-    location.replace('https://ziway-hp.ziway.cewaycloud.com/shop');
+  var ENDS = {
+    hp: { url: 'https://ziway-hp.ziway.cewaycloud.com/shop', name: '个人端' },
+    cp: { url: 'https://ziway-cp.ziway.cewaycloud.com/mall', name: '客户端' },
+    ep: { url: 'https://ziway-ep.ziway.cewaycloud.com/', name: '企业端' },
+    sp: { url: 'https://ziway-sp.ziway.cewaycloud.com/', name: '生态端' }
+  };
+  var KEY = 'ziway.end';
+
+  function go(id) {
+    if (!ENDS[id]) return;
+    try { localStorage.setItem(KEY, id); } catch (e) {}
+    location.replace(ENDS[id].url);
   }
+
+  function syncOffline() { document.body.classList.toggle('is-offline', navigator.onLine === false); }
+
+  document.getElementById('ends').addEventListener('click', function (ev) {
+    var card = ev.target.closest('[data-end]');
+    if (!card) return;
+    ev.preventDefault();
+    go(card.dataset.end);
+  });
+
+  window.addEventListener('online', syncOffline);
+  window.addEventListener('offline', syncOffline);
+  syncOffline();
+
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  if (saved && ENDS[saved] && !/pick=1/.test(location.search)) go(saved);
 </script>
 </body>
 </html>

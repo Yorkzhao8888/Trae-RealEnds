@@ -3,11 +3,12 @@
   "appName": "知味工场",
   "webDir": "dist",
   "server": {
-    "url": "https://ziway-hp.ziway.cewaycloud.com/shop",
     "cleartext": false,
-    "errorPath": "offline.html",
     "allowNavigation": [
       "ziway-hp.ziway.cewaycloud.com",
+      "ziway-cp.ziway.cewaycloud.com",
+      "ziway-ep.ziway.cewaycloud.com",
+      "ziway-sp.ziway.cewaycloud.com",
       "ziway.cewaycloud.com",
       "oas.cewaycloud.com",
       "*.cewaycloud.com"

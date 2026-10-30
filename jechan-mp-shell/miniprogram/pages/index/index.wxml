@@ -1,9 +1,21 @@
-<view class="brand {{ready ? 'brand-leave' : ''}}">
-  <image class="logo" src="/assets/logo-lockup.png" mode="widthFix" />
-</view>
+<view class="page">
+  <view class="head">
+    <image class="logo" src="/assets/logo-lockup.png" mode="widthFix" />
+  </view>
 
-<web-view
-  wx:if="{{ready}}"
-  src="{{src}}"
-  binderror="onWebError"
-></web-view>
+  <view class="title">选择你的身份</view>
+  <view class="tip">四种身份对应四个独立工作台，返回本页即可切换</view>
+
+  <view class="grid">
+    <view class="card" wx:for="{{ends}}" wx:key="id" data-id="{{item.id}}" bindtap="onTap">
+      <view class="ico">{{item.mark}}</view>
+      <view class="txt">
+        <view class="name">{{item.name}}</view>
+        <view class="sub">{{item.sub}}</view>
+      </view>
+      <view class="arrow">›</view>
+    </view>
+  </view>
+
+  <view class="foot">捷才人才大市场 · Jechan</view>
+</view>

@@ -3,11 +3,13 @@
   "appName": "捷才工友",
   "webDir": "dist",
   "server": {
-    "url": "https://hp.jechan.cewaysoft.com",
     "cleartext": false,
-    "errorPath": "offline.html",
     "allowNavigation": [
       "hp.jechan.cewaysoft.com",
+      "cp.jechan.cewaysoft.com",
+      "ep.jechan.cewaysoft.com",
+      "sp.jechan.cewaysoft.com",
+      "jechan.cewaysoft.com",
       "oas.cewaysoft.com",
       "*.cewaysoft.com"
     ]
@@ -24,8 +26,8 @@
       "resize": "native"
     },
     "StatusBar": {
-      "style": "DARK",
-      "backgroundColor": "#1F6FEB",
+      "style": "LIGHT",
+      "backgroundColor": "#FFFFFF",
       "overlaysWebView": false
     },
     "SplashScreen": {

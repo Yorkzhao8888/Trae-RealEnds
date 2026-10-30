@@ -49,3 +49,4 @@
 - 2026-10-30：Cajob 四端入口迁移到新根 `https://cajob.cewaysoft.com/`（旧根 `h5.cewaycloud.com` 已停用），OAS 同步为 `oas.cewaysoft.com`，白名单与更新源一并更新；小程序业务域名与校验文件需按新域重新配置。
 - 2026-10-30：新增「XSO 智慧企业」两端（`xso-app-shell` / `xso-pc-shell`），包名 `com.cewaycloud.xso`，深底 `#0E1218` + 蓝标 `#1F6FEB`。
 - 2026-10-30：新增「捷才工友 Jechan」三端（`jechan-app-shell` / `jechan-mp-shell` / `jechan-pc-shell`），包名 `com.cewaycloud.jechan`，蓝渐变 `#1F6FEB→#0B3F9E`，入口 `hp.jechan.cewaysoft.com`。
+- 2026-10-30：知味工场与捷才工友补齐**四端**（个人 hp / 客户 cp / 企业 ep / 生态 sp）：App 改为本地「选择身份」页 + `allowNavigation` 放行四域，PC 加「身份」菜单与首启选择，小程序改为选择页 + `pages/web` 承载；桥新增 `ends` / `currentEnd` / `switchEnd`。

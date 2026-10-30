@@ -4,12 +4,43 @@ const { app, BrowserWindow, shell, Menu, session, nativeImage, dialog, screen, n
 const fs = require('fs');
 const path = require('path');
 
-const HOME_URL = 'https://ziway-hp.ziway.cewaycloud.com/shop';
+// 四端：个人 / 客户端 / 企业 / 生态，同一套壳内切换
+const ENDS = {
+  hp: { name: '个人端 · 铺主工作台', url: 'https://ziway-hp.ziway.cewaycloud.com/shop' },
+  cp: { name: '客户端 · 通用大市场', url: 'https://ziway-cp.ziway.cewaycloud.com/mall' },
+  ep: { name: '企业端 · 企业版', url: 'https://ziway-ep.ziway.cewaycloud.com/' },
+  sp: { name: '生态端 · 生态版', url: 'https://ziway-sp.ziway.cewaycloud.com/' },
+};
+const END_DEFAULT = 'hp';
+const END_STORE = () => path.join(app.getPath('userData'), 'end.json');
+
+let currentEnd = null;
+
+function loadEnd() {
+  try {
+    const id = JSON.parse(fs.readFileSync(END_STORE(), 'utf8')).end;
+    if (id && ENDS[id]) return id;
+  } catch (e) { /* 首次运行或文件损坏：回落到默认端 */ }
+  return null;
+}
+
+function saveEnd(id) {
+  try { fs.writeFileSync(END_STORE(), JSON.stringify({ end: id })); } catch (e) { /* 写入失败不影响本次使用 */ }
+  currentEnd = id;
+}
+
+function homeUrl() {
+  return (ENDS[currentEnd] || ENDS[END_DEFAULT]).url;
+}
 // 品牌图标（窗口图标：Windows/Linux 开发模式；打包后由安装器内嵌图标接管）
 const APP_ICON = path.join(__dirname, 'build', 'icon.png');
 // 允许在壳内导航的域（登录/授权链路会跳到 A门）；P4-1 收紧：仅 https
 const ALLOWED_HOSTS = new Set([
   'ziway-hp.ziway.cewaycloud.com',
+  'ziway-cp.ziway.cewaycloud.com',
+  'ziway-ep.ziway.cewaycloud.com',
+  'ziway-sp.ziway.cewaycloud.com',
+  'ziway.cewaycloud.com',
   'oas.cewaycloud.com',
 ]);
 
@@ -102,7 +133,7 @@ code{font-size:11px;color:#9aa1ad}
 <h1>网络连接异常</h1>
 <p>无法访问知味工场服务，请检查网络后重试。</p>
 <code>${escapeHtml(code)} ${escapeHtml(desc || '')}</code><br>
-<button onclick="location.replace('${HOME_URL}')">重新加载</button>
+<button onclick="location.replace('${homeUrl()}')">重新加载</button>
 </div></body></html>`;
 }
 
@@ -192,7 +223,7 @@ function createWindow() {
 
   mainWindow.once('ready-to-show', () => mainWindow.show());
   blurredAt = Date.now();
-  mainWindow.loadURL(HOME_URL);
+  mainWindow.loadURL(homeUrl());
 
   // 离开 ≥5 分钟再回到窗口：与线上 H5 对一次版本，变了静默重载
   mainWindow.on('blur', () => { blurredAt = Date.now(); });
@@ -255,7 +286,7 @@ function createWindow() {
         buttons: ['重新加载'],
       });
       rendererCrashes = 0;
-      mainWindow.loadURL(HOME_URL);
+      mainWindow.loadURL(homeUrl());
     } catch { /* 窗口已关闭 */ }
   });
 
@@ -384,11 +415,26 @@ function setupAutoUpdate() {
 }
 
 // macOS 基础菜单（复制粘贴等编辑功能在壳内可用）；P4-4 发行版按打包状态收敛调试项
+function endMenu() {
+  return {
+    label: '身份',
+    submenu: Object.keys(ENDS).map((id) => ({
+      label: ENDS[id].name,
+      type: 'radio',
+      checked: (currentEnd || END_DEFAULT) === id,
+      click: () => switchEnd(id),
+    })),
+  };
+}
+
+function switchEnd(id) {
+  if (!ENDS[id] || id === currentEnd) return;
+  saveEnd(id);
+  buildMenu();
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.loadURL(ENDS[id].url);
+}
+
 function buildMenu() {
-  if (process.platform !== 'darwin') {
-    Menu.setApplicationMenu(null);
-    return;
-  }
   const dev = !app.isPackaged;
   const viewSubmenu = dev
     ? [
@@ -419,6 +465,7 @@ function buildMenu() {
       ],
     },
     { label: '视图', submenu: viewSubmenu },
+    endMenu(),
     {
       label: '窗口',
       submenu: [{ role: 'minimize' }, { role: 'close' }],
@@ -427,7 +474,26 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-app.whenReady().then(() => {
+
+// 首次运行：用系统对话框选身份（不占用窗口，避免先加载错端再跳）
+async function pickEndOnFirstRun() {
+  const ids = Object.keys(ENDS);
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    title: '选择身份',
+    message: '请选择要进入的工作台',
+    detail: '之后可在菜单「身份」中随时切换，选择会被记住。',
+    buttons: ids.map((id) => ENDS[id].name),
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  });
+  const id = ids[response] || END_DEFAULT;
+  saveEnd(id);
+  return id;
+}
+
+app.whenReady().then(async () => {
   // Windows：任务栏分组与通知归属（缺这行系统会把通知算到 electron.exe 名下）
   if (process.platform === 'win32') app.setAppUserModelId('com.cewaycloud.ziwayos');
 
@@ -447,6 +513,8 @@ app.whenReady().then(() => {
     if (mainWindow && !mainWindow.isDestroyed()) mainWindow.setBackgroundColor(bgColor());
   });
 
+  currentEnd = loadEnd();
+  if (!currentEnd) currentEnd = await pickEndOnFirstRun();
   buildMenu();
   createWindow();
   setupAutoUpdate();

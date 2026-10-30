@@ -18,6 +18,15 @@
 
   var VERSION = '0.1.0';
 
+  // 四端目录：与 dist/index.html 的选择页保持一致，改一处需同步另一处
+  var ENDS = {
+    hp: { url: 'https://hp.jechan.cewaysoft.com/', name: '个人端 · 捷才工友' },
+    cp: { url: 'https://cp.jechan.cewaysoft.com/', name: '客户端 · 捷才需求方' },
+    ep: { url: 'https://ep.jechan.cewaysoft.com/', name: '企业端 · 捷才企业' },
+    sp: { url: 'https://sp.jechan.cewaysoft.com/', name: '生态端 · 捷才生态' }
+  };
+  var END_KEY = 'jechan.end';
+
   // 幂等：已注册则直接返回，避免重复绑定监听导致事件翻倍
   if (window.jechanOS) return;
 
@@ -335,6 +344,19 @@
           return;
         }
         await P.Browser.open({ url: url });
+      },
+      // 四端：切换即跳对应工作台，选择记在本机（启动页据此直达）
+      ends: ENDS,
+
+      currentEnd: function () {
+        try { return localStorage.getItem(END_KEY); } catch (e) { return null; }
+      },
+
+      switchEnd: function (id) {
+        if (!ENDS[id]) return false;
+        try { localStorage.setItem(END_KEY, id); } catch (e) {}
+        location.replace(ENDS[id].url);
+        return true;
       },
     };
 

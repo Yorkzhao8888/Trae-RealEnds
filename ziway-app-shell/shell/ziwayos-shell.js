@@ -18,6 +18,15 @@
 
   var VERSION = '0.1.0';
 
+  // 四端目录：与 dist/index.html 的选择页保持一致，改一处需同步另一处
+  var ENDS = {
+    hp: { url: 'https://ziway-hp.ziway.cewaycloud.com/shop', name: '个人端 · 铺主工作台' },
+    cp: { url: 'https://ziway-cp.ziway.cewaycloud.com/mall', name: '客户端 · 通用大市场' },
+    ep: { url: 'https://ziway-ep.ziway.cewaycloud.com/', name: '企业端 · 企业版' },
+    sp: { url: 'https://ziway-sp.ziway.cewaycloud.com/', name: '生态端 · 生态版' }
+  };
+  var END_KEY = 'ziway.end';
+
   // 幂等：已注册则直接返回，避免重复绑定监听导致事件翻倍
   if (window.ziwayOS) return;
 
@@ -335,6 +344,19 @@
           return;
         }
         await P.Browser.open({ url: url });
+      },
+      // 四端：切换即跳对应工作台，选择记在本机（启动页据此直达）
+      ends: ENDS,
+
+      currentEnd: function () {
+        try { return localStorage.getItem(END_KEY); } catch (e) { return null; }
+      },
+
+      switchEnd: function (id) {
+        if (!ENDS[id]) return false;
+        try { localStorage.setItem(END_KEY, id); } catch (e) {}
+        location.replace(ENDS[id].url);
+        return true;
       },
     };
 

@@ -1,21 +1,44 @@
-.brand {
-  position: fixed;
-  inset: 0;
+page { height: 100%; background: #FFFFFF; }
+
+.page {
+  min-height: 100vh;
+  padding: 48rpx 40rpx calc(40rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.head { display: flex; justify-content: center; margin: 20rpx 0 40rpx; }
+.logo { width: 420rpx; display: block; }
+
+.title { font-size: 44rpx; font-weight: 700; color: #1A1A1A; }
+.tip { font-size: 26rpx; color: #8A8A8A; margin: 12rpx 0 36rpx; }
+
+.grid { display: flex; flex-direction: column; gap: 20rpx; }
+
+.card {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: #F97316;
-  transition: opacity 240ms ease;
+  gap: 24rpx;
+  padding: 30rpx 32rpx;
+  border: 1rpx solid #F3E3D3;
+  border-radius: 28rpx;
+  background: #FFF7ED;
+}
+.card:active { background: #FFEDD5; }
+
+.ico {
+  width: 80rpx; height: 80rpx; border-radius: 22rpx;
+  background: #FFFFFF; border: 1rpx solid #F3E3D3;
+  color: #F97316; font-size: 34rpx; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
 }
 
-/* web-view 挂载后启动层淡出，不抢焦点 */
-.brand-leave {
-  opacity: 0;
-  pointer-events: none;
-}
+.txt { flex: 1; min-width: 0; }
+.name { font-size: 31rpx; font-weight: 600; color: #1A1A1A; }
+.sub { font-size: 25rpx; color: #8A8A8A; margin-top: 6rpx; }
 
-/* 品牌组合图自带白底徽标，直接落在橙色启动层上，不再套白卡片 */
-.logo {
-  width: 560rpx;
-  display: block;
-}
+.arrow { color: #8A8A8A; font-size: 34rpx; }
+
+.foot { margin-top: auto; padding-top: 48rpx; text-align: center; color: #8A8A8A; font-size: 24rpx; letter-spacing: 1rpx; }

@@ -1,65 +1,36 @@
-// 首页：品牌启动层 → 全屏 web-view 承载 H5 根
-const HOME = 'https://hp.jechan.cewaysoft.com';
-const SPLASH_MS = 600;
-// 离开超过 5 分钟后回来，强制重载一次 web-view，避免长期停留在旧版本 H5
-const STALE_MS = 5 * 60 * 1000;
+// 四端选择页：客户端 / 个人端 / 企业端 / 生态端
+const ENDS = [
+  { id: 'hp', name: '个人端', sub: '捷才工友 · 挂出技能，活来找你', mark: '工', url: 'https://hp.jechan.cewaysoft.com/' },
+  { id: 'cp', name: '客户端', sub: '捷才需求方 · 说清需求，人才上门', mark: '需', url: 'https://cp.jechan.cewaysoft.com/' },
+  { id: 'ep', name: '企业端', sub: '捷才企业 · 批量招人，合规留痕', mark: '企', url: 'https://ep.jechan.cewaysoft.com/' },
+  { id: 'sp', name: '生态端', sub: '捷才生态 · 把渠道接进人才大市场', mark: '态', url: 'https://sp.jechan.cewaysoft.com/' },
+];
+const KEY = 'jechan.end';
 
 Page({
   data: {
-    ready: false,
-    src: '',
+    ends: ENDS,
   },
 
   onLoad() {
-    this.awayAt = 0;
-    // 先亮品牌层，避免 web-view 首帧白屏；同时确认网络可用
-    wx.getNetworkType({
-      success: (res) => {
-        if (res.networkType === 'none') {
-          this.toError('当前无网络连接');
-          return;
-        }
-        this.mount();
-      },
-      fail: () => this.mount(),
-    });
+    let last = null;
+    try { last = wx.getStorageSync(KEY); } catch (e) { /* 存储不可用时仍展示选择页 */ }
+    if (last && ENDS.some((e) => e.id === last)) this.enter(last);
   },
 
-  onHide() {
-    this.awayAt = Date.now();
+  onTap(e) {
+    this.enter(e.currentTarget.dataset.id);
   },
 
-  onShow() {
-    if (!this.data.ready || !this.awayAt) return;
-    if (Date.now() - this.awayAt < STALE_MS) return;
-    this.awayAt = 0;
-    // web-view 没有 reload API，换 src 才能重新拉取 H5
-    this.setData({ src: HOME + '?__t=' + Date.now() });
-  },
-
-  mount() {
-    setTimeout(() => {
-      this.setData({ src: HOME, ready: true });
-    }, SPLASH_MS);
-  },
-
-  // web-view 加载失败：小程序内无法在 web-view 上叠加提示，改为跳独立错误页
-  onWebError(e) {
-    const msg = (e && e.detail && e.detail.errMsg) || '页面加载失败';
-    this.toError(msg);
-  },
-
-  toError(reason) {
-    wx.redirectTo({
-      url: '/pages/error/error?reason=' + encodeURIComponent(reason),
-    });
+  enter(id) {
+    const end = ENDS.find((e) => e.id === id);
+    if (!end) return;
+    try { wx.setStorageSync(KEY, id); } catch (e) { /* 忽略 */ }
+    wx.navigateTo({ url: '/pages/web/web?end=' + id });
   },
 
   onShareAppMessage() {
-    return {
-      title: '捷才工友',
-      path: '/pages/index/index',
-    };
+    return { title: '捷才工友 · 挂出技能，活来找你', path: '/pages/index/index' };
   },
 
   onShareTimeline() {

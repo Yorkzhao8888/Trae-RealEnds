@@ -30,6 +30,15 @@ export interface ZiwayNativeBridge {
 
   /** 立即收起启动屏（H5 首屏渲染完成后可主动调用，避免等待自动收起） */
   hideSplash(): void;
+
+  /** 四端目录：hp 个人 / cp 客户 / ep 企业 / sp 生态 */
+  ends: Record<'hp' | 'cp' | 'ep' | 'sp', { url: string; name: string }>;
+
+  /** 当前记住的端（未选择时为 null） */
+  currentEnd(): 'hp' | 'cp' | 'ep' | 'sp' | null;
+
+  /** 切到指定端并跳转，返回是否切换成功 */
+  switchEnd(id: 'hp' | 'cp' | 'ep' | 'sp'): boolean;
 }
 
 /** 桥派发的自定义事件 */

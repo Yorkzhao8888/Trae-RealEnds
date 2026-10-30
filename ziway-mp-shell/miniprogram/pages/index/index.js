@@ -1,65 +1,36 @@
-// 首页：品牌启动层 → 全屏 web-view 承载 H5 根
-const HOME = 'https://ziway-hp.ziway.cewaycloud.com/shop';
-const SPLASH_MS = 600;
-// 离开超过 5 分钟后回来，强制重载一次 web-view，避免长期停留在旧版本 H5
-const STALE_MS = 5 * 60 * 1000;
+// 四端选择页：客户端 / 个人端 / 企业端 / 生态端
+const ENDS = [
+  { id: 'hp', name: '个人端', sub: '铺主工作台 · 选品、上架、接单与结算', mark: '铺', url: 'https://ziway-hp.ziway.cewaycloud.com/shop' },
+  { id: 'cp', name: '客户端', sub: '通用大市场 · 买东西、找供给、加盟采购', mark: '客', url: 'https://ziway-cp.ziway.cewaycloud.com/mall' },
+  { id: 'ep', name: '企业端', sub: '企业版 · 多店协同、供应链与组织管理', mark: '企', url: 'https://ziway-ep.ziway.cewaycloud.com/' },
+  { id: 'sp', name: '生态端', sub: '生态版 · 渠道接入、服务商与生态协作', mark: '态', url: 'https://ziway-sp.ziway.cewaycloud.com/' },
+];
+const KEY = 'ziway.end';
 
 Page({
   data: {
-    ready: false,
-    src: '',
+    ends: ENDS,
   },
 
   onLoad() {
-    this.awayAt = 0;
-    // 先亮品牌层，避免 web-view 首帧白屏；同时确认网络可用
-    wx.getNetworkType({
-      success: (res) => {
-        if (res.networkType === 'none') {
-          this.toError('当前无网络连接');
-          return;
-        }
-        this.mount();
-      },
-      fail: () => this.mount(),
-    });
+    let last = null;
+    try { last = wx.getStorageSync(KEY); } catch (e) { /* 存储不可用时仍展示选择页 */ }
+    if (last && ENDS.some((e) => e.id === last)) this.enter(last);
   },
 
-  onHide() {
-    this.awayAt = Date.now();
+  onTap(e) {
+    this.enter(e.currentTarget.dataset.id);
   },
 
-  onShow() {
-    if (!this.data.ready || !this.awayAt) return;
-    if (Date.now() - this.awayAt < STALE_MS) return;
-    this.awayAt = 0;
-    // web-view 没有 reload API，换 src 才能重新拉取 H5
-    this.setData({ src: HOME + '?__t=' + Date.now() });
-  },
-
-  mount() {
-    setTimeout(() => {
-      this.setData({ src: HOME, ready: true });
-    }, SPLASH_MS);
-  },
-
-  // web-view 加载失败：小程序内无法在 web-view 上叠加提示，改为跳独立错误页
-  onWebError(e) {
-    const msg = (e && e.detail && e.detail.errMsg) || '页面加载失败';
-    this.toError(msg);
-  },
-
-  toError(reason) {
-    wx.redirectTo({
-      url: '/pages/error/error?reason=' + encodeURIComponent(reason),
-    });
+  enter(id) {
+    const end = ENDS.find((e) => e.id === id);
+    if (!end) return;
+    try { wx.setStorageSync(KEY, id); } catch (e) { /* 忽略 */ }
+    wx.navigateTo({ url: '/pages/web/web?end=' + id });
   },
 
   onShareAppMessage() {
-    return {
-      title: '知味工场',
-      path: '/pages/index/index',
-    };
+    return { title: '知味工场 · ZiwayOS', path: '/pages/index/index' };
   },
 
   onShareTimeline() {

@@ -77,3 +77,14 @@ if (window.ziwayOS?.isDesktopShell) {
   未部署该目录时更新逻辑静默失败，不影响使用。
 - 未签名/未公证的 mac 包首次打开需在「系统设置 → 隐私与安全性」放行。
 - Linux 环境下未安装 Electron 依赖，因此本仓库只做了配置与语法校验，桌面产物需在目标机构建。
+
+## 四端（本次变更）
+
+一个安装包承载四端：菜单「身份」可随时切换，首次启动弹出系统对话框选择，选择写入 `userData/end.json` 并在下次启动生效。
+
+| 端 | 入口 |
+|---|---|
+| 个人端 | `https://ziway-hp.ziway.cewaycloud.com/shop` |
+| 客户端 | `https://ziway-cp.ziway.cewaycloud.com/mall` |
+| 企业端 | `https://ziway-ep.ziway.cewaycloud.com/` |
+| 生态端 | `https://ziway-sp.ziway.cewaycloud.com/` |

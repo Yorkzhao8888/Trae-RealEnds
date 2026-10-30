@@ -214,3 +214,17 @@ iOS 首次导出前需在 Apple Developer 后台为该 bundle id 新建 Distribu
 | AS `Gradle sync` 超时 | 网络 | gradle-wrapper.properties 换国内镜像 |
 | Android `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | 签名不一致 | 卸载旧版本重装，或用同一个 keystore 签 |
 | iOS 运行时白屏 | H5 根不可达 | 已由 `server.errorPath` 兜底；否则检查 sync 进原生工程的 url / errorPath |
+
+## 四端（本次变更）
+
+一个安装包承载四端，启动先进「选择身份」页，选择记在本机：
+
+| 端 | 入口 |
+|---|---|
+| 个人端 | `https://ziway-hp.ziway.cewaycloud.com/shop` |
+| 客户端 | `https://ziway-cp.ziway.cewaycloud.com/mall` |
+| 企业端 | `https://ziway-ep.ziway.cewaycloud.com/` |
+| 生态端 | `https://ziway-sp.ziway.cewaycloud.com/` |
+
+- 壳不再用 `server.url` 直连单一端，改为本地选择页 + `allowNavigation` 放行四域；因此 `server.errorPath` 不再生效，断网提示在选择页内给出。
+- H5 内可直接调用 `window.ziwayOS.switchEnd('ep')` 切换；`ziwayOS.ends` 为四端目录。
