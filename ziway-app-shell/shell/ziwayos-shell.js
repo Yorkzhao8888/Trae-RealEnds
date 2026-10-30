@@ -130,6 +130,7 @@
     set('biometric', has('BiometricAuth') ? '✓' : '─', '─', '─');
     set('offlineQueue', '✓', '✓', '─');
     set('subscribeMsg', '─', '─', '✓');
+    cap['edge.storeRoot'] = '✓';
 
     return cap;
   }
@@ -229,10 +230,223 @@
 
   function openExternal(url) {
     if (!url) return err('E_BAD_ARGS', 'openExternal');
+    // 桌面壳：走 Electron 原生 shell.openExternal，避免在应用内开新窗口
+    if (window.ShellDesktop && typeof window.ShellDesktop.openExternal === 'function') {
+      try {
+        Promise.resolve(window.ShellDesktop.openExternal(url)).catch(function () {});
+        return ok();
+      } catch (e) {
+        return err('E_NATIVE', 'openExternal', e && e.message);
+      }
+    }
     if (P.Browser) {
       try { P.Browser.open({ url: url }); return ok(); } catch (e) { return err('E_NATIVE', 'openExternal', e && e.message); }
     }
     try { window.open(url, '_system'); return ok(); } catch (e) { return err('E_UNSUPPORTED', 'openExternal'); }
+  }
+
+  // ---------------------------------------------------------------- 桌面能力
+  var DESKTOP_METHODS = {
+    openExternal: true, openPath: true, revealFile: true, paths: true, writeTemp: true,
+  };
+
+  function desktopCapabilities() {
+    var d = window.ShellDesktop;
+    if (!d) return {};
+    var caps = {};
+    Object.keys(DESKTOP_METHODS).forEach(function (k) {
+      if (typeof d[k] === 'function') caps[k] = '✓';
+    });
+    return caps;
+  }
+
+  // ---------------------------------------------------------------- 店根适配器
+  // 店根在店内局域网（默认 http://127.0.0.1:7321，桌面壳即店根本机）。
+  // 超时 3s：门店 Wi-Fi 抖动时快速失败，由调用方决定回落到离线队列。
+  var EDGE_KEY = 'shell:edge';
+  var EDGE_TIMEOUT = 3000;
+
+  function edgeConfig() {
+    var cfg = {};
+    try { cfg = JSON.parse(localStorage.getItem(EDGE_KEY) || '{}'); } catch (e) {}
+    if (!cfg.baseUrl) {
+      // 桌面壳自带店根：默认本机端口；移动壳需要显式配置门店地址
+      if (window.ShellDesktop) cfg.baseUrl = 'http://127.0.0.1:7321';
+      else {
+        var q = parseQuery();
+        if (q.edge) cfg.baseUrl = q.edge;
+      }
+    }
+    return cfg;
+  }
+
+  function edgeConfigure(opts) {
+    var o = opts || {};
+    if (!o.baseUrl) return err('E_BAD_ARGS', 'edge.configure');
+    var cfg = { baseUrl: String(o.baseUrl).replace(/\/$/, ''), token: o.token || '', deviceId: o.deviceId || null };
+    try { localStorage.setItem(EDGE_KEY, JSON.stringify(cfg)); } catch (e) {}
+    return ok(cfg);
+  }
+
+  async function edgeFetch(path, init) {
+    var cfg = edgeConfig();
+    if (!cfg.baseUrl) return err('E_UNSUPPORTED', 'edge', '未配置店根地址');
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, EDGE_TIMEOUT) : null;
+    try {
+      var headers = { 'Content-Type': 'application/json' };
+      if (cfg.token) headers.authorization = 'Bearer ' + cfg.token;
+      var res = await fetch(cfg.baseUrl + path, Object.assign({ headers: headers, signal: ctrl && ctrl.signal, cache: 'no-store' }, init || {}));
+      var body = null;
+      try { body = await res.json(); } catch (e) {}
+      if (!res.ok) {
+        var code = (body && body.code) || 'E_EDGE';
+        var out = err(code === 'stock' ? 'E_STOCK' : code === 'limit' ? 'E_LIMIT' : code === 'lease_expired' || code === 'lease_unknown' ? 'E_LEASE' : 'E_EDGE', 'edge');
+        out.status = res.status;
+        out.data = body;
+        return out;
+      }
+      return ok(body);
+    } catch (e) {
+      return err('E_EDGE_OFFLINE', 'edge', e && e.message);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async function edgeHealth() { return edgeFetch('/edge/health'); }
+
+  async function edgeLease(opts) {
+    var cfg = edgeConfig();
+    var body = {
+      deviceId: (opts && opts.deviceId) || cfg.deviceId || (shellDeviceId()),
+      ttlMs: (opts && opts.ttlMs) || undefined,
+    };
+    var r = await edgeFetch('/edge/lease', { method: 'POST', body: JSON.stringify(body) });
+    if (r.ok) {
+      _lease = { id: r.data.leaseId, expires: r.data.expires };
+    }
+    return r;
+  }
+
+  var _lease = null;
+  function edgeLeaseId() {
+    if (_lease && _lease.expires > Date.now()) return _lease.id;
+    return null;
+  }
+
+  async function edgeCommit(opts) {
+    var o = opts || {};
+    if (!Array.isArray(o.ops) || !o.ops.length) return err('E_BAD_ARGS', 'edge.commit');
+    var leaseId = o.leaseId || edgeLeaseId();
+    if (!leaseId) {
+      var lr = await edgeLease({});
+      if (!lr.ok) return lr;
+      leaseId = lr.data.leaseId;
+    }
+    var r = await edgeFetch('/edge/commit', { method: 'POST', body: JSON.stringify({ leaseId: leaseId, ops: o.ops }) });
+    // 店内不可达且调用方允许回落：转离线队列（队列重放目标仍是店根路径）
+    if (!r.ok && o.fallback === 'queue' && r.code === 'E_EDGE_OFFLINE') {
+      for (var i = 0; i < o.ops.length; i++) {
+        enqueue({ url: edgeConfig().baseUrl + '/edge/commit', method: 'POST', body: { leaseId: leaseId, ops: [o.ops[i]] }, headers: { authorization: edgeConfig().token ? 'Bearer ' + edgeConfig().token : '' } });
+      }
+      return ok({ queued: o.ops.length });
+    }
+    return r;
+  }
+
+  function shellDeviceId() {
+    var k = 'shell:device-id';
+    var v = null;
+    try { v = localStorage.getItem(k); } catch (e) {}
+    if (!v) {
+      v = uuid();
+      try { localStorage.setItem(k, v); } catch (e) {}
+    }
+    return v;
+  }
+
+  // 条目：{ idem, method, url, body, at, tries }
+  // 规则：幂等键由端生成；联网后按入队顺序重放；4xx 视为永久失败并出队，5xx/网络错误保留重试。
+  var QUEUE_KEY = 'shell:offline-queue';
+  var flushing = false;
+
+  function queueRead() {
+    try {
+      var raw = localStorage.getItem(QUEUE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function queueWrite(list) {
+    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(list.slice(0, 200))); } catch (e) {}
+  }
+
+  function uuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    return 'xxxxxx-xxxx-4xxx-yxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0;
+      var v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    }) + '-' + Date.now();
+  }
+
+  function enqueue(item) {
+    var it = item || {};
+    if (!it.url || !it.method) return err('E_BAD_ARGS', 'offline.enqueue');
+    var entry = {
+      idem: it.idem || uuid(),
+      method: String(it.method).toUpperCase(),
+      url: it.url,
+      body: it.body === undefined ? null : it.body,
+      headers: it.headers || {},
+      at: Date.now(),
+      tries: 0,
+    };
+    var list = queueRead();
+    list.push(entry);
+    queueWrite(list);
+    emit('shell:queued', { idem: entry.idem, count: list.length });
+    if (netState().online) flush();
+    return ok({ idem: entry.idem, count: list.length });
+  }
+
+  async function flush() {
+    if (flushing || !netState().online) return ok({ flushed: 0 });
+    flushing = true;
+    var list = queueRead();
+    var kept = [];
+    var sent = 0;
+    try {
+      for (var i = 0; i < list.length; i++) {
+        var e = list[i];
+        try {
+          var res = await fetch(e.url, {
+            method: e.method,
+            headers: Object.assign({ 'Content-Type': 'application/json', 'X-Idem-Key': e.idem }, e.headers || {}),
+            body: e.body === null ? undefined : JSON.stringify(e.body),
+            credentials: 'same-origin',
+          });
+          if (res.status >= 400 && res.status < 500) {
+            emit('shell:queue-failed', { idem: e.idem, status: res.status });
+            continue; // 4xx 永久失败，出队
+          }
+          if (!res.ok) throw new Error('status ' + res.status);
+          sent++;
+          emit('shell:queue-replayed', { idem: e.idem, status: res.status });
+        } catch (x) {
+          e.tries = (e.tries || 0) + 1;
+          kept.push(e);
+        }
+      }
+      queueWrite(kept);
+    } finally {
+      flushing = false;
+    }
+    if (sent) emit('shell:queue-drained', { sent: sent, left: kept.length });
+    return ok({ flushed: sent, left: kept.length });
   }
 
   function pushRequest() {
@@ -286,6 +500,22 @@
     'core.net': function () { return ok(netState()); },
     'core.end': function () { return currentEnd(); },
     'core.switchEnd': function (a) { return switchEnd(a && a.id); },
+    'offline.enqueue': function (a) { return enqueue(a); },
+    'offline.flush': function () { return flush(); },
+    'offline.list': function () { return ok(queueRead()); },
+    'edge.configure': function (a) { return edgeConfigure(a); },
+    'edge.health': function () { return edgeHealth(); },
+    'edge.lease': function (a) { return edgeLease(a); },
+    'edge.commit': function (a) { return edgeCommit(a); },
+    'edge.snapshot': function (a) { return edgeFetch('/edge/snapshot?since=' + Number((a && a.since) || 0)); },
+    'desktop.paths': function () {
+      if (!window.ShellDesktop || typeof window.ShellDesktop.paths !== 'function') return err('E_UNSUPPORTED', 'desktop.paths');
+      try { return ok(window.ShellDesktop.paths()); } catch (e) { return err('E_NATIVE', 'desktop.paths', e && e.message); }
+    },
+    'desktop.revealFile': function (a) {
+      if (!window.ShellDesktop || typeof window.ShellDesktop.revealFile !== 'function') return err('E_UNSUPPORTED', 'desktop.revealFile');
+      try { window.ShellDesktop.revealFile(a && a.path); return ok(); } catch (e) { return err('E_NATIVE', 'desktop.revealFile', e && e.message); }
+    },
   };
 
   function ok(data) { return { ok: true, data: data === undefined ? null : data, at: nowMonotonic() }; }
@@ -352,7 +582,10 @@
   }
 
   function bindWeb() {
-    window.addEventListener('online', function () { emit('shell:network', netState()); });
+    window.addEventListener('online', function () {
+      emit('shell:network', netState());
+      flush();
+    });
     window.addEventListener('offline', function () { emit('shell:network', netState()); });
     document.addEventListener('visibilitychange', function () {
       emit(document.hidden ? 'shell:pause' : 'shell:resume');
@@ -435,7 +668,7 @@
     state.env = detect();
     P = plugins();
     state.platform = state.env === 'capacitor' ? window.Capacitor.getPlatform() : state.env;
-    state.capabilities = buildCapabilities(state.env, P);
+    state.capabilities = Object.assign(buildCapabilities(state.env, P), desktopCapabilities());
 
     var Shell = {
       __core: true,
@@ -487,7 +720,10 @@
     Shell.vibrate = function (d) { vibrate(d); };
 
     window.Shell = Shell;
-    if (config.alias) window[config.alias] = Shell;
+    if (config.alias) {
+      // Electron preload 通过 contextBridge 暴露的品牌对象是只读的：覆盖失败属预期，忽略即可
+      try { window[config.alias] = Shell; } catch (e) {}
+    }
 
     if (state.env === 'capacitor') {
       polish();
