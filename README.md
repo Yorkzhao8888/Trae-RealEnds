@@ -29,6 +29,7 @@
 | `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0** 目录/清单/校验和/筛选；入口 `h5.cewaycloud.com`（DNS 在、证书待重签） |
 | `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
+| `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P1** 原子扣减/租约/幂等重放/快照增量 + UDP 局域网发现；7 项测试通过 |
 
 ## 关键口径
 
@@ -54,3 +55,5 @@
 - 2026-10-30：新增「捷才工友 Jechan」三端（`jechan-app-shell` / `jechan-mp-shell` / `jechan-pc-shell`），包名 `com.cewaycloud.jechan`，蓝渐变 `#1F6FEB→#0B3F9E`，入口 `hp.jechan.cewaysoft.com`。
 - 2026-10-30：知味工场与捷才工友补齐**四端**（个人 hp / 客户 cp / 企业 ep / 生态 sp）：App 改为本地「选择身份」页 + `allowNavigation` 放行四域，PC 加「身份」菜单与首启选择，小程序改为选择页 + `pages/web` 承载；桥新增 `ends` / `currentEnd` / `switchEnd`。
 - 2026-10-30：抽取 `shell-core` v0.2.0 —— 四品牌桥改为同一份 `core.js` + 品牌配置生成（`window.Shell` 统一入口，品牌别名兼容），能力矩阵/事件名/错误码集中定义；新增真机自检页 `selftest.html` 与 `build.mjs --check` 一致性校验。
+- 2026-10-30：`shell-core` 第二刀——桌面 preload 由模板生成（`ShellDesktop` 6 个最小能力）、小程序承载页统一附加 `shell=mp&brand=&v=`、新增 P0 离线队列（幂等键 + 顺序重放 + 4xx 出队）。
+- 2026-10-30：新增 `edge-store` 店根 P1 —— 零依赖 Node 服务（内置 SQLite）：租约、单事务原子扣减、幂等重放、快照增量、UDP 广播发现；7 项测试覆盖整批回滚与超卖拒绝。
