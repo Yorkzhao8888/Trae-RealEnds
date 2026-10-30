@@ -1,6 +1,6 @@
 # 百泰OS 应用商店 · BTOS App Store（M0）
 
-生态自有端的**分发与版本中心**，部署入口 `https://h5.cewaysoft.com/`。
+生态自有端的**分发与版本中心**，部署入口 `https://h5.cewaycloud.com/`（复用原 H5 域名）。
 
 ## 定位（先说清，避免误解）
 
@@ -59,7 +59,7 @@ btos-app-store/
 静态托管即可（Caddy / Nginx / OSS + CDN）：
 
 ```caddyfile
-h5.cewaysoft.com {
+h5.cewaycloud.com {
   root * /srv/btos-app-store
   file_server
   header Cache-Control "public, max-age=60"
@@ -67,7 +67,7 @@ h5.cewaysoft.com {
 }
 ```
 
-必需前置：`h5.cewaysoft.com` 的 DNS 解析与证书（当前无解析，需运维开通）。
+必需前置：该域名 **DNS 已解析**（`182.92.105.231`），HTTP 308 已指向 HTTPS，但 **443 无可用证书**（TLS 握手失败），站点此前被有意下线。复用即等于复活：需重新签发证书并把 `btos-app-store/` 挂到该站点的 root 或子路径。
 安装包目录建议同域挂在 `/download/`，保证下载计数与清单同源。
 
 ## 与壳的闭环
