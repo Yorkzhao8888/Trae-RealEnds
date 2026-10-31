@@ -29,7 +29,7 @@
 | `jechan-mp-shell/` | 微信小程序 | 原生小程序 + `web-view` | **v0.1.0** 单页壳；AppID 占位，业务域名待配置 |
 | `jechan-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 一套代码出 Windows/macOS；更新源待部署 |
 | `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0 已上线 + M1/M2 页面就绪**：目录/清单/筛选、通道（stable/beta）、下载计数、灰度配置、运营台；入口 `https://cajob.cewaysoft.com/store/`（复用现有证书，零新增） |
-| `docs/` | 跨端契约与接入文档 | Markdown | `shell-contract.md` v0.4.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检 + SDK 工程化契约/一键出包/版本档位/个性化主题/入口编排/插件注册）；`uendos-dev-onboarding-v0.3.1.md`（开发者接入指南，含 launcher 原生兼容性真机验证）；`uendos-editions.md`（轻量/标准/增强三档与能力矩阵）；`uendos-customization-v0.4.md`（个性化壳：主题/入口编排/插件） |
+| `docs/` | 跨端契约与接入文档 | Markdown | `shell-contract.md` v0.4.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检 + SDK 工程化契约/一键出包/版本档位/个性化主题/入口编排/插件注册）；`uendos-dev-onboarding-v0.3.1.md`（开发者接入指南，含 launcher 原生兼容性真机验证）；`uendos-editions.md`（轻量/标准/增强三档与能力矩阵）；`uendos-customization-v0.4.md`（个性化壳：主题/入口编排/插件）；`uendos-v0.5-plan.md`（v0.5 规划：能力白名单/插件体验） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.4.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含主题 CSS 变量、插件注册（`ShellCore.registerPlugin`）与真机自检页 |
 | `sdk/` | 开发者工具 SDK（UendOS） | Node 18+，零依赖 workspace | **v0.4.0**：`@uendos/contract` + `@uendos/shell` + `@uendos/conformance`（39 项断言，插件合并为 39+N）+ `uendos` CLI（init/add-end/sync/doctor/conformance/profile/plugin add/remove/update/assets/pack/publish）+ App/PC/小程序三模板；一键出 Debug APK、`--release` 签名、launcher 多端启动、lite/standard/pro 三档裁剪、个性化主题（`theme` → CSS 变量）、入口编排与生成式选择页（`entry` → `shell/picker.html`）、构建期插件注册（`plugins` → `Shell.plugins`）与构建期升级（`plugin update`）；测试 25/25 |
 | `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型/冲突复核页 + UDP 发现；24 项测试通过 |
