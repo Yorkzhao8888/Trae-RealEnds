@@ -106,7 +106,7 @@ cd /tmp/acme && npx uendos doctor --offline && npx uendos conformance && npx uen
 |---|---|---|
 | OAS 真实身份接入 | 需 OAuth 客户端 ID、授权/回调地址、userinfo 或 introspect 端点；接入点集中在 `cloud-root/src/server.js` 的 `tenantOf()` | 平台方 |
 | 商店 M1/M2 接口上线 | ~~需部署 `cloud-root` + 反代~~ → **已完成 2026-10-30**（systemd + Caddy `@storeapi`） | 已闭环 |
-| 安装包分发 | cajob Android **Debug** 已以 `beta` 上线（灰度 100%，下载 200）；其余 18 条仍 `pending`；PC 更新源仍空——无签名包、无 `latest.yml` | 发行团队 |
+| 安装包分发 | cajob / jechan / ziway Android **Debug** 均已 `beta` 上线（下载均 200，SHA-256 见 `/download/latest/SHA256SUMS`）；其余 16 条仍 `pending`；PC 更新源仍空——无签名包、无 `latest.yml` | 发行团队 |
 | iOS / macOS 真机包 | 需 Apple 开发者账号与公证凭据 | 账号方 |
 | h5.cewaycloud.com 独立域名 | 443 无证书，DNS/证书不在当前账号；已改用 cajob 子路径，仅作可选 | 边缘维护方 |
 

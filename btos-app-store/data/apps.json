@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-30T18:10:00+08:00",
+  "generatedAt": "2026-10-31T14:18:29+08:00",
   "store": {
     "name": "百泰OS 应用商店",
     "nameEn": "BTOS App Store",
@@ -20,9 +20,10 @@
       "id": "ziway-app-android", "brand": "ziway", "end": "hp",
       "platform": "android", "platformLabel": "Android APK",
       "packageId": "com.cewaycloud.ziwayos", "version": "0.1.0",
-      "contractVersion": "0.2.0", "size": null, "sha256": null,
-      "url": null, "status": "pending",
-      "notes": "四端选择页；待签名与 Firebase 配置"
+      "contractVersion": "0.2.0", "size": 7374934,
+      "sha256": "57e9fba363d1fc743309692ea02ac11af66d7de7276f1c10f57ab074b0be0fcf",
+      "url": "https://cajob.cewaysoft.com/download/latest/ziway-app-0.1.0-debug.apk", "status": "beta",
+      "notes": "CI Debug 构建（debug 签名）；校验和见 /download/latest/SHA256SUMS，正式签名后替换"
     },
     {
       "id": "ziway-app-ios", "brand": "ziway", "end": "hp",
@@ -61,9 +62,10 @@
       "id": "jechan-app-android", "brand": "jechan", "end": "hp",
       "platform": "android", "platformLabel": "Android APK",
       "packageId": "com.cewaycloud.jechan", "version": "0.1.0",
-      "contractVersion": "0.2.0", "size": null, "sha256": null,
-      "url": null, "status": "pending",
-      "notes": "四端选择页；待签名"
+      "contractVersion": "0.2.0", "size": 7332667,
+      "sha256": "3dae1387419f18980c8514518c2fc5f3e60f4422fa6cf4a4ff282946ab14d59a",
+      "url": "https://cajob.cewaysoft.com/download/latest/jechan-app-0.1.0-debug.apk", "status": "beta",
+      "notes": "CI Debug 构建（debug 签名）；校验和见 /download/latest/SHA256SUMS，正式签名后替换"
     },
     {
       "id": "jechan-app-ios", "brand": "jechan", "end": "hp",
