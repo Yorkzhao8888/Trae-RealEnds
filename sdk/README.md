@@ -132,7 +132,7 @@ npx uendos sync --check          # CI 用：产物必须与配置一致
     "$UENDOS" sync --check
 ```
 
-`npm test` 跑运行时源一致性（`check-core`）+ conformance 自测；`npm run check` 再单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
+`npm test` 先跑运行时源一致性（`check-core`），再跑 14 项测试：契约校验 9 项、CLI 端到端 4 项（init → add-end → doctor → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
 
 ## 发布
 
