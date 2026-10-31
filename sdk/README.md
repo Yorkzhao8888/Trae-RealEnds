@@ -22,10 +22,12 @@ sdk/
 
 ## 分发包
 
-- `BTOS-UendOS-SDK-0.4.0.zip`（184,422 B，SHA-256 `bd8edab7200461ebb0b85a11b966c12d4b4afedea5ad42c3dafbf63480018b4d`）
-- `BTOS-UendOS-SDK-0.4.0.tar.gz`（143,351 B，SHA-256 `4786bec25606a3b7a1222f79d411b40a5abb2d9168fba0626c84f26c5b23adc9`）
+0.4.0 分发包随 GitHub Release [`uendos-sdk-v0.4.0`](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/tag/uendos-sdk-v0.4.0) 发布：
 
-> 0.4.0 分发包已在仓库 `dist/` 生成并实测：解压后 `cd sdk && npm ci && npm test` 为 25/25，`init → doctor --offline → conformance（39/39）→ sync --check` 全过。GitHub Release 尚未上传（缺推送凭据）。
+- [BTOS-UendOS-SDK-0.4.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.4.0/BTOS-UendOS-SDK-0.4.0.zip)（184,422 B，SHA-256 `bd8edab7200461ebb0b85a11b966c12d4b4afedea5ad42c3dafbf63480018b4d`）
+- [BTOS-UendOS-SDK-0.4.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.4.0/BTOS-UendOS-SDK-0.4.0.tar.gz)（143,351 B，SHA-256 `4786bec25606a3b7a1222f79d411b40a5abb2d9168fba0626c84f26c5b23adc9`）
+
+> 0.4.0 包已在仓库 `dist/` 实测：解压后 `cd sdk && npm ci && npm test` 为 25/25，`init → doctor --offline → conformance（39/39）→ sync --check` 全过。
 
 解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md`、`docs/uendos-customization-v0.4.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
