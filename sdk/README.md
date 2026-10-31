@@ -19,6 +19,13 @@ sdk/
 
 运行时唯一真源仍是 [`shell-core/src/core.js`](../shell-core/src/core.js)；`@uendos/shell` 用 `scripts/sync-core.mjs` 复制、用 `scripts/check-core.mjs` 校验，禁止在 SDK 内私改运行时。
 
+## 分发包
+
+- [BTOS-UendOS-SDK-0.3.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.0/BTOS-UendOS-SDK-0.3.0.zip)（77,709 B，SHA-256 `ca5853a9e8ff2879493d8e08eea3a423424e99b7de07499eabe7f7275292c7f5`）
+- [BTOS-UendOS-SDK-0.3.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.0/BTOS-UendOS-SDK-0.3.0.tar.gz)
+
+解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
+
 ## 快速开始
 
 ```bash
