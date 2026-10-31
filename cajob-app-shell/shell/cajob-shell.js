@@ -738,6 +738,7 @@
     // 握手：延迟一拍，保证 H5 侧脚本先挂好监听
     setTimeout(function () {
       Shell.ready = true;
+      state.ready = true;
       emit('shell:ready', handshakePayload());
     }, 0);
 
