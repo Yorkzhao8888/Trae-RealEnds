@@ -10,8 +10,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const SHELL_VERSION = '0.3.2';
-export const BRIDGE_VERSION = '2';
+export const SHELL_VERSION = '0.4.0';
+export const BRIDGE_VERSION = '3';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -29,7 +29,7 @@ export function shellFileName(cfg) {
 /**
  * 合成可直接部署的品牌桥文件。
  * @param {object} cfg uendos.config.json
- * @param {{core?: string, header?: string}} [opts]
+ * @param {{core?: string, header?: string, plugins?: Array<{id: string, runtime: string}>}} [opts]
  */
 export function composeShellFile(cfg, opts = {}) {
   const core = opts.core || coreSource();
@@ -49,6 +49,11 @@ export function composeShellFile(cfg, opts = {}) {
     statusBarStyle: cfg.statusBarStyle || 'dark',
     endKey: cfg.endKey,
     ends: cfg.ends,
+    theme: cfg.theme,
   };
-  return `${header}${core}\nShellCore.create(${JSON.stringify(runtimeCfg, null, 2)});\n`;
+  // 插件运行时在 create 之前注册：id 只来自配置，能力声明来自插件包
+  const regs = (opts.plugins || []).map((p) =>
+    `ShellCore.registerPlugin(${JSON.stringify(p.id)}, function () {\n${p.runtime.trim()}\n});`
+  ).join('\n');
+  return `${header}${core}${regs ? `\n${regs}\n` : ''}\nShellCore.create(${JSON.stringify(runtimeCfg, null, 2)});\n`;
 }

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, cpSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,11 +11,12 @@ const DIR = mkdtempSync(join(tmpdir(), 'uendos-cli-'));
 
 test.after(() => rmSync(DIR, { recursive: true, force: true }));
 
-function run(args) {
+function run(args, opts = {}) {
   return execFileSync(process.execPath, [BIN, ...args], {
     cwd: DIR,
     encoding: 'utf8',
     timeout: 120000,
+    ...opts,
   });
 }
 
@@ -39,7 +40,7 @@ test('init 生成配置、品牌桥与三套模板', () => {
   assert.deepEqual(cfg.targets, ['app', 'pc', 'mp']);
   assert.deepEqual(Object.keys(cfg.ends).sort(), ['ep', 'hp']);
   assert.equal(cfg.launchMode, 'portal');
-  assert.match(cfg.contractVersion, /^0\.3\./);
+  assert.match(cfg.contractVersion, /^0\.4\./);
 
   const cap = JSON.parse(readFileSync(join(DIR, 'capacitor.config.json'), 'utf8'));
   assert.equal(cap.server.url, 'https://hp.acme.example.com/');
@@ -109,8 +110,12 @@ test('launcher 模式：不固定主端 URL，选择页可记住所选端', () =
   assert.deepEqual(cap.server.allowNavigation, ['hp.acme.example.com', 'ep.acme.example.com']);
 
   const idx = readFileSync(join(dir, 'index.html'), 'utf8');
-  assert.match(idx, /launcher-demo\.end/, '选择页应使用 endKey 记住上次端');
-  assert.ok(!idx.includes('{{'), '选择页占位符未替换');
+  assert.match(idx, /picker\.html/, '入口页应跳转到生成式选择页');
+  assert.ok(!idx.includes('{{'), '入口页占位符未替换');
+
+  const picker = readFileSync(join(dir, 'shell', 'picker.html'), 'utf8');
+  assert.match(picker, /launcher-demo\.end/, '选择页应使用 endKey 记住上次端');
+  assert.ok(!picker.includes('{{'), '选择页占位符未替换');
 });
 
 test('sync --check 一致，add-end 后仍一致', () => {
@@ -124,12 +129,136 @@ test('sync --check 一致，add-end 后仍一致', () => {
   assert.match(run(['sync', '--check']), /产物一致/);
 });
 
+test('theme：改配置后 sync 一致，选择页不含硬编码色值', () => {
+  const cfg = readCfg();
+  cfg.theme = { mode: 'dark', tokens: { accent: '#FF8800', bg: '#0E1218', ink: '#E8EEF7', radius: 10, fontScale: 1.1 } };
+  writeFileSync(join(DIR, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+
+  assert.match(run(['sync']), /已生成/);
+  assert.match(run(['sync', '--check']), /产物一致/);
+
+  const bridge = readFileSync(join(DIR, 'shell', 'demo-acme-shell.js'), 'utf8');
+  assert.match(bridge, /"theme":\s*\{/, '主题应写入品牌桥配置');
+  assert.match(bridge, /"mode": "dark"/);
+
+  const idx = readFileSync(join(DIR, 'index.html'), 'utf8');
+  assert.match(idx, /picker\.html/, '入口页应跳转到生成式选择页');
+
+  const picker = readFileSync(join(DIR, 'shell', 'picker.html'), 'utf8');
+  assert.ok(!/#[0-9a-fA-F]{6}/.test(picker), '选择页不应出现硬编码色值');
+  assert.match(picker, /var\(--uendos-accent\)/, '选择页应使用主题 CSS 变量');
+});
+
+test('entry：顺序、分组、记忆开关写入生成式选择页', () => {
+  const cfg = readCfg();
+  cfg.entry = {
+    title: '选择工位',
+    subtitle: '按岗位进入对应工作台',
+    rememberLast: false,
+    order: ['ep', 'hp', 'sp'],
+    groups: [{ label: '管理与协作', ends: ['ep', 'hp'] }],
+  };
+  writeFileSync(join(DIR, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+
+  assert.match(run(['sync']), /已生成/);
+  assert.match(run(['sync', '--check']), /产物一致/);
+
+  const picker = readFileSync(join(DIR, 'shell', 'picker.html'), 'utf8');
+  assert.match(picker, /选择工位/);
+  assert.match(picker, /按岗位进入对应工作台/);
+  assert.match(picker, /管理与协作/);
+  assert.match(picker, /"rememberLast":false/);
+  assert.match(picker, /"order":\["ep","hp","sp"\]/);
+
+  const idx = readFileSync(join(DIR, 'index.html'), 'utf8');
+  assert.match(idx, /location\.replace\('\.\/picker\.html' \+ location\.search\)/);
+
+  const prep = readFileSync(join(DIR, 'scripts', 'prepare-web.sh'), 'utf8');
+  assert.match(prep, /shell\/picker\.html/, 'prepare:web 应把选择页复制进 dist');
+});
+
 test('doctor --offline 与 conformance 通过', () => {
   const doctor = run(['doctor', '--offline']);
   assert.match(doctor, /全部通过/);
 
   const conf = run(['conformance']);
   assert.match(conf, /39 通过 \/ 0 失败/);
+});
+
+test('插件：注册进品牌桥、doctor 体检、断言合并', () => {
+  const src = fileURLToPath(new URL('../../plugin-fixture', import.meta.url));
+  const dst = join(DIR, 'node_modules', '@uendos', 'plugin-fixture');
+  mkdirSync(join(DIR, 'node_modules', '@uendos'), { recursive: true });
+  cpSync(src, dst, { recursive: true });
+
+  const cfg = readCfg();
+  cfg.plugins = ['@uendos/plugin-fixture'];
+  writeFileSync(join(DIR, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+
+  assert.match(run(['sync']), /已生成/);
+  assert.match(run(['sync', '--check']), /产物一致/);
+
+  const bridge = readFileSync(join(DIR, 'shell', 'demo-acme-shell.js'), 'utf8');
+  assert.match(bridge, /ShellCore\.registerPlugin\("@uendos\/plugin-fixture"/);
+  assert.match(bridge, /'printer\.print'/, '插件 runtime 应被原样嵌入');
+
+  const doctor = run(['doctor', '--offline']);
+  assert.match(doctor, /插件：1 个 · @uendos\/plugin-fixture@0\.1\.0/);
+  assert.match(doctor, /内置 18 项 \+ 插件 1 项（printer）/);
+
+  const conf = run(['conformance']);
+  assert.match(conf, /44 通过 \/ 0 失败/, '内置 39 + 插件 5 项');
+
+  // 构建期热更新：plugin update 走 npm install → 重新校验 → sync，不涉及运行时远程加载
+  const v2 = join(DIR, '.fixtures', 'plugin-v2');
+  mkdirSync(join(DIR, '.fixtures'), { recursive: true });
+  cpSync(src, v2, { recursive: true });
+  for (const f of ['package.json', 'uendos.plugin.json']) {
+    const p = join(v2, f);
+    const m = JSON.parse(readFileSync(p, 'utf8'));
+    m.version = '0.2.0';
+    writeFileSync(p, JSON.stringify(m, null, 2) + '\n');
+  }
+  const rt = readFileSync(join(v2, 'runtime.js'), 'utf8');
+  writeFileSync(join(v2, 'runtime.js'), rt.replace("version: '0.1.0'", "version: '0.2.0'"));
+
+  // 用假 npm 模拟“已发布新版本”，避免测试联网
+  const bin = join(DIR, '.fakebin');
+  mkdirSync(bin, { recursive: true });
+  const npmStub = join(bin, 'npm');
+  writeFileSync(npmStub, [
+    '#!/bin/sh',
+    'if [ "$1" = "install" ]; then',
+    '  rm -rf node_modules/@uendos/plugin-fixture',
+    '  cp -r "$UENDOS_FAKE_PLUGIN_SRC" node_modules/@uendos/plugin-fixture',
+    'fi',
+    'exit 0',
+    '',
+  ].join('\n'));
+  chmodSync(npmStub, 0o755);
+  const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, UENDOS_FAKE_PLUGIN_SRC: v2 };
+
+  const up = run(['plugin', 'update'], { env });
+  assert.match(up, /@uendos\/plugin-fixture 0\.1\.0 → 0\.2\.0/);
+  assert.match(readFileSync(join(DIR, 'shell', 'demo-acme-shell.js'), 'utf8'), /version: '0\.2\.0'/, '升级后桥内插件版本应更新');
+  assert.match(run(['sync', '--check']), /产物一致/);
+  assert.match(run(['doctor', '--offline']), /@uendos\/plugin-fixture@0\.2\.0/);
+  assert.match(run(['plugin', 'update'], { env }), /已是最新/);
+
+  // 负例：能力与内置重名 → sync 必须失败
+  const bad = join(DIR, 'node_modules', '@uendos', 'bad-plugin');
+  mkdirSync(bad, { recursive: true });
+  writeFileSync(join(bad, 'uendos.plugin.json'), JSON.stringify({
+    id: '@uendos/bad-plugin',
+    version: '1.0.0',
+    runtime: 'runtime.js',
+    capabilities: ['vibrate'],
+    methods: ['vibrate.pulse'],
+  }, null, 2));
+  writeFileSync(join(bad, 'runtime.js'), 'return { capabilities: { vibrate: "✓" }, methods: {} };\n');
+  cfg.plugins = ['@uendos/bad-plugin'];
+  writeFileSync(join(DIR, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+  assert.throws(() => run(['sync']), /Command failed|插件/);
 });
 
 test('publish 计算哈希、复制安装包并回写清单', () => {

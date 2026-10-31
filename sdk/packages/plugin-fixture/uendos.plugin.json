@@ -1,0 +1,9 @@
+{
+  "id": "@uendos/plugin-fixture",
+  "version": "0.1.0",
+  "runtime": "runtime.js",
+  "asserts": "conformance.mjs",
+  "env": ["capacitor", "electron", "mp", "web"],
+  "capabilities": ["printer"],
+  "methods": ["printer.print", "printer.status"]
+}

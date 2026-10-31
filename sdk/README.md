@@ -13,6 +13,7 @@ sdk/
 │   ├── contract/                # @uendos/contract：能力/方法/事件/错误码 + 配置校验 + JSON Schema
 │   ├── shell/                   # @uendos/shell：运行时合成（把 shell-core 的 core.js + 品牌配置出桥）
 │   ├── conformance/             # @uendos/conformance：39 项契约断言（vm 沙箱，不依赖真机）
+│   ├── plugin-fixture/          # @uendos/plugin-fixture：插件机制 fixture（假打印机，仅测试用）
 │   └── cli/                     # uendos CLI + App/PC/小程序三套模板
 └── README.md
 ```
@@ -21,10 +22,14 @@ sdk/
 
 ## 分发包
 
-- [BTOS-UendOS-SDK-0.3.2.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.2/BTOS-UendOS-SDK-0.3.2.zip)（100,025 B，SHA-256 `5048215aa34836597043292cf8bcc4cacc228f71aeecee1d92f5877e39dc9d85`）
-- [BTOS-UendOS-SDK-0.3.2.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.2/BTOS-UendOS-SDK-0.3.2.tar.gz)（70,968 B，SHA-256 `2ddced149b8247c167b3990dfa3677dd80cf340496ad5a34296c9a74c8812225`）
+- `BTOS-UendOS-SDK-0.4.0.zip`（184,422 B，SHA-256 `bd8edab7200461ebb0b85a11b966c12d4b4afedea5ad42c3dafbf63480018b4d`）
+- `BTOS-UendOS-SDK-0.4.0.tar.gz`（143,351 B，SHA-256 `4786bec25606a3b7a1222f79d411b40a5abb2d9168fba0626c84f26c5b23adc9`）
 
-解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
+> 0.4.0 分发包已在仓库 `dist/` 生成并实测：解压后 `cd sdk && npm ci && npm test` 为 25/25，`init → doctor --offline → conformance（39/39）→ sync --check` 全过。GitHub Release 尚未上传（缺推送凭据）。
+
+解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md`、`docs/uendos-customization-v0.4.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
+
+> 仓库当前代码版本为 **0.4.0**（v0.4 M1 个性化主题、M2 入口编排、M3 插件注册、M4 插件构建期热更新）；分发包与代码同版本。
 
 首次接入请先读：[开发者接入指南（v0.3.1）](../docs/uendos-dev-onboarding-v0.3.1.md)，其中第 6 节是 launcher 与原生插件的真机验证步骤。
 
@@ -46,7 +51,7 @@ uendos init acme \
 
 cd acme
 uendos doctor                    # 配置 / 产物 / 端可达性 / 模板体检
-uendos conformance               # 39 项契约断言
+uendos conformance               # 39 项契约断言（配置了插件时为 39 + N）
 uendos sync --check              # CI 用：产物必须与配置一致
 ```
 
@@ -63,12 +68,14 @@ uendos sync --check              # CI 用：产物必须与配置一致
 
 | 命令 | 作用 | 关键参数 |
 |---|---|---|
-| `uendos init <项目名>` | 建工程：拷模板 → 替换占位符 → 写配置 → 生成品牌桥与 `assets/` 源图 | `--brand` `--ends` `--profile` `--targets` `--app-id` `--display` `--accent` `--mp-appid` `--launch-mode` `--dir` |
+| `uendos init <项目名>` | 建工程：拷模板 → 替换占位符 → 写配置 → 生成品牌桥、选择页与 `assets/` 源图 | `--brand` `--ends` `--profile` `--targets` `--app-id` `--display` `--accent` `--mp-appid` `--launch-mode` `--dir` |
 | `uendos add-end <id>` | 增加一个端并重新生成桥 | `--name` `--url` |
-| `uendos sync` | 重新合成品牌桥 | `--check` 只校验不写，不一致时退出码 1 |
+| `uendos sync` | 重新合成品牌桥与选择页 | `--check` 只校验不写，不一致时退出码 1 |
 | `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址 |
-| `uendos conformance` | 对品牌桥跑 39 项契约断言 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
+| `uendos conformance` | 对品牌桥跑 39 项契约断言；配置了插件时合并插件断言，输出 `39 + N` | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
 | `uendos profile` | 查看 `lite/standard/pro` 三档默认 target 与能力集 | `--json` 输出机器可读结果 |
+| `uendos plugin add <包名>` | 把**已安装**的插件写入 `plugins` 并重新生成品牌桥（先预检声明合法） | `remove` 反向操作 |
+| `uendos plugin update [<包名>...]` | 构建期升级插件：`npm install <包名>@latest` → 重新校验 → `sync`；变更随壳包发布 | `--spec` 指定版本/tarball/内网源；不给包名则升级全部 |
 | `uendos assets` | 按主色与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732） | `--force` 覆盖已有图 |
 | `uendos pack` | 本地打包（缺 `node_modules` / `android` / `ios` 时自动安装与生成平台工程） | `--target app`（Debug APK；`--release` 走签名）、`ios`（需 macOS）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传） |
 | `uendos publish` | 计算 SHA-256/大小并回写商店清单 | `--file` `--item` `--manifest` `--url` 或 `--download-dir` `--version` `--status`（默认 `beta`） |
@@ -92,10 +99,34 @@ uendos sync --check              # CI 用：产物必须与配置一致
   "targets": ["app", "pc"],
   "packageId": "com.acme.app",
   "launchMode": "portal",
+  "theme": {
+    "mode": "light",
+    "tokens": {
+      "accent": "#4C8DFF",
+      "bg": "#FFFFFF",
+      "surface": "#F6F9FD",
+      "ink": "#0B1220",
+      "inkMuted": "#7B8AA0",
+      "line": "#E4E9F2",
+      "radius": 16,
+      "fontScale": 1
+    }
+  },
+  "entry": {
+    "title": "选择你的身份",
+    "subtitle": "选择后进入对应工作台，可随时返回本页切换。",
+    "rememberLast": true,
+    "order": ["hp", "cp", "ep"],
+    "groups": [
+      { "label": "一线员工", "ends": ["hp"] },
+      { "label": "管理与协作", "ends": ["cp", "ep"] }
+    ]
+  },
   "ends": {
     "hp": { "name": "个人端", "url": "https://hp.acme.example.com/" },
     "ep": { "name": "企业端", "url": "https://ep.acme.example.com/" }
-  }
+  },
+  "plugins": ["@acme/uendos-plugin-printer"]
 }
 ```
 
@@ -106,6 +137,9 @@ uendos sync --check              # CI 用：产物必须与配置一致
 - `targets` 取值 `app` / `pc` / `mp`；`contractVersion` 主版本必须与 SDK 当前契约一致
 - `launchMode` 为 `portal`（默认，启动直进主端）或 `launcher`（本机选择页，记住上次所选端）
 - `profile` 为 `lite` / `standard` / `pro`，决定默认 target 与声明的端能力集；不是权限边界
+- `theme` 可选：`mode`（`light`/`dark`）+ `tokens`（颜色 `#RRGGBB`、`radius` 0–28、`fontScale` 0.9–1.2）；只作用于壳自有页面
+- `entry` 可选：选择页标题/副标题、`order` 顺序、`groups` 分组、`rememberLast` 是否记住上次端；只影响 launcher / 选择页
+- `plugins` 可选：已 `npm install` 的插件包名数组，去重；`profile=lite` 不允许插件
 
 ### 三档 profile
 
@@ -116,6 +150,58 @@ uendos sync --check              # CI 用：产物必须与配置一致
 | `pro` 增强版 | `app/pc/mp` | `app/pc/mp` | 18/18 |
 
 `uendos init <项目名> --profile lite` 会自动只出 App；显式给不允许的 target 会被拒绝。完整边界与分发建议见 [版本档位与能力矩阵](../docs/uendos-editions.md)。
+
+### 个性化主题（v0.4 M1）
+
+- 改 `theme` 后执行 `uendos sync`，`sync --check` 校验主题是否已写入品牌桥与选择页；`doctor` 会打印生效的 `mode` / `accent` / `radius` / `fontScale`。
+- 选择页（`shell/picker.html`）只引用 `--uendos-*` CSS 变量，不写死色值；变量由运行时按 `theme` 注入，同时设置 `color-scheme` 与 `theme-color`。
+- 远程 H5 不强制换肤，业务页可读 `Shell.theme` 自行适配；边界见 [个性化壳方案](../docs/uendos-customization-v0.4.md)。
+
+### 入口编排（v0.4 M2）
+
+- 选择页由 `uendos sync` 生成到 `shell/picker.html`（`index.html` 只做 `./picker.html` 跳转，`prepare:web` 负责复制进 `dist`），纳入 `sync --check`，不再靠手改。
+- `entry.order` 决定展示顺序，未列出的端按配置顺序追加；`entry.groups` 只做分组展示，未分组的端排在分组之后。
+- `entry.rememberLast: false` 时既不自动跳转也不写 `endKey`，适合共用设备的门店场景。
+- 改完执行 `uendos sync` 即可，`doctor` 会打印 `端数 / 组数 / 顺序 / 是否记住`。配置契约见 [个性化壳方案 §2.2](../docs/uendos-customization-v0.4.md)。
+
+### 插件（v0.4 M3）
+
+插件是普通 npm 包，根目录放 `uendos.plugin.json` 与 `runtime.js`（浏览器侧代码，无 Node 依赖）：
+
+```json
+{
+  "id": "@acme/uendos-plugin-printer",
+  "version": "1.0.0",
+  "runtime": "runtime.js",
+  "asserts": "conformance.mjs",
+  "env": ["capacitor", "electron"],
+  "capabilities": ["printer"],
+  "methods": ["printer.print", "printer.status"]
+}
+```
+
+```js
+// runtime.js —— CLI 会包进函数作用域后嵌入品牌桥，不直接执行
+return {
+  detect: function (env) { return env === 'capacitor' || env === 'electron'; },
+  capabilities: { printer: '✓' },
+  methods: {
+    'printer.print': function (a) { /* 调原生插件 */ },
+    'printer.status': function () { /* ... */ },
+  },
+};
+```
+
+- 接入：`npm install @acme/uendos-plugin-printer` → `uendos plugin add @acme/uendos-plugin-printer`（写配置 + 重新 `sync`）；移除用 `plugin remove`。
+- **升级走构建期热更新**：`uendos plugin update`（默认 `@latest`，`--spec` 可指定版本/内网源）→ 重新校验声明 → `sync`；插件变更随壳包发布，业务侧不会在运行时拉取插件代码。
+- **只允许构建期嵌入**，禁止运行时远程加载；包版本由 `package-lock.json` 锁定，必须提交。
+- 注册即校验：id 唯一、能力不得与内置 18 项重名、多插件不得共享能力、方法命名空间必须是插件自己的能力且不占用 `core/edge/offline/desktop/shell`、方法不得与内置或其他插件重名，任一不满足 `sync` 直接报错。
+- 激活与回落：只有 `detect(env)` 为真才算 `active`，否则能力记 `─`、方法返回 `E_UNSUPPORTED`；插件抛错映射 `E_NATIVE`。
+- `Shell.plugins` 与握手 payload 携带 `[{ id, version, active }]`，线上可按版本排障。
+- `uendos conformance` 合并插件自带的 `conformance.mjs`（导出 `[{ name, run(Shell) }]`），输出 `39 + N`；`doctor` 打印插件清单与合并后的能力集。
+- `uendos pack` 打包前强制 `sync --check`，桥里的插件运行时必须与配置一致。
+
+完整契约见 [shell-contract §21](../docs/shell-contract.md)，设计背景见 [个性化壳方案 §3](../docs/uendos-customization-v0.4.md)。
 
 ## 三套模板
 
@@ -130,7 +216,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
 ### 两种启动模式
 
 - `portal`（默认）：`server.url` 指向主端，App 启动即进业务页；原生能力与既有四个品牌壳一致。
-- `launcher`：`init --launch-mode launcher` 去掉 `server.url`，先加载本机选择页，选中端写入 `endKey` 后跳转，**重启记住上次所选端**；访问 `?picker=1` 可强制回到选择页。
+- `launcher`：`init --launch-mode launcher` 去掉 `server.url`，先加载本机选择页（`shell/picker.html`，按 `entry` 编排），选中端写入 `endKey` 后跳转，**重启记住上次所选端**；访问 `?picker=1` 可强制回到选择页。
 
 `launcher` 模式的业务页由远程加载，Capacitor 原生插件是否可用取决于远程页能否拿到运行时；需要强原生能力（推送/震动/生物识别）时用 `portal`，由主端门户页负责切换。
 
@@ -149,7 +235,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
 | 店根适配 | 6 | 未配置 `E_UNSUPPORTED`、超时、`E_STOCK` 映射、租约缓存 |
 | 契约自洽 | 2 | 导出常量与运行时能力一一对应 |
 
-断言在 `vm` 中跑，不需要 Android SDK / Xcode，CI 与本地一致。
+断言在 `vm` 中跑，不需要 Android SDK / Xcode，CI 与本地一致。配置了 `plugins` 时，再按顺序执行各插件自带断言，总数为 `39 + N`（fixture 插件为 5 项，合计 44 项）。
 
 ## CI 接法
 
@@ -167,7 +253,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
     "$UENDOS" sync --check
 ```
 
-`npm test` 先跑运行时源一致性（`check-core`），再跑 16 项测试：契约校验 9 项、CLI 端到端 6 项（init → profile → launcher → add-end → doctor → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
+`npm test` 先跑运行时源一致性（`check-core`），再跑 25 项测试：契约校验 15 项、CLI 端到端 9 项（init → profile → launcher → theme → entry → add-end → doctor → 插件 → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
 
 ## 打包与签名
 

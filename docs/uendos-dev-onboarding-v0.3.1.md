@@ -69,7 +69,7 @@ acme/
 ├── dist/                       # App 的 webDir（首次 sync 后出现）
 ├── assets/                     # 品牌源图
 ├── capacitor.config.json       # App 平台配置
-├── index.html / offline.html   # 选择页 / 离线页
+├── index.html / offline.html   # 入口跳转 / 离线页（选择页由 sync 生成 shell/picker.html）
 ├── package.json                # Capacitor / Electron / 小程序工程
 └── uendos.runtime.json         # PC 运行时（brand/primaryEnd/shellFile）
 ```
@@ -146,7 +146,7 @@ uendos pack --target app
 
 - `pack` 自动：`npm install` → `prepare:web` → `cap add android` → 品牌图标展开（仅首次）→ `cap sync` → `assembleDebug`
 - 首次出包后，后续只需改业务 H5；壳配置变更用 `uendos sync` + `cap sync`
-- `launcher` 模式的选择页 `index.html` 只在本机 `dist` 中生效，见第 5 节
+- `launcher` 模式的选择页（`shell/picker.html`，由 `uendos sync` 生成，`index.html` 仅做跳转）只在本机 `dist` 中生效，见第 5 节
 
 ### 4.2 PC（Electron 33）
 

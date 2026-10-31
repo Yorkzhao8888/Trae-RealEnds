@@ -5,7 +5,7 @@
  * （@uendos/conformance）都以本文件为准；改契约先改这里，再改实现。
  */
 
-export const CONTRACT_VERSION = '0.3.2';
+export const CONTRACT_VERSION = '0.4.0';
 export const SCHEMA_VERSION = 1;
 
 /** 能力矩阵：键名固定，值由运行时按环境计算（✓ / ◐ / ─ / web） */
@@ -122,10 +122,141 @@ export const PROFILES = {
 
 export const PROFILE_NAMES = Object.keys(PROFILES);
 
+/**
+ * 主题：只作用于壳自有页面（选择页 / 启动兜底 / 错误页），远程 H5 不强制套用。
+ * tokens 是 CSS 变量的唯一来源，客户端不用改 HTML。
+ */
+export const THEME_MODES = ['light', 'dark'];
+export const THEME_TOKEN_KEYS = ['accent', 'bg', 'surface', 'ink', 'inkMuted', 'line', 'radius', 'fontScale'];
+
+export const THEME_DEFAULTS = {
+  light: { accent: '#4C8DFF', bg: '#FFFFFF', surface: '#F6F9FD', ink: '#0B1220', inkMuted: '#7B8AA0', line: '#E4E9F2', radius: 16, fontScale: 1 },
+  dark: { accent: '#4C8DFF', bg: '#0E1218', surface: '#161C26', ink: '#E8EEF7', inkMuted: '#8A98AD', line: '#253041', radius: 16, fontScale: 1 },
+};
+
+/** 合并默认值，得到可直接下发的主题（accent 缺省回落到品牌主色） */
+export function resolveTheme(theme, accent) {
+  const mode = (theme && theme.mode) || 'light';
+  const tokens = { ...(THEME_DEFAULTS[mode] || THEME_DEFAULTS.light), ...((theme && theme.tokens) || {}) };
+  if (!(theme && theme.tokens && theme.tokens.accent) && accent) tokens.accent = accent;
+  return { mode, tokens };
+}
+
+/**
+ * 入口编排：只影响 launcher / 选择页，不改 portal 直进逻辑。
+ * order 决定展示顺序（未列出的端按配置顺序追加）；groups 只做分组展示，
+ * 未分组的端排在分组之后。
+ */
+export const ENTRY_KEYS = ['title', 'subtitle', 'rememberLast', 'order', 'groups'];
+export const ENTRY_DEFAULTS = {
+  title: '选择你的身份',
+  subtitle: '选择后进入对应工作台，可随时返回本页切换。',
+  rememberLast: true,
+};
+
+export function resolveEntry(cfg) {
+  const ids = Object.keys(cfg.ends || {});
+  const entry = cfg.entry || {};
+  const order = Array.isArray(entry.order) ? entry.order.filter((id) => ids.includes(id)) : [];
+  const ordered = [...order, ...ids.filter((id) => !order.includes(id))];
+  const groups = (Array.isArray(entry.groups) ? entry.groups : []).map((g) => ({
+    label: g.label,
+    ends: (g.ends || []).filter((id) => ids.includes(id)),
+  }));
+  const grouped = new Set(groups.flatMap((g) => g.ends));
+  return {
+    title: entry.title || ENTRY_DEFAULTS.title,
+    subtitle: entry.subtitle === undefined ? ENTRY_DEFAULTS.subtitle : entry.subtitle,
+    rememberLast: entry.rememberLast !== false,
+    order: ordered,
+    groups,
+    rest: ordered.filter((id) => !grouped.has(id)),
+  };
+}
+
 const RE_URL = /^(https?:\/\/[^\s]+)$/;
 const RE_BRAND = /^[a-z][a-z0-9-]{1,15}$/;
 const RE_END_ID = /^[a-z]{2,4}$/;
 const RE_ACCENT = /^#[0-9A-Fa-f]{6}$/;
+const RE_PKG = /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
+const RE_SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
+const RE_CAP = /^[a-z][a-z0-9]*$/;
+const RE_PLUGIN_METHOD = /^[a-z][a-z0-9]*(\.[a-z][A-Za-z0-9]*)+$/;
+
+/** 插件不得占用的内置命名空间 */
+export const PLUGIN_RESERVED_NS = ['core', 'edge', 'offline', 'desktop', 'shell'];
+
+export const PLUGIN_MANIFEST_KEYS = ['id', 'version', 'runtime', 'asserts', 'env', 'capabilities', 'methods'];
+export const PLUGIN_ENVS = ['capacitor', 'electron', 'mp', 'web'];
+
+/**
+ * 校验插件包根目录的 uendos.plugin.json。
+ * 能力声明以插件包为唯一真相；与内置能力重名、方法越权命名空间一律拒绝。
+ * @param {object} m
+ * @param {{name?: string, profile?: string}} [opts]
+ */
+export function validatePluginManifest(m, opts = {}) {
+  const errors = [];
+  const isObj = (v) => !!v && typeof v === 'object' && !Array.isArray(v);
+
+  if (!isObj(m)) return { ok: false, errors: ['插件声明必须是 JSON 对象'] };
+  for (const k of Object.keys(m)) {
+    if (!PLUGIN_MANIFEST_KEYS.includes(k)) errors.push(`插件声明不支持的键：${k}`);
+  }
+  if (typeof m.id !== 'string' || !RE_PKG.test(m.id)) {
+    errors.push('插件 id 必须是合法 npm 包名（如 @acme/uendos-plugin-printer）');
+  } else if (opts.name && m.id !== opts.name) {
+    errors.push(`插件 id 与包名不一致：${m.id} != ${opts.name}`);
+  }
+  if (typeof m.version !== 'string' || !RE_SEMVER.test(m.version)) {
+    errors.push('插件 version 必须是语义化版本（如 1.0.0）');
+  }
+  if (typeof m.runtime !== 'string' || !m.runtime.trim()) {
+    errors.push('插件必须声明 runtime（浏览器侧脚本路径）');
+  }
+  if (m.asserts !== undefined && (typeof m.asserts !== 'string' || !m.asserts.trim())) {
+    errors.push('插件 asserts 必须是非空路径字符串');
+  }
+  if (m.env !== undefined) {
+    if (!Array.isArray(m.env) || m.env.some((e) => !PLUGIN_ENVS.includes(e))) {
+      errors.push(`插件 env 只能是 ${PLUGIN_ENVS.join(' / ')} 的子集`);
+    }
+  }
+
+  if (!Array.isArray(m.capabilities) || !m.capabilities.length) {
+    errors.push('插件 capabilities 不能为空');
+  } else {
+    const seen = new Set();
+    for (const cap of m.capabilities) {
+      if (typeof cap !== 'string' || !RE_CAP.test(cap)) errors.push(`插件能力名不合法：${cap}`);
+      else if (CAPABILITIES.includes(cap)) errors.push(`插件能力与内置能力重名：${cap}`);
+      else if (PLUGIN_RESERVED_NS.includes(cap)) errors.push(`插件能力不得占用内置命名空间：${cap}`);
+      else if (seen.has(cap)) errors.push(`插件能力重复：${cap}`);
+      else seen.add(cap);
+    }
+  }
+
+  if (!Array.isArray(m.methods) || !m.methods.length) {
+    errors.push('插件 methods 不能为空（至少要有一个可调用方法）');
+  } else {
+    const seen = new Set();
+    for (const method of m.methods) {
+      if (typeof method !== 'string' || !RE_PLUGIN_METHOD.test(method)) {
+        errors.push(`插件方法名不合法：${method}`);
+        continue;
+      }
+      const ns = method.split('.')[0];
+      if (PLUGIN_RESERVED_NS.includes(ns)) errors.push(`插件方法不得占用内置命名空间：${method}`);
+      else if (!(m.capabilities || []).includes(ns)) errors.push(`插件方法 ${method} 不在声明的能力命名空间内`);
+      if (seen.has(method)) errors.push(`插件方法重复：${method}`);
+      else seen.add(method);
+    }
+  }
+
+  if (opts.profile === 'lite') errors.push('profile=lite 不允许插件（请升档或移除插件）');
+
+  return { ok: errors.length === 0, errors };
+}
 
 /**
  * 校验 uendos.config.json。返回 { ok, errors }，errors 是可直接展示的中文文案。
@@ -175,6 +306,33 @@ export function validateConfig(cfg, opts = {}) {
     }
   }
 
+  if (cfg.theme !== undefined) {
+    if (!isObj(cfg.theme)) errors.push('theme 必须是对象');
+    else {
+      for (const k of Object.keys(cfg.theme)) {
+        if (!['mode', 'tokens'].includes(k)) errors.push(`theme 不支持的键：${k}`);
+      }
+      if (cfg.theme.mode !== undefined && !THEME_MODES.includes(cfg.theme.mode)) {
+        errors.push('theme.mode 只能是 light 或 dark');
+      }
+      if (cfg.theme.tokens !== undefined) {
+        if (!isObj(cfg.theme.tokens)) errors.push('theme.tokens 必须是对象');
+        else {
+          for (const [k, v] of Object.entries(cfg.theme.tokens)) {
+            if (!THEME_TOKEN_KEYS.includes(k)) { errors.push(`theme.tokens 不支持的键：${k}`); continue; }
+            if (k === 'radius') {
+              if (typeof v !== 'number' || v < 0 || v > 28) errors.push('theme.tokens.radius 必须是 0–28 的数字');
+            } else if (k === 'fontScale') {
+              if (typeof v !== 'number' || v < 0.9 || v > 1.2) errors.push('theme.tokens.fontScale 必须是 0.9–1.2 的数字');
+            } else if (typeof v !== 'string' || !RE_ACCENT.test(v)) {
+              errors.push(`theme.tokens.${k} 必须是 #RRGGBB`);
+            }
+          }
+        }
+      }
+    }
+  }
+
   if (!isObj(cfg.ends) || !Object.keys(cfg.ends).length) {
     errors.push('ends 至少要有 1 个端');
   } else {
@@ -189,6 +347,67 @@ export function validateConfig(cfg, opts = {}) {
         errors.push(`端 ${id} 的 url 必须是 http(s) 绝对地址`);
       } else if (!allowHttp && !end.url.startsWith('https://')) {
         errors.push(`端 ${id} 的 url 必须是 https（开发期可加 --allow-http）`);
+      }
+    }
+  }
+
+  if (cfg.entry !== undefined) {
+    if (!isObj(cfg.entry)) errors.push('entry 必须是对象');
+    else {
+      for (const k of Object.keys(cfg.entry)) {
+        if (!ENTRY_KEYS.includes(k)) errors.push(`entry 不支持的键：${k}`);
+      }
+      if (cfg.entry.title !== undefined && (typeof cfg.entry.title !== 'string' || !cfg.entry.title.trim())) {
+        errors.push('entry.title 不能为空');
+      }
+      if (cfg.entry.subtitle !== undefined && typeof cfg.entry.subtitle !== 'string') {
+        errors.push('entry.subtitle 必须是字符串');
+      }
+      if (cfg.entry.rememberLast !== undefined && typeof cfg.entry.rememberLast !== 'boolean') {
+        errors.push('entry.rememberLast 必须是布尔值');
+      }
+      const endIds = isObj(cfg.ends) ? Object.keys(cfg.ends) : [];
+      if (cfg.entry.order !== undefined) {
+        if (!Array.isArray(cfg.entry.order)) errors.push('entry.order 必须是数组');
+        else {
+          for (const id of cfg.entry.order) {
+            if (typeof id !== 'string' || !endIds.includes(id)) errors.push(`entry.order 含未知端：${id}`);
+          }
+        }
+      }
+      if (cfg.entry.groups !== undefined) {
+        if (!Array.isArray(cfg.entry.groups)) errors.push('entry.groups 必须是数组');
+        else {
+          const seen = new Set();
+          for (const g of cfg.entry.groups) {
+            if (!isObj(g)) { errors.push('entry.groups 每项必须是对象'); continue; }
+            for (const k of Object.keys(g)) {
+              if (!['label', 'ends'].includes(k)) errors.push(`entry.groups 不支持的键：${k}`);
+            }
+            if (typeof g.label !== 'string' || !g.label.trim()) errors.push('entry.groups.label 不能为空');
+            if (!Array.isArray(g.ends)) { errors.push('entry.groups.ends 必须是数组'); continue; }
+            for (const id of g.ends) {
+              if (typeof id !== 'string' || !endIds.includes(id)) errors.push(`entry.groups 含未知端：${id}`);
+              else if (seen.has(id)) errors.push(`端 ${id} 在 entry.groups 中重复出现`);
+              else seen.add(id);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (cfg.plugins !== undefined) {
+    if (!Array.isArray(cfg.plugins)) errors.push('plugins 必须是包名数组');
+    else {
+      const seen = new Set();
+      for (const name of cfg.plugins) {
+        if (typeof name !== 'string' || !RE_PKG.test(name)) errors.push(`插件包名不合法：${name}`);
+        else if (seen.has(name)) errors.push(`插件重复：${name}`);
+        else seen.add(name);
+      }
+      if (cfg.profile === 'lite' && cfg.plugins.length) {
+        errors.push('profile=lite 不允许插件（请升档或移除插件）');
       }
     }
   }
@@ -218,5 +437,6 @@ export function runtimeConfig(cfg) {
     statusBarStyle: cfg.statusBarStyle || 'dark',
     endKey: cfg.endKey,
     ends: cfg.ends,
+    theme: cfg.theme,
   };
 }

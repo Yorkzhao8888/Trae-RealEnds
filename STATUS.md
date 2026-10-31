@@ -21,8 +21,8 @@
 
 | 模块 | 做到什么 | 验证 |
 |---|---|---|
-| `shell-core/` | 四品牌桥由同一份 `core.js` 生成（`window.Shell` + `ziwayOS/jechanOS/xsoOS/cajobOS` 别名）；能力矩阵、事件双写、`build.mjs --check` 一致性校验、真机自检页 | 构建校验通过 |
-| `sdk/` | **UendOS 开发者 SDK v0.3.2**：`@uendos/contract`（契约常量 + 配置校验 + 档位）、`@uendos/shell`（运行时合成品牌桥）、`@uendos/conformance`（39 项断言）、`uendos` CLI（init/add-end/sync/doctor/conformance/profile/assets/pack/publish）+ App/PC/小程序三模板；一键出 Debug APK、`--release` 签名、launcher 多端启动、lite/standard/pro 三档裁剪 | `npm test` 16/16 通过（契约 9 / CLI 6 / 一致性自测 1）；端到端冒烟 39/39、`sync --check` 一致；`pack` 实测自动 `npm install` + `cap add android` + 图标展开，止于沙箱无法下载 Gradle 发行包 |
+| `shell-core/` | 四品牌桥由同一份 `core.js` 生成（`window.Shell` + `ziwayOS/jechanOS/xsoOS/cajobOS` 别名）；能力矩阵、事件双写、主题 CSS 变量、`build.mjs --check` 一致性校验、真机自检页 | 构建校验通过 |
+| `sdk/` | **UendOS 开发者 SDK v0.4.0**：`@uendos/contract`（契约常量 + 配置校验 + 档位 + 主题 + 入口编排 + 插件声明）、`@uendos/shell`（运行时合成品牌桥 + 插件嵌入）、`@uendos/conformance`（39 项断言，插件合并为 39+N）、`uendos` CLI（init/add-end/sync/doctor/conformance/profile/plugin add/remove/update/assets/pack/publish）+ App/PC/小程序三模板；一键出 Debug APK、`--release` 签名、launcher 多端启动、lite/standard/pro 三档裁剪、个性化主题（`theme` → CSS 变量）、入口编排与生成式选择页（`entry` → `shell/picker.html`）、构建期插件注册（`plugins` → `ShellCore.registerPlugin` / `Shell.plugins`）与构建期升级（`plugin update`） | `npm test` 25/25 通过（契约 15 / CLI 9 / 一致性自测 1）；端到端冒烟 39/39、插件 fixture 44/44、`sync --check` 一致；`0.4.0` 分发包（zip 184,422 B / tar.gz 143,351 B）已生成并解压实测；`pack` 实测自动 `npm install` + `cap add android` + 图标展开，止于沙箱无法下载 Gradle 发行包 |
 | `cajob-pc-shell/` | Electron 33 壳 v0.2.2：窗口记忆/主题/下载进度/崩溃重载；`electron-updater` 指向 `/download/latest/` | 打包脚本可用；签名公证待证书 |
 | `cajob-app-shell/` | Capacitor 6，11 插件，桥/兜底页/权限/隐私声明齐备 | Android Debug APK 由 CI 产出；iOS 待开发者账号 |
 | `ziway-* / jechan-* / xso-*` | 知味工场、捷才工友各四端（hp/cp/ep/sp），XSO 两端；四端身份选择页 + `allowNavigation` | 工程就绪；包名/品牌色已定 |

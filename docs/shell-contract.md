@@ -1,4 +1,4 @@
-# 真实端壳契约 v0.3.2
+# 真实端壳契约 v0.4.0
 
 > 适用范围：`Trae-RealEnds` 内全部壳工程（App / 小程序 / PC / 浏览器兜底）。
 > 本文件是**唯一真相**：壳、H5、发行部署都以本文对齐。改契约先改本文，再改实现。
@@ -22,7 +22,7 @@
 
 | 字段 | 当前值 | 说明 |
 |---|---|---|
-| `contractVersion` | `0.3.2` | 本文版本，语义化 |
+| `contractVersion` | `0.4.0` | 本文版本，语义化 |
 | `shellVersion` | 各壳自报 | 壳内核版本 |
 | `appVersion` | 各壳自报 | 商店发版版本 |
 
@@ -111,7 +111,7 @@
 ```js
 window.dispatchEvent(new CustomEvent('shell:ready', {
   detail: {
-    contractVersion: '0.3.2',
+    contractVersion: '0.4.0',
     shellVersion: '0.1.0',
     appVersion: '0.1.0',
     brand: 'ziway',
@@ -388,3 +388,49 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 3. `uendos profile [--json]` 输出三档矩阵；`uendos doctor` 校验档位与 target 是否匹配。
 4. **边界**：`profile` 只裁剪构建期产物与声明能力，不是权限边界；租户/角色权限仍由云根校验。业务规则不得因档位分叉。
 5. 设计说明与分发建议见 [`uendos-editions.md`](./uendos-editions.md)。
+
+---
+
+## 19. v0.4 M1 变更（个性化主题）
+
+运行时不改协议，只新增壳自有页面的主题能力：
+
+1. `uendos.config.json` 新增可选 `theme`：`{ mode: 'light' | 'dark', tokens: { accent, bg, surface, ink, inkMuted, line, radius, fontScale } }`；未配置时沿用浅色默认值，旧工程零改动。
+2. 运行时把 token 落成 CSS 变量（`--uendos-bg` / `--uendos-ink` / `--uendos-accent` / `--uendos-radius` / `--uendos-fs-*`），并同步设置 `color-scheme` 与 `<meta name="theme-color">`。
+3. `Shell.theme` 暴露给 H5：`{ mode, tokens }`；握手 payload 同步携带 `theme`，`accent` 以主题 accent 为准。
+4. **作用域**：只覆盖壳自有页面（选择页 / 启动兜底 / 错误页）。远程 H5 根不强制套主题，可由 H5 读取 `Shell.theme` 自行适配。
+5. 校验：颜色必须 `#RRGGBB`，`radius` 0–28，`fontScale` 0.9–1.2；未知 token 直接拒绝。`doctor` 打印生效主题，`sync --check` 校验主题是否已写入品牌桥。
+6. 设计草案与后续 L2/L3（入口编排、插件）见 [`uendos-customization-v0.4.md`](./uendos-customization-v0.4.md)。
+
+---
+
+## 20. v0.4 M2 变更（入口编排与生成式选择页）
+
+1. 配置新增可选 `entry`：`{ title, subtitle, rememberLast, order: [endId], groups: [{ label, ends: [endId] }] }`；字段均可缺省，缺省时用默认标题与配置顺序。`order` 与 `groups` 引用的端必须存在，同一端不得出现在多个分组。
+2. 选择页改为 `sync` 产物 `shell/picker.html`（仅含 app target 时生成），与品牌桥一起受 `sync --check` 保护；`index.html` 只做 `./picker.html` 跳转，`prepare:web` 把选择页复制进 `dist`。
+3. 展示规则：先按 `groups` 顺序渲染分组，未分组的端按 `order` 追加在最后；分组只影响展示，不改变 `ends` 的可用性。
+4. `rememberLast: false` 时既不自动跳转也不写 `endKey`；`?picker=1` 始终可强制回到选择页。
+5. `doctor` 打印 `端数 / 组数 / 顺序 / 是否记住`；`entry` 非法值由 `validateConfig` 拒绝。
+6. 设计草案见 [`uendos-customization-v0.4.md`](./uendos-customization-v0.4.md)。
+
+---
+
+## 21. v0.4 M3 变更（插件注册）
+
+桥版本 `2 → 3`，契约版本 `0.4.0`。新增的是**构建期插件**，不是远程加载：
+
+1. `ShellCore.registerPlugin(id, factory)`：CLI 在 `sync` 时把插件运行时以 `ShellCore.registerPlugin("<id>", function () { <runtime.js 原文> });` 嵌进品牌桥，位置在 `ShellCore.create(cfg)` 之前。**禁止运行时远程加载插件代码**，插件必须 `npm install` 进工程并锁版本（提交 `package-lock.json`）。
+2. 插件包根目录提供 `uendos.plugin.json`：`{ id, version, runtime, asserts?, env?, capabilities, methods }`；配置只写包名：`{ "plugins": ["@scope/uendos-plugin-x"] }`。能力声明以插件包为唯一真相。
+3. 注册即校验，任一条不满足则返回 `false` 且不注册（不静默降级）：
+   - `id` 唯一，且与配置中的包名一致；
+   - 能力不得与内置 18 项重名；多个插件不得声明同一能力（暂无 provider 优先级机制）；
+   - 方法命名空间（首个 `.` 之前）必须是该插件自己声明的能力，且不得占用 `core` / `edge` / `offline` / `desktop` / `shell`；
+   - 方法与内置 `METHODS` 或其他插件方法不得重名，且必须为函数；
+   - `capabilities` 与 `methods` 均非空。
+4. 激活与能力回落：`detect(env)` 为真才 `active`；声明值取合法枚举（`✓`/`◐`/`─`/`web`），否则按 `✓`；未激活的能力一律回落 `─`。`Shell.capabilities` 为内置能力 + 插件能力合并；未激活插件的方法调用返回 `E_UNSUPPORTED`，插件抛错统一映射 `E_NATIVE`。
+5. `Shell.plugins` 返回 `[{ id, version, active }]`，握手 payload 同步携带 `plugins`，线上排障可按版本定位。
+6. `uendos conformance` 合并插件自带 `conformance.mjs`（默认导出 `[{ name, run(Shell) }]`），输出 `39 + N`；插件未提供断言时只跑内置 39 项，断言格式非法按失败计。
+7. `profile=lite` 不允许插件（`validateConfig` 与 `uendos plugin add` 均拒绝）。
+8. `uendos pack` 打包前强制 `sync --check`，保证嵌入桥里的插件运行时与配置一致；`uendos sync --check` 同时校验品牌桥与 `shell/picker.html`。
+9. CLI：`uendos plugin add <包名>`（预检已安装 + 声明合法 → 写配置 → `sync`）、`uendos plugin remove <包名>`（移除 → `sync`）；`doctor` 打印 `插件：N 个 · id@version` 与 `生效能力集：内置 18 项 + 插件 N 项（能力名）`。
+10. **插件「热更新」= 构建期升级**：`uendos plugin update [<包名>...] [--spec <npm spec>]` 执行 `npm install <包名>@latest`（`--spec` 可指定具体版本、tarball 或内网源）→ 重新校验声明与冲突 → `sync`；变更随壳包发布，`package-lock.json` 必须提交。**不提供运行时动态加载插件代码的通道**：桥里只存在构建时嵌入的 runtime，`Shell.plugins` 上报的只是已嵌入版本。

@@ -1,6 +1,6 @@
 {
   "name": "uendos",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "type": "module",
   "description": "UendOS 壳工程 CLI：init / add-end / sync / doctor / conformance / profile / assets / pack / publish",
   "bin": {

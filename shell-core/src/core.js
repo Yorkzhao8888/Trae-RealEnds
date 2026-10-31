@@ -1,7 +1,7 @@
 /**
  * BTOS 真实端壳 · 共享运行时（shell-core）
  *
- * 契约：docs/shell-contract.md（v0.2.0）
+ * 契约：docs/shell-contract.md（v0.3.2）
  * 形态：无构建依赖的自包含脚本，可被远程 H5 直接 <script> 引入。
  *
  * 设计要点：
@@ -14,8 +14,8 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '0.2.0';
-  var BRIDGE_VERSION = '2';
+  var CORE_VERSION = '0.4.0';
+  var BRIDGE_VERSION = '3';
   var READY_TIMEOUT_MS = 1500;
 
   if (window.Shell && window.Shell.__core) return;
@@ -92,6 +92,81 @@
   function plugins() {
     var c = window.Capacitor;
     return (c && c.Plugins) || {};
+  }
+
+  // ---------------------------------------------------------------- 插件注册
+  // 插件由 CLI 在品牌桥里以 ShellCore.registerPlugin(id, factory) 包裹嵌入；
+  // 只允许构建期嵌入，禁止运行时远程加载。
+  var PLUGIN_REGISTRY = { list: [], methods: {} };
+  var RESERVED_NS = ['core', 'edge', 'offline', 'desktop', 'shell'];
+
+  function registerPlugin(id, factory) {
+    if (typeof id !== 'string' || !id || typeof factory !== 'function') return false;
+    for (var i = 0; i < PLUGIN_REGISTRY.list.length; i++) {
+      if (PLUGIN_REGISTRY.list[i].id === id) return false;
+    }
+    var def;
+    try { def = factory(); } catch (e) { return false; }
+    if (!def || typeof def !== 'object') return false;
+
+    var caps = def.capabilities || {};
+    var methods = def.methods || {};
+    var builtin = buildCapabilities('web', {});
+    var item = {
+      id: id,
+      version: typeof def.version === 'string' ? def.version : '0.0.0',
+      def: def,
+      active: false,
+      capabilities: [],
+      methods: [],
+    };
+
+    for (var cap in caps) {
+      if (!Object.prototype.hasOwnProperty.call(caps, cap)) continue;
+      if (Object.prototype.hasOwnProperty.call(builtin, cap)) return false; // 内置能力不得重名
+      for (var j = 0; j < PLUGIN_REGISTRY.list.length; j++) {
+        if (PLUGIN_REGISTRY.list[j].capabilities.indexOf(cap) >= 0) return false; // 多 provider 未声明优先级
+      }
+      item.capabilities.push(cap);
+    }
+    for (var m in methods) {
+      if (!Object.prototype.hasOwnProperty.call(methods, m)) continue;
+      var ns = String(m).split('.')[0];
+      if (RESERVED_NS.indexOf(ns) >= 0) return false; // 禁止占用内置命名空间
+      if (item.capabilities.indexOf(ns) < 0) return false; // 方法必须落在插件自己的命名空间
+      if (METHODS[m] || PLUGIN_REGISTRY.methods[m]) return false; // 方法重名
+      if (typeof methods[m] !== 'function') return false;
+      item.methods.push(m);
+    }
+    if (!item.capabilities.length || !item.methods.length) return false;
+
+    for (var k = 0; k < item.methods.length; k++) {
+      PLUGIN_REGISTRY.methods[item.methods[k]] = { plugin: item, fn: methods[item.methods[k]] };
+    }
+    PLUGIN_REGISTRY.list.push(item);
+    return true;
+  }
+
+  // 插件声明的能力只在 detect(env) 为真时记 ✓，否则回落 ─
+  function pluginCapabilities() {
+    var cap = {};
+    for (var i = 0; i < PLUGIN_REGISTRY.list.length; i++) {
+      var item = PLUGIN_REGISTRY.list[i];
+      for (var j = 0; j < item.capabilities.length; j++) {
+        var name = item.capabilities[j];
+        var v = item.def.capabilities[name];
+        cap[name] = item.active
+          ? (['✓', '◐', '─', 'web'].indexOf(v) >= 0 ? v : '✓')
+          : '─';
+      }
+    }
+    return cap;
+  }
+
+  function pluginList() {
+    return PLUGIN_REGISTRY.list.map(function (p) {
+      return { id: p.id, version: p.version, active: p.active };
+    });
   }
 
   // ---------------------------------------------------------------- 能力矩阵
@@ -251,6 +326,68 @@
       if (typeof d[k] === 'function') caps[k] = '✓';
     });
     return caps;
+  }
+
+  // ---------------------------------------------------------------- 主题
+  // 只作用于壳自有页面（选择页 / 启动兜底 / 错误页），远程 H5 不强制套用。
+  // 颜色、圆角、字号全部落成 CSS 变量，页面模板不写死色值。
+  var THEME_DEFAULTS = {
+    light: { accent: '#4C8DFF', bg: '#FFFFFF', surface: '#F6F9FD', ink: '#0B1220', inkMuted: '#7B8AA0', line: '#E4E9F2', radius: 16, fontScale: 1 },
+    dark: { accent: '#4C8DFF', bg: '#0E1218', surface: '#161C26', ink: '#E8EEF7', inkMuted: '#8A98AD', line: '#253041', radius: 16, fontScale: 1 },
+  };
+  var THEME_COLOR_VARS = {
+    bg: '--uendos-bg',
+    surface: '--uendos-surface',
+    ink: '--uendos-ink',
+    inkMuted: '--uendos-ink-muted',
+    line: '--uendos-line',
+    accent: '--uendos-accent',
+  };
+  var FONT_SIZES = { xs: 11, sm: 12, base: 13.5, lg: 18, xl: 24 };
+
+  function resolveTheme(theme, accent) {
+    var mode = (theme && theme.mode) || 'light';
+    var def = THEME_DEFAULTS[mode] || THEME_DEFAULTS.light;
+    var tokens = {};
+    for (var k in def) tokens[k] = def[k];
+    if (theme && theme.tokens) {
+      for (var t in theme.tokens) {
+        if (Object.prototype.hasOwnProperty.call(tokens, t)) tokens[t] = theme.tokens[t];
+      }
+    }
+    if (accent && !(theme && theme.tokens && theme.tokens.accent)) tokens.accent = accent;
+    return { mode: mode, tokens: tokens };
+  }
+
+  function setCssVar(style, name, value) {
+    try {
+      if (typeof style.setProperty === 'function') style.setProperty(name, String(value));
+      else style[name] = String(value);
+    } catch (e) {}
+  }
+
+  function applyTheme(theme, accent) {
+    var r = resolveTheme(theme, accent);
+    try {
+      var style = document.documentElement && document.documentElement.style;
+      if (style) {
+        for (var key in THEME_COLOR_VARS) setCssVar(style, THEME_COLOR_VARS[key], r.tokens[key]);
+        setCssVar(style, '--uendos-radius', r.tokens.radius + 'px');
+        setCssVar(style, '--uendos-font-scale', r.tokens.fontScale);
+        for (var f in FONT_SIZES) setCssVar(style, '--uendos-fs-' + f, (FONT_SIZES[f] * r.tokens.fontScale) + 'px');
+        setCssVar(style, 'color-scheme', r.mode);
+      }
+    } catch (e) {}
+    try {
+      var meta = document.querySelector ? document.querySelector('meta[name="theme-color"]') : null;
+      if (!meta && document.createElement) {
+        meta = document.createElement('meta');
+        meta.setAttribute('name', 'theme-color');
+        (document.head || document.documentElement).appendChild(meta);
+      }
+      if (meta) meta.setAttribute('content', r.tokens.accent);
+    } catch (e) {}
+    return r;
   }
 
   // ---------------------------------------------------------------- 店根适配器
@@ -515,6 +652,19 @@
   function err(code, method, message) { return { ok: false, code: code, method: method, message: message || '', at: nowMonotonic() }; }
 
   function call(method, args) {
+    var p = PLUGIN_REGISTRY.methods[method];
+    if (p) {
+      if (!p.plugin.active) return Promise.resolve(err('E_UNSUPPORTED', method));
+      try {
+        return Promise.resolve(p.fn(args || {})).then(function (r) {
+          return (r && typeof r.ok === 'boolean') ? r : ok(r);
+        }).catch(function (e) {
+          return err('E_NATIVE', method, e && e.message);
+        });
+      } catch (e) {
+        return Promise.resolve(err('E_NATIVE', method, e && e.message));
+      }
+    }
     var fn = METHODS[method];
     if (!fn) return Promise.resolve(err('E_UNSUPPORTED', method));
     try {
@@ -536,7 +686,9 @@
       capabilities: state.capabilities,
       ends: state.config.ends || {},
       end: currentEnd().data.id,
-      accent: state.config.accent,
+      accent: state.theme.tokens.accent,
+      theme: state.theme,
+      plugins: pluginList(),
     };
   }
 
@@ -658,10 +810,15 @@
     if (window.Shell && window.Shell.__core) return window.Shell;
 
     state.config = config;
+    state.theme = applyTheme(config.theme, config.accent);
     state.env = detect();
     P = plugins();
+    for (var pi = 0; pi < PLUGIN_REGISTRY.list.length; pi++) {
+      var pItem = PLUGIN_REGISTRY.list[pi];
+      pItem.active = typeof pItem.def.detect === 'function' ? !!pItem.def.detect(state.env) : true;
+    }
     state.platform = state.env === 'capacitor' ? window.Capacitor.getPlatform() : state.env;
-    state.capabilities = Object.assign(buildCapabilities(state.env, P), desktopCapabilities());
+    state.capabilities = Object.assign(buildCapabilities(state.env, P), desktopCapabilities(), pluginCapabilities());
 
     var Shell = {
       __core: true,
@@ -674,8 +831,10 @@
       isDesktopShell: state.env === 'electron',
       capabilities: state.capabilities,
       ready: false,
-      accent: config.accent,
+      accent: state.theme.tokens.accent,
+      theme: state.theme,
       ends: config.ends,
+      plugins: pluginList(),
       call: call,
       on: function (event, fn) {
         if (typeof fn !== 'function') return function () {};
@@ -700,6 +859,7 @@
 
     // 兼容 v0.1 品牌桥的直调签名（H5 已上线的调用不变）
     Shell.shellVersion = CORE_VERSION;
+    Shell.plugins = pluginList();
     Shell.requestPushPermission = function () {
       return pushRequest().then(function (r) { return !!r.ok; });
     };
@@ -720,7 +880,7 @@
 
     if (state.env === 'capacitor') {
       polish();
-      statusBar({ color: config.accent, style: config.statusBarStyle || 'dark' });
+      statusBar({ color: state.theme.tokens.accent, style: config.statusBarStyle || 'dark' });
       armSplash();
       bindCapacitor();
     }
@@ -739,7 +899,7 @@
     return Shell;
   }
 
-  window.ShellCore = { version: CORE_VERSION, create: create, detect: detect };
+  window.ShellCore = { version: CORE_VERSION, create: create, detect: detect, registerPlugin: registerPlugin };
 
   // 配置由 build.mjs 追加在文件末尾：ShellCore.create(<config>);
 })();

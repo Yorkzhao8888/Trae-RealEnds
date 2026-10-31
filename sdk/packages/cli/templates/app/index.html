@@ -3,77 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="{{accent}}">
-<title>{{displayName}} · 选择身份</title>
-<style>
-  :root { --brand: {{accent}}; --ink: #0B1220; --ink-3: #7B8AA0; --soft: #F6F9FD; --line: #E4E9F2; }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  html, body { margin: 0; min-height: 100%; background: #fff; color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
-  .page { padding: 32px 22px calc(28px + env(safe-area-inset-bottom)); }
-  .head { display: flex; align-items: center; gap: 12px; margin: 16px 0 32px; }
-  .mark { width: 44px; height: 44px; border-radius: 12px; background: var(--brand); color: #fff;
-    font-weight: 700; font-size: 22px; display: grid; place-items: center; }
-  .head b { font-size: 18px; }
-  .head span { display: block; font-size: 11px; color: var(--ink-3); letter-spacing: 2px; margin-top: 2px; }
-  h1 { font-size: 24px; margin: 0 0 6px; }
-  .tip { color: var(--ink-3); font-size: 13.5px; margin-bottom: 20px; }
-  .grid { display: grid; gap: 12px; }
-  .card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--line);
-    border-radius: 16px; background: var(--soft); color: inherit; text-decoration: none; width: 100%;
-    text-align: left; font: inherit; transition: transform .12s, border-color .12s; }
-  .card:active { transform: scale(.985); border-color: var(--brand); }
-  .txt b { font-size: 15.5px; }
-  .txt i { display: block; font-style: normal; font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
-  .arrow { margin-left: auto; color: var(--ink-3); font-size: 18px; }
-  .foot { margin-top: 28px; color: var(--ink-3); font-size: 12px; line-height: 1.7; text-align: center; }
-</style>
-</head>
-<body>
-<div class="page">
-  <div class="head">
-    <div class="mark">{{displayName}}</div>
-    <div><b>{{displayName}}</b><span>UENDOS SHELL</span></div>
-  </div>
-  <h1>选择你的身份</h1>
-  <div class="tip">选择后进入对应工作台，可随时返回本页切换。</div>
-  <div class="grid" id="ends"></div>
-  <div class="foot">壳版本 v{{contractVersion}} · 由 uendos 生成</div>
-</div>
-<script src="./{{shellFile}}"></script>
+<title>{{displayName}}</title>
 <script>
-(function () {
-  var box = document.getElementById('ends');
-  var ends = (window.Shell && window.Shell.ends) || {};
-  var END_KEY = '{{endKey}}';
-
-  // launcher 模式：记住上次选择的端，直接进入；?picker=1 可强制回到本页
-  try {
-    var saved = localStorage.getItem(END_KEY);
-    if (saved && ends[saved] && location.search.indexOf('picker=1') < 0) {
-      location.replace(ends[saved].url);
-      return;
-    }
-  } catch (e) {}
-
-  Object.keys(ends).forEach(function (id, i) {
-    var e = ends[id];
-    var btn = document.createElement('button');
-    btn.className = 'card';
-    btn.innerHTML = '<div class="txt"><b></b><i></i></div><div class="arrow">›</div>';
-    btn.querySelector('b').textContent = e.name;
-    btn.querySelector('i').textContent = id.toUpperCase();
-    btn.onclick = function () {
-      try { localStorage.setItem(END_KEY, id); } catch (err) {}
-      if (window.Shell) window.Shell.call('core.switchEnd', { id: id });
-      else location.replace(e.url);
-    };
-    box.appendChild(btn);
-  });
-  if (!Object.keys(ends).length) {
-    box.innerHTML = '<div class="tip">未读取到端配置，请检查品牌桥是否加载。</div>';
-  }
-})();
+  // 由 uendos sync 生成 shell/picker.html；构建时 prepare:web 会复制为 dist/picker.html
+  location.replace('./picker.html' + location.search);
 </script>
-</body>
+</head>
+<body></body>
 </html>

@@ -166,7 +166,7 @@ async function record(results, name, fn) {
 /**
  * 跑一致性测试。
  * @param {string} shellFile 生成的品牌桥文件路径
- * @param {{cfg?: object, envName?: string}} [opts]
+ * @param {{cfg?: object, envName?: string, plugins?: Array<{id: string, assertions: Array<{name: string, run: Function}>}>}} [opts]
  * @returns {Promise<{ok: boolean, passed: number, failed: number, results: object[]}>}
  */
 export async function runConformance(shellFile, opts = {}) {
@@ -208,7 +208,7 @@ export async function runConformance(shellFile, opts = {}) {
   });
   await record(results, '版本字段语义化', () => {
     if (!/^\d+\.\d+\.\d+$/.test(Shell.version || '')) throw new Error(`version=${Shell.version}`);
-    if (String(Shell.bridge) !== '2') throw new Error(`bridge=${Shell.bridge}`);
+    if (String(Shell.bridge) !== '3') throw new Error(`bridge=${Shell.bridge}`);
   });
   await record(results, 'ends 与配置一致', () => {
     const a = JSON.stringify(Object.keys(Shell.ends || {}).sort());
@@ -423,6 +423,17 @@ export async function runConformance(shellFile, opts = {}) {
       if (!(k in rc)) throw new Error(`缺 ${k}`);
     }
   });
+
+  // ---------------------------------------------------------------- 插件断言合并
+  for (const p of opts.plugins || []) {
+    for (const a of p.assertions || []) {
+      if (!a || typeof a.name !== 'string' || typeof a.run !== 'function') {
+        results.push(fail(`${p.id} · 断言格式`, '插件断言需为 { name, run(Shell) }'));
+        continue;
+      }
+      await record(results, `${p.id} · ${a.name}`, () => a.run(Shell));
+    }
+  }
 
   const failed = results.filter((r) => !r.ok).length;
   return { ok: failed === 0, passed: results.length - failed, failed, results };

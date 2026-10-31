@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 rm -rf dist
 mkdir -p dist
 cp index.html offline.html dist/
+if [ -f "shell/picker.html" ]; then cp "shell/picker.html" dist/; fi
 if [ -f "shell/{{shellFile}}" ]; then cp "shell/{{shellFile}}" dist/; else
   echo "缺少 shell/{{shellFile}}：先运行 npx uendos sync" >&2
   exit 1

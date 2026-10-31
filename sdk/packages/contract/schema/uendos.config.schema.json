@@ -14,14 +14,57 @@
     "accent": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
     "statusBarStyle": { "enum": ["dark", "light"] },
     "endKey": { "type": "string", "minLength": 1 },
-    "contractVersion": { "type": "string", "pattern": "^0\\.3(\\.[0-9]+)?$" },
+    "contractVersion": { "type": "string", "pattern": "^0\\.(3|4)(\\.[0-9]+)?$" },
     "launchMode": { "enum": ["portal", "launcher"] },
     "profile": { "enum": ["lite", "standard", "pro"] },
+    "theme": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["light", "dark"] },
+        "tokens": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accent": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+            "bg": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+            "surface": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+            "ink": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+            "inkMuted": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+            "line": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
+            "radius": { "type": "number", "minimum": 0, "maximum": 28 },
+            "fontScale": { "type": "number", "minimum": 0.9, "maximum": 1.2 }
+          }
+        }
+      }
+    },
     "targets": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
       "items": { "enum": ["app", "pc", "mp", "web"] }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "subtitle": { "type": "string" },
+        "rememberLast": { "type": "boolean" },
+        "order": { "type": "array", "items": { "type": "string" } },
+        "groups": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["label", "ends"],
+            "properties": {
+              "label": { "type": "string", "minLength": 1 },
+              "ends": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
     },
     "ends": {
       "type": "object",
@@ -36,7 +79,12 @@
         }
       }
     },
-    "packageId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.?[A-Za-z0-9_]+)+$" },
+    "packageId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+$" },
+    "plugins": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
     "store": {
       "type": "object",
       "properties": {

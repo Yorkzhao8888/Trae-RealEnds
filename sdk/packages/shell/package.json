@@ -1,6 +1,6 @@
 {
   "name": "@uendos/shell",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "type": "module",
   "description": "UendOS 壳运行时（零依赖单文件，可被 H5 直接 <script> 引入）",
   "main": "src/index.js",

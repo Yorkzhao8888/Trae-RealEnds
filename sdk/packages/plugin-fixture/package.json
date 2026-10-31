@@ -1,0 +1,11 @@
+{
+  "name": "@uendos/plugin-fixture",
+  "version": "0.1.0",
+  "private": true,
+  "description": "UendOS 插件机制 fixture（假打印机）：只用于验证注册、能力与断言合并",
+  "files": [
+    "uendos.plugin.json",
+    "runtime.js",
+    "conformance.mjs"
+  ]
+}
