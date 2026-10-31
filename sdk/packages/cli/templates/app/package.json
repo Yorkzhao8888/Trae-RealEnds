@@ -8,7 +8,8 @@
     "sync": "npm run prepare:web && npx cap sync",
     "add:android": "npm run prepare:web && npx cap add android",
     "add:ios": "npm run prepare:web && npx cap add ios",
-    "build:android": "npx cap sync android && cd android && ./gradlew assembleDebug"
+    "build:android": "npx cap sync android && cd android && ./gradlew assembleDebug",
+    "assets": "capacitor-assets generate --iconBackgroundColor '{{accent}}' --iconBackgroundColorDark '#0B1220' --splashBackgroundColor '{{accent}}' --splashBackgroundColorDark '#0B1220'"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
@@ -24,6 +25,7 @@
     "@capacitor/status-bar": "^6.0.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^6.0.0"
   }
 }

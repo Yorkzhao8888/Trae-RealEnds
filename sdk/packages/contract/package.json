@@ -1,6 +1,6 @@
 {
   "name": "@uendos/contract",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "description": "UendOS 壳契约：能力、方法、事件、错误码与配置校验（零依赖）",
   "main": "src/index.js",

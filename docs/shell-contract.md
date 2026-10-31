@@ -1,4 +1,4 @@
-# 真实端壳契约 v0.3.0
+# 真实端壳契约 v0.3.1
 
 > 适用范围：`Trae-RealEnds` 内全部壳工程（App / 小程序 / PC / 浏览器兜底）。
 > 本文件是**唯一真相**：壳、H5、发行部署都以本文对齐。改契约先改本文，再改实现。
@@ -22,7 +22,7 @@
 
 | 字段 | 当前值 | 说明 |
 |---|---|---|
-| `contractVersion` | `0.3.0` | 本文版本，语义化 |
+| `contractVersion` | `0.3.1` | 本文版本，语义化 |
 | `shellVersion` | 各壳自报 | 壳内核版本 |
 | `appVersion` | 各壳自报 | 商店发版版本 |
 
@@ -111,7 +111,7 @@
 ```js
 window.dispatchEvent(new CustomEvent('shell:ready', {
   detail: {
-    contractVersion: '0.3.0',
+    contractVersion: '0.3.1',
     shellVersion: '0.1.0',
     appVersion: '0.1.0',
     brand: 'ziway',
@@ -357,3 +357,16 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 2. **工具链契约**：`uendos init/add-end/sync/doctor/conformance/pack/publish`，其中 `sync --check` 要求生成产物与配置严格一致（CI 拦截手改）。
 3. **一致性契约**：`@uendos/conformance` 用 39 项断言（结构 8 / 握手 4 / 端切换 4 / 事件 4 / 错误协议 5 / 离线队列 6 / 店根适配 6 / 契约自洽 2）在 vm 沙箱验收任意品牌桥，无需真机。
 4. **文档入口**：开发者指南见 [`sdk/README.md`](../sdk/README.md)；运行时源码唯一真相仍为 `shell-core/src/core.js`。
+
+---
+
+## 17. v0.3.1 变更（一键出包）
+
+运行时与 39 项断言不变；本版补齐「从工程到安装包」的工具链：
+
+1. **启动模式**：配置新增可选 `launchMode`。
+   - `portal`（默认）：`server.url` 指主端，与原四个品牌壳一致；
+   - `launcher`：不固定主端，先加载本机选择页，所选端写入 `endKey` 后跳转，重启保持；`?picker=1` 回到选择页。
+2. **品牌资源**：`uendos init` / `uendos assets` 按 `accent` 与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732），首次 `pack` 通过 `@capacitor/assets` 展开到 Android/iOS 各尺寸，之后不覆盖自定义图标。
+3. **打包**：`pack --target app` 自动补齐 `npm install` 与 `cap add android`；`--release` 生成 `android/uendos-signing.gradle`，密码只从 `UENDOS_KEYSTORE_PASSWORD` / `UENDOS_KEY_PASSWORD` 读取，不落盘。`pack --target ios` 需 macOS，`--release` 产出 `.xcarchive`。
+4. **远程端白名单**：`capacitor.config.json` 的 `server.allowNavigation` 由 `ends` 的 host 自动生成，避免远程端被 WebView 拦截。

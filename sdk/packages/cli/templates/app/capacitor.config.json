@@ -5,7 +5,8 @@
   "server": {
     "url": "{{primaryEndUrl}}",
     "errorPath": "offline.html",
-    "cleartext": false
+    "cleartext": false,
+    "allowNavigation": [{{allowHosts}}]
   },
   "android": {
     "allowMixedContent": false

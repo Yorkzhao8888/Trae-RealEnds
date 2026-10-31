@@ -25,7 +25,7 @@ test('init 生成配置、品牌桥与三套模板', () => {
   run([
     'init', 'demo-acme',
     '--brand', 'demo-acme',
-    '--ends', 'hp:个人端:https://hp.acme.example.com/,ep:企业端:https://ep.acme.example.com/',
+    '--ends', 'hp:个人端:https://hp.acme.example.com/，ep:企业端:https://ep.acme.example.com/',
     '--targets', 'app,pc,mp',
     '--app-id', 'com.acme.demo',
     '--accent', '#123456',
@@ -38,7 +38,18 @@ test('init 生成配置、品牌桥与三套模板', () => {
   assert.equal(cfg.packageId, 'com.acme.demo');
   assert.deepEqual(cfg.targets, ['app', 'pc', 'mp']);
   assert.deepEqual(Object.keys(cfg.ends).sort(), ['ep', 'hp']);
+  assert.equal(cfg.launchMode, 'portal');
   assert.match(cfg.contractVersion, /^0\.3\./);
+
+  const cap = JSON.parse(readFileSync(join(DIR, 'capacitor.config.json'), 'utf8'));
+  assert.equal(cap.server.url, 'https://hp.acme.example.com/');
+  assert.deepEqual(cap.server.allowNavigation, ['hp.acme.example.com', 'ep.acme.example.com']);
+  assert.ok(!cap.server.allowNavigation.includes(undefined), 'allowNavigation 不能出现空值');
+
+  const icon = readFileSync(join(DIR, 'assets', 'icon.png'));
+  assert.equal(icon.readUInt32BE(0), 0x89504e47, 'icon.png 不是合法 PNG');
+  assert.equal(icon.readUInt32BE(16), 1024, 'icon.png 宽度应为 1024');
+  assert.equal(icon.readUInt32BE(20), 1024, 'icon.png 高度应为 1024');
 
   const shellFile = join(DIR, 'shell', 'demo-acme-shell.js');
   assert.ok(existsSync(shellFile), '品牌桥未生成');
@@ -55,6 +66,29 @@ test('init 生成配置、品牌桥与三套模板', () => {
   assert.equal(rt.accent, '#123456');
   assert.equal(rt.primaryEnd, 'hp');
   assert.equal(rt.shellFile, 'demo-acme-shell.js');
+});
+
+test('launcher 模式：不固定主端 URL，选择页可记住所选端', () => {
+  const dir = join(DIR, 'launcher-demo');
+  run([
+    'init', 'launcher-demo',
+    '--brand', 'launcher-demo',
+    '--ends', 'hp:个人端:https://hp.acme.example.com/，ep:企业端:https://ep.acme.example.com/',
+    '--targets', 'app',
+    '--dir', dir,
+    '--launch-mode', 'launcher',
+  ]);
+
+  const cfg = JSON.parse(readFileSync(join(dir, 'uendos.config.json'), 'utf8'));
+  assert.equal(cfg.launchMode, 'launcher');
+
+  const cap = JSON.parse(readFileSync(join(dir, 'capacitor.config.json'), 'utf8'));
+  assert.equal(cap.server.url, undefined, 'launcher 模式不应固定主端');
+  assert.deepEqual(cap.server.allowNavigation, ['hp.acme.example.com', 'ep.acme.example.com']);
+
+  const idx = readFileSync(join(dir, 'index.html'), 'utf8');
+  assert.match(idx, /launcher-demo\.end/, '选择页应使用 endKey 记住上次端');
+  assert.ok(!idx.includes('{{'), '选择页占位符未替换');
 });
 
 test('sync --check 一致，add-end 后仍一致', () => {

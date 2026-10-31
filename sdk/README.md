@@ -21,8 +21,8 @@ sdk/
 
 ## 分发包
 
-- [BTOS-UendOS-SDK-0.3.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.0/BTOS-UendOS-SDK-0.3.0.zip)（77,709 B，SHA-256 `ca5853a9e8ff2879493d8e08eea3a423424e99b7de07499eabe7f7275292c7f5`）
-- [BTOS-UendOS-SDK-0.3.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.0/BTOS-UendOS-SDK-0.3.0.tar.gz)
+- [BTOS-UendOS-SDK-0.3.1.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.1/BTOS-UendOS-SDK-0.3.1.zip)（85,385 B，SHA-256 `dcfa07b839d36e05d63f532f8d68dbea12bc2b3c5b23ef73138fc80bc7bf0146`）
+- [BTOS-UendOS-SDK-0.3.1.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.1/BTOS-UendOS-SDK-0.3.1.tar.gz)（58,553 B，SHA-256 `3afcf14f3acef29fa07daf029d8ea3edea1d45cbea1aa0b0f36668b1ba943df3`）
 
 解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
@@ -58,12 +58,13 @@ npx uendos sync --check          # CI 用：产物必须与配置一致
 
 | 命令 | 作用 | 关键参数 |
 |---|---|---|
-| `uendos init <项目名>` | 建工程：拷模板 → 替换占位符 → 写配置 → 生成品牌桥 | `--brand` `--ends` `--targets` `--app-id` `--display` `--accent` `--mp-appid` `--dir` |
+| `uendos init <项目名>` | 建工程：拷模板 → 替换占位符 → 写配置 → 生成品牌桥与 `assets/` 源图 | `--brand` `--ends` `--targets` `--app-id` `--display` `--accent` `--mp-appid` `--launch-mode` `--dir` |
 | `uendos add-end <id>` | 增加一个端并重新生成桥 | `--name` `--url` |
 | `uendos sync` | 重新合成品牌桥 | `--check` 只校验不写，不一致时退出码 1 |
 | `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址 |
 | `uendos conformance` | 对品牌桥跑 39 项契约断言 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
-| `uendos pack` | 本地打包 | `--target app`（`npx cap sync` + `gradlew assembleDebug`）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传） |
+| `uendos assets` | 按主色与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732） | `--force` 覆盖已有图 |
+| `uendos pack` | 本地打包（缺 `node_modules` / `android` / `ios` 时自动安装与生成平台工程） | `--target app`（Debug APK；`--release` 走签名）、`ios`（需 macOS）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传） |
 | `uendos publish` | 计算 SHA-256/大小并回写商店清单 | `--file` `--item` `--manifest` `--url` 或 `--download-dir` `--version` `--status`（默认 `beta`） |
 
 `doctor` / `conformance` / `sync --check` 失败均以非 0 退出，可直接挂 CI。
@@ -80,9 +81,10 @@ npx uendos sync --check          # CI 用：产物必须与配置一致
   "accent": "#4C8DFF",
   "statusBarStyle": "dark",
   "endKey": "acme.end",
-  "contractVersion": "0.3.0",
+  "contractVersion": "0.3.1",
   "targets": ["app", "pc", "mp"],
   "packageId": "com.acme.app",
+  "launchMode": "portal",
   "ends": {
     "hp": { "name": "个人端", "url": "https://hp.acme.example.com/" },
     "ep": { "name": "企业端", "url": "https://ep.acme.example.com/" }
@@ -95,16 +97,24 @@ npx uendos sync --check          # CI 用：产物必须与配置一致
 - `brand` 小写，`^[a-z][a-z0-9-]{1,15}$`；`accent` 为 `#RRGGBB`
 - `ends` 至少 1 个，`id` 2–4 位小写字母；`url` 必须是 https（`--allow-http` 仅供内网联调）
 - `targets` 取值 `app` / `pc` / `mp`；`contractVersion` 主版本必须与 SDK 当前契约一致
+- `launchMode` 为 `portal`（默认，启动直进主端）或 `launcher`（本机选择页，记住上次所选端）
 
 ## 三套模板
 
 | target | 技术栈 | 模板内已包含 |
 |---|---|---|
-| `app` | Capacitor 6 | `capacitor.config.json`（`webDir dist`、`server.url` 指主端、`errorPath offline.html`）、身份选择页 `index.html`、离线页、`prepare-web.sh` |
+| `app` | Capacitor 6 | `capacitor.config.json`（`webDir dist`、`server.url`/`allowNavigation`、`errorPath offline.html`）、身份选择页 `index.html`、离线页、`prepare-web.sh`、`assets/` 品牌源图、`npm run assets` 展开各平台尺寸 |
 | `pc` | Electron 33 + electron-builder 25 | `main.js`（读 `uendos.runtime.json`、加载失败回落离线页、外链交给系统浏览器）、`preload.js`（`ShellDesktop`）、离线页、更新源指向 `/download/latest/` |
 | `mp` | 原生小程序 + `web-view` | `project.config.json`、单页 `web-view` 承载、加载失败跳错误页；AppID 用 `touristappid` 占位 |
 
-模板里的 `{{brand}}` `{{displayName}}` `{{appId}}` `{{accent}}` `{{shellFile}}` `{{primaryEndUrl}}` `{{projectName}}` `{{mpAppId}}` `{{contractVersion}}` 在 `init` 时一次性替换。
+模板里的 `{{brand}}` `{{displayName}}` `{{appId}}` `{{accent}}` `{{shellFile}}` `{{primaryEndUrl}}` `{{projectName}}` `{{mpAppId}}` `{{allowHosts}}` `{{endKey}}` `{{contractVersion}}` 在 `init` 时一次性替换。
+
+### 两种启动模式
+
+- `portal`（默认）：`server.url` 指向主端，App 启动即进业务页；原生能力与既有四个品牌壳一致。
+- `launcher`：`init --launch-mode launcher` 去掉 `server.url`，先加载本机选择页，选中端写入 `endKey` 后跳转，**重启记住上次所选端**；访问 `?picker=1` 可强制回到选择页。
+
+`launcher` 模式的业务页由远程加载，Capacitor 原生插件是否可用取决于远程页能否拿到运行时；需要强原生能力（推送/震动/生物识别）时用 `portal`，由主端门户页负责切换。
 
 ## 39 项断言覆盖什么
 
@@ -139,7 +149,25 @@ npx uendos sync --check          # CI 用：产物必须与配置一致
     "$UENDOS" sync --check
 ```
 
-`npm test` 先跑运行时源一致性（`check-core`），再跑 14 项测试：契约校验 9 项、CLI 端到端 4 项（init → add-end → doctor → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
+`npm test` 先跑运行时源一致性（`check-core`），再跑 15 项测试：契约校验 9 项、CLI 端到端 5 项（init → launcher → add-end → doctor → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
+
+## 打包与签名
+
+```bash
+# Android Debug（首次会自动 npm install + cap add android）
+uendos pack --target app
+
+# Android Release（凭据只从环境变量读，不写进仓库/工程）
+UENDOS_KEYSTORE=/abs/release.keystore \
+UENDOS_KEYSTORE_PASSWORD=*** UENDOS_KEY_ALIAS=release UENDOS_KEY_PASSWORD=*** \
+uendos pack --target app --release
+# 产物：android/app/build/outputs/apk/release/app-release.apk
+
+# iOS（macOS + Xcode）
+uendos pack --target ios --release   # 归档 build/App.xcarchive，再用 Xcode Organizer 导出 IPA
+```
+
+首次 `pack` 若发现 `assets/icon.png` 未展开到平台资源，会自动执行一次 `npm run assets`（`@capacitor/assets`），后续不会再覆盖开发者自定义图标。`--release` 会生成 `android/uendos-signing.gradle` 并在 `app/build.gradle` 追加一次 `apply from`，密码仅从环境变量读取。
 
 ## 发布
 

@@ -45,6 +45,17 @@
 (function () {
   var box = document.getElementById('ends');
   var ends = (window.Shell && window.Shell.ends) || {};
+  var END_KEY = '{{endKey}}';
+
+  // launcher 模式：记住上次选择的端，直接进入；?picker=1 可强制回到本页
+  try {
+    var saved = localStorage.getItem(END_KEY);
+    if (saved && ends[saved] && location.search.indexOf('picker=1') < 0) {
+      location.replace(ends[saved].url);
+      return;
+    }
+  } catch (e) {}
+
   Object.keys(ends).forEach(function (id, i) {
     var e = ends[id];
     var btn = document.createElement('button');
@@ -53,8 +64,9 @@
     btn.querySelector('b').textContent = e.name;
     btn.querySelector('i').textContent = id.toUpperCase();
     btn.onclick = function () {
+      try { localStorage.setItem(END_KEY, id); } catch (err) {}
       if (window.Shell) window.Shell.call('core.switchEnd', { id: id });
-      else location.href = e.url;
+      else location.replace(e.url);
     };
     box.appendChild(btn);
   });
