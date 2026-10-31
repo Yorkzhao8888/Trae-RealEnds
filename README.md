@@ -29,8 +29,9 @@
 | `jechan-mp-shell/` | 微信小程序 | 原生小程序 + `web-view` | **v0.1.0** 单页壳；AppID 占位，业务域名待配置 |
 | `jechan-pc-shell/` | PC（macOS/Windows） | Electron 33 | **v0.1.0** 一套代码出 Windows/macOS；更新源待部署 |
 | `btos-app-store/` | 分发入口（H5） | 纯静态 + `data/apps.json` | **M0 已上线 + M1/M2 页面就绪**：目录/清单/筛选、通道（stable/beta）、下载计数、灰度配置、运营台；入口 `https://cajob.cewaysoft.com/store/`（复用现有证书，零新增） |
-| `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.2.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检） |
+| `docs/` | 跨端契约 | Markdown | `shell-contract.md` v0.3.0（能力矩阵/握手/事件/降级/离线/店根/安全/自检 + SDK 工程化契约） |
 | `shell-core/` | 共享壳运行时 | 单文件 JS（无构建依赖） | **v0.2.0** 四品牌桥由同一份 `core.js` 生成（`window.Shell` + 品牌别名），含真机自检页 |
+| `sdk/` | 开发者工具 SDK（UendOS） | Node 18+，零依赖 workspace | **v0.3.0**：`@uendos/contract` + `@uendos/shell` + `@uendos/conformance`（39 项断言）+ `uendos` CLI（init/add-end/sync/doctor/conformance/pack/publish）+ App/PC/小程序三模板；端到端冒烟通过 |
 | `edge-store/` | 店根（门店边缘服务） | Node 24 + 内置 SQLite，零依赖 | **P2** 原子扣减/租约/幂等重放/快照增量/回传游标/冲突分级/定时退避回传/下行商品读模型/冲突复核页 + UDP 发现；24 项测试通过 |
 | `cloud-root/` | 云根参考实现（联调/契约样板） | Node 24 + 内置 SQLite，零依赖 | **v0.1.2** 上行幂等接收/冲突判定/下行商品读模型 + 商店 M1 授权（租户/座位/门店配额/过期）+ M2 下载统计与百分比灰度；与店根端到端打通，14 项测试通过。**已在 47 机常驻**服务 `/store/*`（systemd + Caddy `@storeapi`） |
 
@@ -47,6 +48,7 @@
 - 移动壳：见 `cajob-app-shell/`（Capacitor 工程与插件清单）
 - 微信/IoT/手表：见各自目录 README
 - 知味工场三端：见 `ziway-app-shell/`、`ziway-mp-shell/`、`ziway-pc-shell/` 各自 README
+- 开发者 SDK（UendOS）：见 [sdk/README.md](sdk/README.md)（init → sync → doctor → conformance → pack → publish）
 
 ## 版本记录
 
@@ -75,3 +77,4 @@
 - 2026-10-30：面向团队补齐说明 —— 新增 `STATUS.md`（三层架构、模块验证度、线上落点、接口清单、本地跑法、外部依赖、协作约定），README 顶部加导览；`cloud-root` 版本号对齐至 0.1.2（14 项测试）。
 - 2026-10-30：商店 M1/M2 接口上线 —— 47 机新增 `cloud-root` systemd 常驻（Node 24.8.0 独立安装，宿主 Node 20 无 `node:sqlite`），监听 `172.18.0.1:7331`；Caddy 在静态 `handle_path /store/*` 之前加 `@storeapi` → `reverse_proxy`，页面同源无需配接口地址。公网验证：`/store/entitlements` 401→带 token 200、占座 1/20、退座归零、`/store/downloads` 公开计数 200、运营台 `rollouts`/`downloads` 均 200；演示租户 `t-demo` 已建。另准备 `.github/workflows/tests.yml`（`edge-store` + `cloud-root` 在 Node 24 上跑测试），因当前 PAT 无 `workflow` scope 暂未推送，文件已就绪待具备权限的 token。
 - 2026-10-30：首个真实安装包上线 —— 从 CI 产物取 `cajob-app-0.2.2-debug.apk`（7,375,846 B，SHA-256 `1563db5e…169b`）放到 `/download/latest/`，新增 Caddy `handle_path /download/*` → `/data/download`；清单里 `cajob-app-android` 置 `beta`、版本 0.2.2、灰度 100%，稳定通道 18 条、测试通道 1 条（浏览器实测）。Debug 签名，不可对外分发；正式渠道待 release 包与 `latest.yml`。
+- 2026-10-30：新增 **UendOS 开发者工具 SDK**（`sdk/`）—— 把壳封装沉淀为可复用工具链：`@uendos/contract`（能力/方法/事件/错误码 + 配置校验 + JSON Schema）、`@uendos/shell`（`shell-core` 运行时 + 品牌配置合成品牌桥）、`@uendos/conformance`（vm 沙箱 39 项契约断言，不需要真机/SDK）、`uendos` CLI（`init/add-end/sync/doctor/conformance/pack/publish`）与 App(Capacitor)/PC(Electron)/小程序三套模板。另修 `shell-core` 真 bug：`core.ready` 恒为 false（`setTimeout` 回调补 `state.ready = true`），四品牌桥与三个 preload 已重新生成。冒烟：`init` → `doctor --offline` 全过、在线端 200 → `conformance` 39/39 → `sync --check` 一致 → `add-end` 后仍一致。开发者文档见 [sdk/README.md](sdk/README.md)。

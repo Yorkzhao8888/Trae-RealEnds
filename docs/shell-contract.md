@@ -1,4 +1,4 @@
-# 真实端壳契约 v0.2.0
+# 真实端壳契约 v0.3.0
 
 > 适用范围：`Trae-RealEnds` 内全部壳工程（App / 小程序 / PC / 浏览器兜底）。
 > 本文件是**唯一真相**：壳、H5、发行部署都以本文对齐。改契约先改本文，再改实现。
@@ -22,7 +22,7 @@
 
 | 字段 | 当前值 | 说明 |
 |---|---|---|
-| `contractVersion` | `0.2.0` | 本文版本，语义化 |
+| `contractVersion` | `0.3.0` | 本文版本，语义化 |
 | `shellVersion` | 各壳自报 | 壳内核版本 |
 | `appVersion` | 各壳自报 | 商店发版版本 |
 
@@ -111,7 +111,7 @@
 ```js
 window.dispatchEvent(new CustomEvent('shell:ready', {
   detail: {
-    contractVersion: '0.2.0',
+    contractVersion: '0.3.0',
     shellVersion: '0.1.0',
     appVersion: '0.1.0',
     brand: 'ziway',
@@ -346,3 +346,14 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 | P1 | 本地镜像 + 离线队列 + 幂等重放 + 策略下发 | 待启动 |
 | P2 | 店根（PC 壳本地库、局域网发现、原子扣减、上行回传/下行读模型/退避调度） | 已实现（`edge-store/`） |
 | P3 | 策略自动调优、围栏触发、批量对账 | 规划中 |
+
+---
+
+## 16. v0.3.0 变更（UendOS SDK 化）
+
+本版不改变运行时行为（`shell-core` 仍为 v0.2.0，能力矩阵、事件、错误码、握手字段不变），新增的是**工程化契约**：
+
+1. **配置契约**：`uendos.config.json`（`schemaVersion: 1`）与 `schema/uendos.config.schema.json` 固化品牌、端、targets、包名等字段；`@uendos/contract` 的 `validateConfig()` 为唯一校验入口。
+2. **工具链契约**：`uendos init/add-end/sync/doctor/conformance/pack/publish`，其中 `sync --check` 要求生成产物与配置严格一致（CI 拦截手改）。
+3. **一致性契约**：`@uendos/conformance` 用 39 项断言（结构 8 / 握手 4 / 端切换 4 / 事件 4 / 错误协议 5 / 离线队列 6 / 店根适配 6 / 契约自洽 2）在 vm 沙箱验收任意品牌桥，无需真机。
+4. **文档入口**：开发者指南见 [`sdk/README.md`](../sdk/README.md)；运行时源码唯一真相仍为 `shell-core/src/core.js`。

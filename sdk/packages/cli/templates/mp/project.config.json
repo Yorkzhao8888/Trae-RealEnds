@@ -1,0 +1,15 @@
+{
+  "appid": "{{mpAppId}}",
+  "projectname": "{{projectName}}-mp",
+  "compileType": "miniprogram",
+  "miniprogramRoot": "miniprogram/",
+  "libVersion": "3.6.5",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true,
+    "ignoreUploadUnusedFiles": true
+  }
+}

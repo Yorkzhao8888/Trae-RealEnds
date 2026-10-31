@@ -1,0 +1,16 @@
+{
+  "appId": "{{appId}}",
+  "appName": "{{displayName}}",
+  "webDir": "dist",
+  "server": {
+    "url": "{{primaryEndUrl}}",
+    "errorPath": "offline.html",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  }
+}

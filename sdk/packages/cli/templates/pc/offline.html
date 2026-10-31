@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{{displayName}} · 无法连接</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0B0F17; color: #E8ECF4;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .wrap { min-height: 100%; display: grid; place-items: center; padding: 24px; text-align: center; }
+  h1 { font-size: 20px; margin: 0 0 10px; }
+  p { color: #8E99AB; font-size: 14px; margin: 0 0 22px; }
+  button { appearance: none; border: 0; border-radius: 10px; background: {{accent}}; color: #fff;
+    font: inherit; font-size: 15px; padding: 10px 22px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>无法连接到工作台</h1>
+    <p>检查网络或门店地址后重试；离线操作会在恢复后补传。</p>
+    <button onclick="location.reload()">重新加载</button>
+  </div>
+</div>
+</body>
+</html>

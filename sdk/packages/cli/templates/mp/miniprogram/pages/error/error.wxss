@@ -1,0 +1,4 @@
+.wrap { padding: 120rpx 48rpx; text-align: center; }
+.title { font-size: 36rpx; font-weight: 600; margin-bottom: 20rpx; }
+.tip { font-size: 26rpx; color: #7B8AA0; line-height: 1.7; margin-bottom: 48rpx; }
+button { border-radius: 12rpx; background: {{accent}}; color: #fff; font-size: 30rpx; }

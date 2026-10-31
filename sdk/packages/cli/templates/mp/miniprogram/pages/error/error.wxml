@@ -1,0 +1,5 @@
+<view class="wrap">
+  <view class="title">网页无法打开</view>
+  <view class="tip">业务域名未配置或网络不可用。请在微信后台把 {{primaryEndUrl}} 加入业务域名后重试。</view>
+  <button bindtap="retry">返回重试</button>
+</view>

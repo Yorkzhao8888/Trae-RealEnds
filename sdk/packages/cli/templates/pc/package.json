@@ -1,0 +1,29 @@
+{
+  "name": "{{projectName}}-pc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "{{displayName}} · UendOS PC 壳",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --publish never",
+    "publish": "electron-builder --publish always"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.0"
+  },
+  "build": {
+    "appId": "{{appId}}",
+    "productName": "{{displayName}}",
+    "files": ["main.js", "preload.js", "offline.html", "uendos.runtime.json"],
+    "directories": { "output": "release" },
+    "win": { "target": ["nsis"] },
+    "mac": { "target": ["dmg"], "category": "public.app-category.business" },
+    "linux": { "target": ["AppImage"] },
+    "publish": [{ "provider": "generic", "url": "https://cajob.cewaysoft.com/download/latest/" }]
+  }
+}

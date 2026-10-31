@@ -1,0 +1,13 @@
+{
+  "name": "@uendos/contract",
+  "version": "0.3.0",
+  "type": "module",
+  "description": "UendOS 壳契约：能力、方法、事件、错误码与配置校验（零依赖）",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./schema": "./schema/uendos.config.schema.json"
+  },
+  "files": ["src", "schema"],
+  "engines": { "node": ">=18" }
+}

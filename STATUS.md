@@ -22,6 +22,7 @@
 | 模块 | 做到什么 | 验证 |
 |---|---|---|
 | `shell-core/` | 四品牌桥由同一份 `core.js` 生成（`window.Shell` + `ziwayOS/jechanOS/xsoOS/cajobOS` 别名）；能力矩阵、事件双写、`build.mjs --check` 一致性校验、真机自检页 | 构建校验通过 |
+| `sdk/` | **UendOS 开发者 SDK**：`@uendos/contract`（契约常量 + 配置校验）、`@uendos/shell`（运行时合成品牌桥）、`@uendos/conformance`（39 项断言）、`uendos` CLI（init/add-end/sync/doctor/conformance/pack/publish）+ App/PC/小程序三模板 | `npm test` 通过；端到端冒烟 39/39、`sync --check` 一致 |
 | `cajob-pc-shell/` | Electron 33 壳 v0.2.2：窗口记忆/主题/下载进度/崩溃重载；`electron-updater` 指向 `/download/latest/` | 打包脚本可用；签名公证待证书 |
 | `cajob-app-shell/` | Capacitor 6，11 插件，桥/兜底页/权限/隐私声明齐备 | Android Debug APK 由 CI 产出；iOS 待开发者账号 |
 | `ziway-* / jechan-* / xso-*` | 知味工场、捷才工友各四端（hp/cp/ep/sp），XSO 两端；四端身份选择页 + `allowNavigation` | 工程就绪；包名/品牌色已定 |
@@ -91,6 +92,12 @@ CLOUD_TOKEN=tk CLOUD_ADMIN_TOKEN=adm CLOUD_DB=/tmp/cloud.db node src/server.js
 
 # 商店静态页（任意静态服务即可，页面全相对路径）
 cd btos-app-store && python3 -m http.server 8099
+
+# 开发者 SDK：一致性测试 + 源同步校验
+cd sdk && npm install && npm test && npm run check
+# 新工程：init → doctor → conformance → sync --check
+cd sdk && npx uendos init acme --brand acme --ends "hp:个人端:https://hp.acme.example.com/" --targets app,pc,mp --dir /tmp/acme
+cd /tmp/acme && npx uendos doctor --offline && npx uendos conformance && npx uendos sync --check
 ```
 
 ## 6. 待办与外部依赖
@@ -106,7 +113,7 @@ cd btos-app-store && python3 -m http.server 8099
 ## 7. 协作约定
 
 1. **契约先行**：改能力/事件/接口先改 `docs/shell-contract.md`（唯一真相），再改实现；契约版本语义化递增。
-2. **测试门槛**：`edge-store`、`cloud-root` 改动后 `npm test` 必须全过，新增行为补用例。测试工作流 `.github/workflows/tests.yml`（Node 24）已就绪，但推送需 PAT 具备 `workflow` scope，落地后 PR 必须绿。
+2. **测试门槛**：`edge-store`、`cloud-root` 改动后 `npm test` 必须全过，新增行为补用例；`sdk/` 改动后 `npm test && npm run check` 必须全过，且 `uendos sync --check` + `uendos conformance` 不得退化。测试工作流 `.github/workflows/tests.yml`（Node 24）已就绪，但推送需 PAT 具备 `workflow` scope，落地后 PR 必须绿。
 3. **提交**：`feat|fix|docs(scope): 中文简述`，一次提交一个主题；文档与代码同批提交。
 4. **不落凭证**：仓库内不提交任何 token / AccessKey / 证书私钥；线上配置走环境变量。
 5. **商店清单是唯一真相**：`btos-app-store/data/apps.json` 的 `status` 未置 `available` 时，页面按钮不可点，不允许前端自行放开。
