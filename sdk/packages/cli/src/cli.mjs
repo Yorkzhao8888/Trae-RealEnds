@@ -587,6 +587,10 @@ async function cmdDoctor(flags) {
     else {
       report(true, `插件：${pluginList.length} 个 · ${pluginList.map((p) => `${p.id}@${p.version}`).join('、')}`);
       report(true, `生效能力集：内置 ${CAPABILITIES.length} 项 + 插件 ${pluginCaps.length} 项（${pluginCaps.join('/')}）`);
+      for (const p of pluginList) {
+        if (!p.assertsPath) log(`· 插件 ${p.id} 未提供断言（可选：manifest 加 "asserts": "conformance.mjs"）`);
+        else if (!existsSync(p.assertsPath)) report(false, `插件 ${p.id} 的断言文件不存在：${p.assertsPath}`);
+      }
     }
   } else {
     log(`· 未配置插件（生效能力集：内置 ${CAPABILITIES.length} 项）`);
@@ -822,10 +826,60 @@ function cmdPluginUpdate(names, flags, cfg, dir) {
   log('插件变更随壳包发布：记得提交 package-lock.json 并重新出包。');
 }
 
+function pluginHelp() {
+  log(`uendos plugin — 插件管理（构建期注册，运行时禁止远程加载）
+
+  uendos plugin list [--json]        列出配置中的插件、安装状态、环境与断言
+  uendos plugin add <包名>           把已安装的插件写入配置并重新生成品牌桥
+  uendos plugin remove <包名>        从配置移除插件并重新生成品牌桥
+  uendos plugin update [<包名>...]   构建期升级（默认 @latest），--spec 指定版本或 tarball
+
+  插件包根目录需提供 uendos.plugin.json（id / version / runtime / asserts / env / capabilities / methods）。`);
+}
+
+function cmdPluginList(flags) {
+  const { cfg } = loadConfig(flags);
+  const dir = projectDir(flags);
+  const names = cfg.plugins || [];
+  if (!names.length) {
+    log('· 配置里没有插件（uendos plugin add <包名>）');
+    return;
+  }
+  const rows = names.map((id) => {
+    const m = installedManifest(dir, id);
+    if (!m) return { id, installed: false };
+    const asserts = m.asserts || null;
+    const assertsExists = !!asserts && existsSync(join(dir, 'node_modules', ...id.split('/'), asserts));
+    return {
+      id,
+      installed: true,
+      version: m.version,
+      env: m.env || [],
+      capabilities: m.capabilities || [],
+      asserts,
+      assertsExists,
+    };
+  });
+  if (flags.json) return log(JSON.stringify(rows, null, 2));
+  log(`插件（声明 ${rows.length} 个）`);
+  for (const r of rows) {
+    if (!r.installed) {
+      log(`✗ ${r.id} 未安装（先 npm install ${r.id}）`);
+      continue;
+    }
+    const env = r.env.length ? r.env.join('/') : '任意';
+    const asserts = r.asserts ? `${r.asserts}${r.assertsExists ? '' : '（文件缺失）'}` : '未提供';
+    log(`✓ ${r.id}@${r.version}  环境 ${env}  能力 ${r.capabilities.join('/')}  断言 ${asserts}`);
+  }
+}
+
 function cmdPlugin(pos, flags) {
   const sub = pos[0];
+  if (!sub) return pluginHelp();
+  if (sub === 'list') return cmdPluginList(flags);
   if (!['add', 'remove', 'update'].includes(sub)) {
-    fail('用法：uendos plugin add <包名> | uendos plugin remove <包名> | uendos plugin update [<包名>...] [--spec <npm spec>]');
+    pluginHelp();
+    fail(`未知子命令：${sub}`);
   }
   const { cfg, path } = loadConfig(flags);
   const dir = projectDir(flags);
@@ -862,9 +916,10 @@ function help() {
   uendos add-end <id> --name <名称> --url <https://...>
   uendos sync [--check]          生成 shell/<brand>-shell.js 与 shell/picker.html（--check 供 CI 校验一致性）
   uendos doctor [--offline]      配置 / 产物 / 端地址 / 模板体检
-  uendos conformance [--json]    跑 39 项契约断言
+  uendos conformance [--json]    跑契约断言（内置 39 项 + 插件断言，能力被裁剪时跳过）
   uendos assets [--force]        按品牌色生成 assets/icon.png 与 splash.png
   uendos profile [--json]        查看 lite / standard / pro 三档默认 target 与能力集
+  uendos plugin list [--json]    列出配置中的插件、安装状态、环境与断言
   uendos plugin add <包名>       把已安装的插件写入配置并重新生成品牌桥
   uendos plugin remove <包名>    从配置移除插件并重新生成品牌桥
   uendos plugin update [<包名>...] [--spec <npm spec>]

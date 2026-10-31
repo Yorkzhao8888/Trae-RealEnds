@@ -472,6 +472,10 @@ export async function runConformance(shellFile, opts = {}) {
 
   // ---------------------------------------------------------------- 插件断言合并
   for (const p of opts.plugins || []) {
+    if (!p.assertions || !p.assertions.length) {
+      results.push(skip(`${p.id} · 一致性断言`, '插件未提供断言（可选）'));
+      continue;
+    }
     const blocked = allowCaps !== null && (p.capabilities || []).some((c) => !allowCaps.includes(c));
     for (const a of p.assertions || []) {
       if (!a || typeof a.name !== 'string' || typeof a.run !== 'function') {

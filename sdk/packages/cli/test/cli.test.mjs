@@ -226,6 +226,55 @@ test('能力白名单：裁剪能力位、拦住方法、conformance 跳过', ()
   }
 });
 
+test('plugin list 与断言缺省提示', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-plist-'));
+  const opts = { cwd: dir };
+  try {
+    run([
+      'init', 'plist-demo',
+      '--brand', 'plist-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'app',
+      '--dir', dir,
+    ], opts);
+
+    const src = fileURLToPath(new URL('../../plugin-fixture', import.meta.url));
+    const dst = join(dir, 'node_modules', '@uendos', 'plugin-fixture');
+    mkdirSync(join(dir, 'node_modules', '@uendos'), { recursive: true });
+    cpSync(src, dst, { recursive: true });
+    const mp = join(dst, 'uendos.plugin.json');
+    const mf = JSON.parse(readFileSync(mp, 'utf8'));
+    delete mf.asserts;
+    writeFileSync(mp, JSON.stringify(mf, null, 2) + '\n');
+
+    const cfg = JSON.parse(readFileSync(join(dir, 'uendos.config.json'), 'utf8'));
+    cfg.plugins = ['@uendos/plugin-fixture'];
+    writeFileSync(join(dir, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+    run(['sync'], opts);
+
+    const text = run(['plugin', 'list'], opts);
+    assert.match(text, /插件（声明 1 个）/);
+    assert.match(text, /✓ @uendos\/plugin-fixture@0\.1\.0/);
+    assert.match(text, /环境 capacitor\/electron\/mp\/web/);
+    assert.match(text, /断言 未提供/);
+
+    const rows = JSON.parse(run(['plugin', 'list', '--json'], opts));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].installed, true);
+    assert.equal(rows[0].asserts, null);
+    assert.deepEqual(rows[0].capabilities, ['printer']);
+
+    assert.match(run(['doctor', '--offline'], opts), /未提供断言/);
+    const conf = run(['conformance'], opts);
+    assert.match(conf, /未提供断言/);
+    assert.match(conf, /\d+ 通过 \/ 1 跳过 \/ 0 失败/);
+
+    assert.match(run(['plugin'], opts), /uendos plugin list \[--json\]/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('插件：注册进品牌桥、doctor 体检、断言合并', () => {
   const src = fileURLToPath(new URL('../../plugin-fixture', import.meta.url));
   const dst = join(DIR, 'node_modules', '@uendos', 'plugin-fixture');
