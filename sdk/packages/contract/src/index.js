@@ -5,7 +5,7 @@
  * （@uendos/conformance）都以本文件为准；改契约先改这里，再改实现。
  */
 
-export const CONTRACT_VERSION = '0.4.0';
+export const CONTRACT_VERSION = '0.5.0';
 export const SCHEMA_VERSION = 1;
 
 /** 能力矩阵：键名固定，值由运行时按环境计算（✓ / ◐ / ─ / web） */

@@ -40,7 +40,7 @@ test('init 生成配置、品牌桥与三套模板', () => {
   assert.deepEqual(cfg.targets, ['app', 'pc', 'mp']);
   assert.deepEqual(Object.keys(cfg.ends).sort(), ['ep', 'hp']);
   assert.equal(cfg.launchMode, 'portal');
-  assert.match(cfg.contractVersion, /^0\.4\./);
+  assert.match(cfg.contractVersion, /^0\.5\./);
 
   const cap = JSON.parse(readFileSync(join(DIR, 'capacitor.config.json'), 'utf8'));
   assert.equal(cap.server.url, 'https://hp.acme.example.com/');

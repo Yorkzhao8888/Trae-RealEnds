@@ -1,4 +1,4 @@
-# 真实端壳契约 v0.4.0
+# 真实端壳契约 v0.5.0
 
 > 适用范围：`Trae-RealEnds` 内全部壳工程（App / 小程序 / PC / 浏览器兜底）。
 > 本文件是**唯一真相**：壳、H5、发行部署都以本文对齐。改契约先改本文，再改实现。
@@ -22,7 +22,7 @@
 
 | 字段 | 当前值 | 说明 |
 |---|---|---|
-| `contractVersion` | `0.4.0` | 本文版本，语义化 |
+| `contractVersion` | `0.5.0` | 本文版本，语义化 |
 | `shellVersion` | 各壳自报 | 壳内核版本 |
 | `appVersion` | 各壳自报 | 商店发版版本 |
 
@@ -111,7 +111,7 @@
 ```js
 window.dispatchEvent(new CustomEvent('shell:ready', {
   detail: {
-    contractVersion: '0.4.0',
+    contractVersion: '0.5.0',
     shellVersion: '0.1.0',
     appVersion: '0.1.0',
     brand: 'ziway',
@@ -434,3 +434,17 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 8. `uendos pack` 打包前强制 `sync --check`，保证嵌入桥里的插件运行时与配置一致；`uendos sync --check` 同时校验品牌桥与 `shell/picker.html`。
 9. CLI：`uendos plugin add <包名>`（预检已安装 + 声明合法 → 写配置 → `sync`）、`uendos plugin remove <包名>`（移除 → `sync`）；`doctor` 打印 `插件：N 个 · id@version` 与 `生效能力集：内置 18 项 + 插件 N 项（能力名）`。
 10. **插件「热更新」= 构建期升级**：`uendos plugin update [<包名>...] [--spec <npm spec>]` 执行 `npm install <包名>@latest`（`--spec` 可指定具体版本、tarball 或内网源）→ 重新校验声明与冲突 → `sync`；变更随壳包发布，`package-lock.json` 必须提交。**不提供运行时动态加载插件代码的通道**：桥里只存在构建时嵌入的 runtime，`Shell.plugins` 上报的只是已嵌入版本。
+
+---
+
+## 22. v0.5 变更（能力白名单 `caps.allow`）
+
+桥版本保持 `3`，契约版本 `0.5.0`；只新增配置与构建期裁剪，运行协议不变。
+
+1. 配置：`"caps": { "allow": ["share", "offlineQueue"] }`。`allow` 必须是当前 `profile` 能力与已声明插件能力的子集，**只能收窄、不能放宽**；不配置等于全量，空数组等于关闭全部可裁剪能力。
+2. 构建期生效：`sync` 把 `caps` 写入品牌桥；`sync` 与 `doctor` 对越界能力直接报错，`plugin add` 的预检同步覆盖。
+3. 运行时裁剪：能力矩阵键保留、值置 `─`（`Shell.capabilities`、`core.capabilities` 与握手 payload 同步反映）；被裁剪能力对应的方法返回 `E_UNSUPPORTED`，`message` 注明「能力未启用」。
+4. 插件能力同样可裁剪：按插件方法的命名空间判定，被裁剪时统一 `E_UNSUPPORTED`，插件 `detect(env)` 与版本上报不受影响。
+5. `conformance`：被裁剪能力对应的断言段记为 `跳过`（不再判失败），输出「通过 / 跳过 / 失败」三档；配置了 `caps` 时额外断言「白名单外能力值为 ─」「白名单外方法返回 `E_UNSUPPORTED`」。
+6. **口径**：这是构建期裁剪，不是权限边界；租户/角色授权仍由云根裁决。`profile` 同理。
+7. CLI：`uendos plugin list [--json]` 列出声明/安装状态/环境/断言；插件缺 `asserts` 时 `doctor` 提示一次（不判失败），`conformance` 记一条跳过。

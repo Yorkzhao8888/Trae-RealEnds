@@ -21,7 +21,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '0.4.0';
+  var CORE_VERSION = '0.5.0';
   var BRIDGE_VERSION = '3';
   var READY_TIMEOUT_MS = 1500;
 

@@ -22,16 +22,16 @@ sdk/
 
 ## 分发包
 
-0.4.0 分发包随 GitHub Release [`uendos-sdk-v0.4.0`](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/tag/uendos-sdk-v0.4.0) 发布：
+0.5.0 分发包随 GitHub Release [`uendos-sdk-v0.5.0`](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/tag/uendos-sdk-v0.5.0) 发布：
 
-- [BTOS-UendOS-SDK-0.4.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.4.0/BTOS-UendOS-SDK-0.4.0.zip)（184,422 B，SHA-256 `bd8edab7200461ebb0b85a11b966c12d4b4afedea5ad42c3dafbf63480018b4d`）
-- [BTOS-UendOS-SDK-0.4.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.4.0/BTOS-UendOS-SDK-0.4.0.tar.gz)（143,351 B，SHA-256 `4786bec25606a3b7a1222f79d411b40a5abb2d9168fba0626c84f26c5b23adc9`）
+- [BTOS-UendOS-SDK-0.5.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.5.0/BTOS-UendOS-SDK-0.5.0.zip)（191,854 B，SHA-256 `4c954194654c029895ff55bb1e806ea23eb34d772f65e5f03153c660cfe8f225`）
+- [BTOS-UendOS-SDK-0.5.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.5.0/BTOS-UendOS-SDK-0.5.0.tar.gz)（153,985 B，SHA-256 `960d32cf0e7bee32c8369fd6282d0d395cec61766e46fc1d48fbc473c65f8451`）
 
-> 0.4.0 包已在仓库 `dist/` 实测：解压后 `cd sdk && npm ci && npm test` 为 25/25，`init → doctor --offline → conformance（39/39）→ sync --check` 全过。
+> 0.5.0 包已在仓库 `dist/` 实测：解压后 `cd sdk && npm ci && npm test` 为 28/28，`init → doctor --offline → conformance → sync --check` 全过；`caps.allow` 示例为 27 通过 / 14 跳过 / 0 失败。
 
 解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md`、`docs/uendos-customization-v0.4.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
-> 仓库当前代码版本为 **0.4.0**（v0.4 M1 个性化主题、M2 入口编排、M3 插件注册、M4 插件构建期热更新）；分发包与代码同版本。
+> 仓库当前代码版本为 **0.5.0**（v0.5 M1 能力白名单 `caps.allow`、M2 插件体验 `plugin list`/断言提示、M3 发版）；分发包与代码同版本。
 
 首次接入请先读：[开发者接入指南（v0.3.1）](../docs/uendos-dev-onboarding-v0.3.1.md)，其中第 6 节是 launcher 与原生插件的真机验证步骤。
 
@@ -74,8 +74,9 @@ uendos sync --check              # CI 用：产物必须与配置一致
 | `uendos add-end <id>` | 增加一个端并重新生成桥 | `--name` `--url` |
 | `uendos sync` | 重新合成品牌桥与选择页 | `--check` 只校验不写，不一致时退出码 1 |
 | `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址 |
-| `uendos conformance` | 对品牌桥跑 39 项契约断言；配置了插件时合并插件断言，输出 `39 + N` | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
+| `uendos conformance` | 对品牌桥跑 39 项契约断言；配置了插件时合并插件断言，输出 `39 + N`；能力被裁剪时对应断言记为跳过 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
 | `uendos profile` | 查看 `lite/standard/pro` 三档默认 target 与能力集 | `--json` 输出机器可读结果 |
+| `uendos plugin list` | 列出配置中的插件：安装状态、版本、环境、能力、断言 | `--json` 输出机器可读结果 |
 | `uendos plugin add <包名>` | 把**已安装**的插件写入 `plugins` 并重新生成品牌桥（先预检声明合法） | `remove` 反向操作 |
 | `uendos plugin update [<包名>...]` | 构建期升级插件：`npm install <包名>@latest` → 重新校验 → `sync`；变更随壳包发布 | `--spec` 指定版本/tarball/内网源；不给包名则升级全部 |
 | `uendos assets` | 按主色与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732） | `--force` 覆盖已有图 |
@@ -96,7 +97,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
   "accent": "#4C8DFF",
   "statusBarStyle": "dark",
   "endKey": "acme.end",
-  "contractVersion": "0.3.2",
+  "contractVersion": "0.5.0",
   "profile": "standard",
   "targets": ["app", "pc"],
   "packageId": "com.acme.app",
@@ -128,6 +129,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
     "hp": { "name": "个人端", "url": "https://hp.acme.example.com/" },
     "ep": { "name": "企业端", "url": "https://ep.acme.example.com/" }
   },
+  "caps": { "allow": ["vibrate", "share", "network"] },
   "plugins": ["@acme/uendos-plugin-printer"]
 }
 ```
@@ -142,6 +144,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
 - `theme` 可选：`mode`（`light`/`dark`）+ `tokens`（颜色 `#RRGGBB`、`radius` 0–28、`fontScale` 0.9–1.2）；只作用于壳自有页面
 - `entry` 可选：选择页标题/副标题、`order` 顺序、`groups` 分组、`rememberLast` 是否记住上次端；只影响 launcher / 选择页
 - `plugins` 可选：已 `npm install` 的插件包名数组，去重；`profile=lite` 不允许插件
+- `caps.allow` 可选：能力白名单，只能收窄（⊆ 档位能力 ∪ 插件能力）；不配置为全量，空数组为全关
 
 ### 三档 profile
 
@@ -165,6 +168,13 @@ uendos sync --check              # CI 用：产物必须与配置一致
 - `entry.order` 决定展示顺序，未列出的端按配置顺序追加；`entry.groups` 只做分组展示，未分组的端排在分组之后。
 - `entry.rememberLast: false` 时既不自动跳转也不写 `endKey`，适合共用设备的门店场景。
 - 改完执行 `uendos sync` 即可，`doctor` 会打印 `端数 / 组数 / 顺序 / 是否记住`。配置契约见 [个性化壳方案 §2.2](../docs/uendos-customization-v0.4.md)。
+
+### 能力白名单（v0.5 M1）
+
+- `caps.allow` 只能收窄：越界能力会被 `sync` / `doctor` 直接拒绝，空数组表示关闭全部可裁剪能力。
+- 裁剪发生在构建期：能力矩阵键保留、值置 `─`，对应方法返回 `E_UNSUPPORTED`（`message` 注明原因）；未配置时与 v0.4 行为一致。
+- `uendos conformance` 会把被裁剪能力的断言记为「跳过」，输出 `通过 / 跳过 / 失败`；`doctor` 打印 `能力白名单：allow N 项 · 生效 X/Y`。
+- 边界：这是构建期裁剪，不是权限边界；租户/角色授权仍由云根校验。
 
 ### 插件（v0.4 M3）
 

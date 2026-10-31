@@ -1,6 +1,6 @@
 {
   "name": "@uendos/conformance",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "UendOS 一致性测试：对任意品牌桥跑契约断言（零依赖，Node 18+）",
   "main": "src/index.js",

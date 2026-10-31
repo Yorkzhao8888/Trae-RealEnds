@@ -220,6 +220,7 @@ M1/M2 可先交付（客户可自助）；M3/M4 已实现（`0.4.0` 分发包已
 
 ## 8. 版本记录
 
+- **v0.5 已实现（2026-10-31）**：L2 最后一块 `caps.allow` 落地——构建期裁剪能力位（值置 `─`）、白名单外方法返回 `E_UNSUPPORTED`，契约/schema/sync/doctor 校验“只能收窄”，conformance 对被裁剪断言记为跳过并提供 `通过 / 跳过 / 失败` 三档输出；同时补齐 `plugin list` 与断言缺省提示。桥版本 3 不变，契约/内核 `0.5.0`，测试 28/28，分发包 `BTOS-UendOS-SDK-0.5.0` 已出。详见 [`uendos-v0.5-plan.md`](./uendos-v0.5-plan.md)。
 - **M4 已实现（2026-10-31）**：新增 `uendos plugin update [<包名>...] [--spec <npm spec>]`——构建期升级插件（`npm install` → 重新校验 → `sync`），`--spec` 支持指定版本/tarball/内网源；明确「热更新 = 发壳包」，不提供运行时动态加载。测试覆盖 v0.1.0 → v0.2.0 升级与幂等「已是最新」。分发包 `BTOS-UendOS-SDK-0.4.0.zip` / `.tar.gz` 已生成并解压实测（`npm test` 25/25、conformance 39/39）。
 - **M3 已实现（2026-10-31）**：`plugins` 配置、`uendos.plugin.json` 与 `runtime.js` 构建期嵌入（`ShellCore.registerPlugin`）、`Shell.plugins` 与握手携带、能力按 `detect(env)` 回落、未激活方法 `E_UNSUPPORTED`、插件断言合并（`39 + N`）、`uendos plugin add/remove`、`pack` 前强制 `sync --check`；桥版本 3、契约 0.4.0；fixture 插件实测 44/44，测试 25/25。
 - **M2 已实现（2026-10-31）**：`entry`（标题/副标题/顺序/分组/记忆开关）、选择页改为 `sync` 生成的 `shell/picker.html` 并纳入 `sync --check`、`index.html` 改为跳转、`prepare:web` 复制选择页、`doctor` 打印入口摘要；测试 22/22。

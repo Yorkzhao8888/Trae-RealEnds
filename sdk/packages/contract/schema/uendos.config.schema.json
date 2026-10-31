@@ -14,7 +14,7 @@
     "accent": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" },
     "statusBarStyle": { "enum": ["dark", "light"] },
     "endKey": { "type": "string", "minLength": 1 },
-    "contractVersion": { "type": "string", "pattern": "^0\\.(3|4)(\\.[0-9]+)?$" },
+    "contractVersion": { "type": "string", "pattern": "^0\\.(3|4|5)(\\.[0-9]+)?$" },
     "launchMode": { "enum": ["portal", "launcher"] },
     "profile": { "enum": ["lite", "standard", "pro"] },
     "theme": {

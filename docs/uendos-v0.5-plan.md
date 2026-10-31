@@ -102,8 +102,8 @@
 | 里程碑 | 内容 | 验收标准 |
 |---|---|---|
 | M1 `caps.allow`（已实现） | 契约、schema、运行时 masking、`call()` 门禁、doctor、conformance skip | 裁剪后 `Shell.capabilities.share='─'`、`core.share` 返回 `E_UNSUPPORTED`；未配置时 39/39 不变 |
-| M2 插件体验 | `plugin list`、断言提示、帮助文案 | 两种输出格式正确；缺断言提示各出现一次且不判失败 |
-| M3 `0.5.0` | 版本、文档、出包、Release | 全新解压 `npm ci && npm test` 全绿；带 `caps` 示例工程 `doctor`/`conformance`/`sync --check` 全过 |
+| M2 插件体验（已实现） | `plugin list`、断言提示、帮助文案 | 两种输出格式正确；缺断言提示各出现一次且不判失败 |
+| M3 `0.5.0`（已实现） | 版本、文档、出包、Release | 全新解压 `npm ci && npm test` 全绿；带 `caps` 示例工程 `doctor`/`conformance`/`sync --check` 全过 |
 
 ## 6. 风险与对策
 
@@ -115,4 +115,4 @@
 
 ## 7. 版本记录
 
-- **v0.5（规划中）**：`caps.allow`、`plugin list`、断言缺省提示、帮助文案；桥版本 3 不变。
+- **v0.5（已实现，2026-10-31）**：`caps.allow` 构建期裁剪（值置 `─` + `E_UNSUPPORTED` 门禁）、`plugin list`、断言缺省提示、子命令帮助；桥版本 3 不变，契约/内核 `0.5.0`；测试 28/28，caps 示例 27 通过/14 跳过/0 失败；分发包 `BTOS-UendOS-SDK-0.5.0.zip`（191,854 B）/ `.tar.gz`（153,985 B）已出包并解压实测。

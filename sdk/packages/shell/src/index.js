@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const SHELL_VERSION = '0.4.0';
+export const SHELL_VERSION = '0.5.0';
 export const BRIDGE_VERSION = '3';
 
 const here = dirname(fileURLToPath(import.meta.url));
