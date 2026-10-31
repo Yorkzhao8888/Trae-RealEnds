@@ -185,6 +185,47 @@ test('doctor --offline 与 conformance 通过', () => {
   assert.match(conf, /39 通过 \/ 0 失败/);
 });
 
+test('能力白名单：裁剪能力位、拦住方法、conformance 跳过', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-caps-'));
+  const opts = { cwd: dir };
+  const write = (c) => writeFileSync(join(dir, 'uendos.config.json'), JSON.stringify(c, null, 2) + '\n');
+  try {
+    run([
+      'init', 'caps-demo',
+      '--brand', 'caps-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'app',
+      '--dir', dir,
+    ], opts);
+    const cfg = JSON.parse(readFileSync(join(dir, 'uendos.config.json'), 'utf8'));
+    cfg.caps = { allow: ['vibrate', 'network'] };
+    write(cfg);
+
+    assert.match(run(['sync'], opts), /已生成/);
+    assert.match(run(['sync', '--check'], opts), /产物一致/);
+    const bridge = readFileSync(join(dir, 'shell', 'caps-demo-shell.js'), 'utf8');
+    assert.match(bridge, /"caps": \{\n\s+"allow"/, 'caps 应写入运行时配置');
+
+    const doctor = run(['doctor', '--offline'], opts);
+    assert.match(doctor, /能力白名单：allow 2 项 · 生效/);
+    assert.match(doctor, /不是权限边界/);
+
+    const conf = run(['conformance'], opts);
+    assert.match(conf, /通过：\d+ 通过 \/ \d+ 跳过 \/ 0 失败/, '被裁剪能力对应的断言应跳过而非失败');
+
+    // 越界能力：sync 与 doctor 都要拒绝
+    cfg.caps = { allow: ['bogus'] };
+    write(cfg);
+    const capture = (args) => {
+      try { run(args, opts); return ''; } catch (e) { return `${e.message}\n${e.stdout || ''}\n${e.stderr || ''}`; }
+    };
+    assert.match(capture(['sync']), /能力白名单不合法/, 'sync 应拒绝越界能力');
+    assert.match(capture(['doctor', '--offline']), /未知能力/, 'doctor 应报未知能力');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('插件：注册进品牌桥、doctor 体检、断言合并', () => {
   const src = fileURLToPath(new URL('../../plugin-fixture', import.meta.url));
   const dst = join(DIR, 'node_modules', '@uendos', 'plugin-fixture');

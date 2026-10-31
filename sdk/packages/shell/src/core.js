@@ -203,6 +203,52 @@
     return cap;
   }
 
+  // ---------------------------------------------------------------- 能力白名单
+  // caps.allow 是构建期裁剪：只收窄能力位、拦住对应方法，不是权限边界（鉴权仍归云根）。
+  var CAP_METHODS = {
+    vibrate: ['core.vibrate'],
+    share: ['core.share'],
+    geolocation: ['core.location'],
+    push: ['core.push.request', 'core.push.token'],
+    statusBar: ['core.statusBar'],
+    splash: ['core.splash'],
+    network: ['core.net'],
+    offlineQueue: ['offline.enqueue', 'offline.flush', 'offline.list'],
+    'edge.storeRoot': ['edge.configure', 'edge.health', 'edge.lease', 'edge.commit', 'edge.snapshot'],
+  };
+  var allowCaps = null; // null = 不裁剪
+
+  function pluginCapabilityMap() {
+    var map = {};
+    for (var i = 0; i < PLUGIN_REGISTRY.list.length; i++) {
+      var item = PLUGIN_REGISTRY.list[i];
+      for (var j = 0; j < item.capabilities.length; j++) map[item.capabilities[j]] = true;
+    }
+    return map;
+  }
+
+  // 键保留、值置 ─：能力矩阵形状不变，握手与 core.capabilities 自动正确
+  function cutCapabilities(raw) {
+    if (allowCaps === null) return raw;
+    var builtin = buildCapabilities('web', {});
+    var pluginCaps = pluginCapabilityMap();
+    var out = {};
+    for (var k in raw) {
+      if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
+      var cuttable = Object.prototype.hasOwnProperty.call(builtin, k) || pluginCaps[k];
+      out[k] = cuttable && allowCaps.indexOf(k) < 0 ? '─' : raw[k];
+    }
+    return out;
+  }
+
+  function blockedCapability(method) {
+    if (allowCaps === null) return null;
+    for (var cap in CAP_METHODS) {
+      if (CAP_METHODS[cap].indexOf(method) >= 0) return allowCaps.indexOf(cap) < 0 ? cap : null;
+    }
+    return null;
+  }
+
   // ---------------------------------------------------------------- 网络状态
   function netState() {
     var on = navigator.onLine !== false;
@@ -652,8 +698,14 @@
   function err(code, method, message) { return { ok: false, code: code, method: method, message: message || '', at: nowMonotonic() }; }
 
   function call(method, args) {
+    var blocked = blockedCapability(method);
+    if (blocked) return Promise.resolve(err('E_UNSUPPORTED', method, '能力未启用：' + blocked));
     var p = PLUGIN_REGISTRY.methods[method];
     if (p) {
+      var ns = String(method).split('.')[0];
+      if (allowCaps !== null && allowCaps.indexOf(ns) < 0) {
+        return Promise.resolve(err('E_UNSUPPORTED', method, '能力未启用：' + ns));
+      }
       if (!p.plugin.active) return Promise.resolve(err('E_UNSUPPORTED', method));
       try {
         return Promise.resolve(p.fn(args || {})).then(function (r) {
@@ -818,7 +870,8 @@
       pItem.active = typeof pItem.def.detect === 'function' ? !!pItem.def.detect(state.env) : true;
     }
     state.platform = state.env === 'capacitor' ? window.Capacitor.getPlatform() : state.env;
-    state.capabilities = Object.assign(buildCapabilities(state.env, P), desktopCapabilities(), pluginCapabilities());
+    allowCaps = config && config.caps && Array.isArray(config.caps.allow) ? config.caps.allow : null;
+    state.capabilities = cutCapabilities(Object.assign(buildCapabilities(state.env, P), desktopCapabilities(), pluginCapabilities()));
 
     var Shell = {
       __core: true,

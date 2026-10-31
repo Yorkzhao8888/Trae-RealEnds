@@ -50,6 +50,7 @@ export function composeShellFile(cfg, opts = {}) {
     endKey: cfg.endKey,
     ends: cfg.ends,
     theme: cfg.theme,
+    caps: cfg.caps,
   };
   // 插件运行时在 create 之前注册：id 只来自配置，能力声明来自插件包
   const regs = (opts.plugins || []).map((p) =>

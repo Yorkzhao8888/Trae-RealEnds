@@ -371,6 +371,13 @@ function renderPicker(cfg) {
 export function syncProject(cfg, dir, { check = false } = {}) {
   const file = shellFileName(cfg);
   const plugins = resolvePlugins(cfg, dir);
+  const pluginCaps = [...new Set(plugins.flatMap((p) => p.manifest.capabilities))];
+  // 只在这里拦 caps 相关错误，避免把历史工程里其它宽松项（如 http 端地址）也一并拦掉
+  if (cfg.caps !== undefined) {
+    const capErrors = validateConfig(cfg, { allowHttp: true, capabilities: pluginCaps })
+      .errors.filter((e) => e.startsWith('caps'));
+    if (capErrors.length) fail(`能力白名单不合法：${capErrors.join('；')}`);
+  }
   const body = composeShellFile(cfg, { plugins });
   const out = join(dir, 'shell', file);
   const withPicker = (cfg.targets || []).includes('app');
@@ -543,7 +550,12 @@ async function cmdDoctor(flags) {
   let failed = 0;
   const report = (ok, msg) => { (ok ? okMark : badMark)(msg); if (!ok) failed++; };
 
-  const v = validateConfig(cfg, { allowHttp: !!flags['allow-http'] });
+  let pluginList = [];
+  let pluginError = '';
+  try { pluginList = resolvePlugins(cfg, dir); } catch (e) { pluginError = e.message; }
+  const pluginCaps = [...new Set(pluginList.flatMap((p) => p.manifest.capabilities))];
+
+  const v = validateConfig(cfg, { allowHttp: !!flags['allow-http'], capabilities: pluginCaps });
   report(v.ok, v.ok ? `配置合法（契约 ${cfg.contractVersion || CONTRACT_VERSION}）` : `配置错误：${v.errors.join('；')}`);
 
   try {
@@ -571,16 +583,28 @@ async function cmdDoctor(flags) {
   report(true, `入口：${entry.order.length} 个端 · ${entry.groups.length} 组 · 顺序 ${entry.order.join('→')} · 记住上次 ${entry.rememberLast ? '是' : '否'}`);
 
   if ((cfg.plugins || []).length) {
-    try {
-      const list = resolvePlugins(cfg, dir);
-      report(true, `插件：${list.length} 个 · ${list.map((p) => `${p.id}@${p.version}`).join('、')}`);
-      const caps = [...new Set(list.flatMap((p) => p.manifest.capabilities))];
-      report(true, `生效能力集：内置 ${CAPABILITIES.length} 项 + 插件 ${caps.length} 项（${caps.join('/')}）`);
-    } catch (e) {
-      report(false, `插件：${e.message}`);
+    if (pluginError) report(false, `插件：${pluginError}`);
+    else {
+      report(true, `插件：${pluginList.length} 个 · ${pluginList.map((p) => `${p.id}@${p.version}`).join('、')}`);
+      report(true, `生效能力集：内置 ${CAPABILITIES.length} 项 + 插件 ${pluginCaps.length} 项（${pluginCaps.join('/')}）`);
     }
   } else {
     log(`· 未配置插件（生效能力集：内置 ${CAPABILITIES.length} 项）`);
+  }
+
+  const allow = cfg.caps && Array.isArray(cfg.caps.allow) ? cfg.caps.allow : null;
+  if (allow === null) {
+    log('· 未配置能力白名单（全量）');
+  } else {
+    const baseCaps = (PROFILES[cfg.profile] && PROFILES[cfg.profile].capabilities) || CAPABILITIES;
+    const keptBuiltin = CAPABILITIES.filter((c) => allow.includes(c)).length;
+    const keptPlugin = pluginCaps.filter((c) => allow.includes(c));
+    const kept = baseCaps.filter((c) => allow.includes(c)).length + keptPlugin.length;
+    const total = baseCaps.length + pluginCaps.length;
+    log(`能力白名单：allow ${allow.length} 项 · 生效 ${kept}/${total}（内置 ${keptBuiltin}/${CAPABILITIES.length}` +
+      `${pluginCaps.length ? `，插件 ${keptPlugin.join('/') || '0 项'}` : ''}）`);
+    if (!allow.length) log('! caps.allow 为空：全部可裁剪能力已关闭');
+    log('  口径：构建期裁剪，不是权限边界；租户/角色授权仍由云根校验。');
   }
 
   for (const t of cfg.targets || []) {
@@ -627,14 +651,22 @@ async function cmdConformance(flags) {
   const plugins = [];
   if (cfg && (cfg.plugins || []).length) {
     for (const p of resolvePlugins(cfg, dir)) {
-      plugins.push({ id: p.id, assertions: p.assertsPath ? await loadAssertions(p) : [] });
+      plugins.push({
+        id: p.id,
+        capabilities: p.manifest.capabilities,
+        assertions: p.assertsPath ? await loadAssertions(p) : [],
+      });
     }
   }
-  const r = await runConformance(file, { plugins });
+  const r = await runConformance(file, { plugins, caps: cfg && cfg.caps ? cfg.caps.allow : undefined });
   if (flags.json) log(JSON.stringify(r, null, 2));
   else {
-    for (const x of r.results) log(`${x.ok ? '✓' : '✗'} ${x.name}${x.ok ? '' : ` — ${x.detail}`}`);
-    log(`\n${r.ok ? '通过' : '失败'}：${r.passed} 通过 / ${r.failed} 失败`);
+    for (const x of r.results) {
+      const mark = x.skipped ? '·' : x.ok ? '✓' : '✗';
+      log(`${mark} ${x.name}${x.ok || x.skipped ? '' : ` — ${x.detail}`}${x.skipped ? `（${x.detail}）` : ''}`);
+    }
+    const skip = r.skipped ? ` / ${r.skipped} 跳过` : '';
+    log(`\n${r.ok ? '通过' : '失败'}：${r.passed} 通过${skip} / ${r.failed} 失败`);
   }
   if (!r.ok) process.exitCode = 1;
 }

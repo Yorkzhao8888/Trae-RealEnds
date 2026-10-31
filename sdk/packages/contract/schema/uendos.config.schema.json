@@ -80,6 +80,17 @@
       }
     },
     "packageId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+$" },
+    "caps": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allow": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][A-Za-z0-9.-]*$" }
+        }
+      }
+    },
     "plugins": {
       "type": "array",
       "uniqueItems": true,

@@ -153,14 +153,30 @@ function mkRes(status, body) {
 
 const pass = (name, detail = '') => ({ name, ok: true, detail });
 const fail = (name, detail) => ({ name, ok: false, detail });
+const skip = (name, detail) => ({ name, ok: true, skipped: true, detail });
+
+let allowCaps = null; // 生效白名单；null = 未配置 caps（不裁剪）
+let sectionCaps = null; // 当前断言段所需能力（被裁剪时整段记为跳过）
 
 async function record(results, name, fn) {
+  if (allowCaps !== null && sectionCaps && !allowCaps.includes(sectionCaps)) {
+    results.push(skip(name, `能力未启用：${sectionCaps}`));
+    return;
+  }
   try {
     const r = await fn();
     results.push(r === true || r == null ? pass(name) : r);
   } catch (e) {
     results.push(fail(name, e && e.message));
   }
+}
+
+async function recordCap(results, name, cap, fn) {
+  if (allowCaps !== null && !allowCaps.includes(cap)) {
+    results.push(skip(name, `能力未启用：${cap}`));
+    return;
+  }
+  await record(results, name, fn);
 }
 
 /**
@@ -189,6 +205,8 @@ export async function runConformance(shellFile, opts = {}) {
   const h = createHarness(source, cfg);
   const results = [];
   const Shell = h.shell;
+  allowCaps = Array.isArray(opts.caps) ? opts.caps : null;
+  sectionCaps = null;
 
   await h.wait(20); // 等 shell:ready 一拍
 
@@ -305,11 +323,11 @@ export async function runConformance(shellFile, opts = {}) {
     const r = await Shell.call('shell.nope');
     if (r.ok || r.code !== 'E_UNSUPPORTED') throw new Error(`code=${r.code}`);
   });
-  await record(results, 'edge.configure 缺参返回 E_BAD_ARGS', async () => {
+  await recordCap(results, 'edge.configure 缺参返回 E_BAD_ARGS', 'edge.storeRoot', async () => {
     const r = await Shell.call('edge.configure', {});
     if (r.ok || r.code !== 'E_BAD_ARGS') throw new Error(`code=${r.code}`);
   });
-  await record(results, 'offline.enqueue 缺参返回 E_BAD_ARGS', async () => {
+  await recordCap(results, 'offline.enqueue 缺参返回 E_BAD_ARGS', 'offlineQueue', async () => {
     const r = await Shell.call('offline.enqueue', {});
     if (r.ok || r.code !== 'E_BAD_ARGS') throw new Error(`code=${r.code}`);
   });
@@ -327,6 +345,7 @@ export async function runConformance(shellFile, opts = {}) {
 
   // ---------------------------------------------------------------- 离线队列
   h.sandbox.navigator.onLine = false;
+  sectionCaps = 'offlineQueue';
   let idem = null;
   await record(results, 'enqueue 返回幂等键与计数', async () => {
     const r = await Shell.call('offline.enqueue', { url: 'https://demo.local/q', method: 'post', body: { n: 1 } });
@@ -382,6 +401,7 @@ export async function runConformance(shellFile, opts = {}) {
   });
 
   // ---------------------------------------------------------------- 店根适配
+  sectionCaps = 'edge.storeRoot';
   await record(results, '未配置店根时 edge.health 返回 E_UNSUPPORTED', async () => {
     const r = await Shell.call('edge.health');
     if (r.ok || r.code !== 'E_UNSUPPORTED') throw new Error(`code=${r.code}`);
@@ -412,9 +432,35 @@ export async function runConformance(shellFile, opts = {}) {
     h.setFetch(async () => mkRes(200, {}));
   });
 
+  sectionCaps = null;
+
+  // ---------------------------------------------------------------- 能力白名单
+  if (allowCaps !== null) {
+    await record(results, '白名单外的能力值回落为 ─', () => {
+      for (const c of CAPABILITIES) {
+        if (!allowCaps.includes(c) && Shell.capabilities[c] !== '─') {
+          throw new Error(`${c}=${Shell.capabilities[c]}`);
+        }
+      }
+    });
+    await record(results, '白名单外的方法返回 E_UNSUPPORTED', async () => {
+      const probes = {
+        vibrate: 'core.vibrate', share: 'core.share', geolocation: 'core.location',
+        statusBar: 'core.statusBar', splash: 'core.splash', network: 'core.net',
+        offlineQueue: 'offline.enqueue', 'edge.storeRoot': 'edge.health',
+      };
+      for (const [c, method] of Object.entries(probes)) {
+        if (allowCaps.includes(c)) continue;
+        const r = await Shell.call(method);
+        if (r.ok || r.code !== 'E_UNSUPPORTED') throw new Error(`${method} code=${r.code}`);
+      }
+    });
+  }
+
   // ---------------------------------------------------------------- 契约自洽
   await record(results, '生成配置通过契约校验', () => {
-    const v = validateConfig({ schemaVersion: 1, displayName: 'Demo', targets: ['web'], ...cfg });
+    const pluginCaps = [...new Set((opts.plugins || []).flatMap((p) => p.capabilities || []))];
+    const v = validateConfig({ schemaVersion: 1, displayName: 'Demo', targets: ['web'], ...cfg }, { capabilities: pluginCaps });
     if (!v.ok) throw new Error(v.errors.join('；'));
   });
   await record(results, 'runtimeConfig 字段齐全', () => {
@@ -426,9 +472,14 @@ export async function runConformance(shellFile, opts = {}) {
 
   // ---------------------------------------------------------------- 插件断言合并
   for (const p of opts.plugins || []) {
+    const blocked = allowCaps !== null && (p.capabilities || []).some((c) => !allowCaps.includes(c));
     for (const a of p.assertions || []) {
       if (!a || typeof a.name !== 'string' || typeof a.run !== 'function') {
         results.push(fail(`${p.id} · 断言格式`, '插件断言需为 { name, run(Shell) }'));
+        continue;
+      }
+      if (blocked) {
+        results.push(skip(`${p.id} · ${a.name}`, `能力未启用：${(p.capabilities || []).join('/')}`));
         continue;
       }
       await record(results, `${p.id} · ${a.name}`, () => a.run(Shell));
@@ -436,5 +487,6 @@ export async function runConformance(shellFile, opts = {}) {
   }
 
   const failed = results.filter((r) => !r.ok).length;
-  return { ok: failed === 0, passed: results.length - failed, failed, results };
+  const skipped = results.filter((r) => r.skipped).length;
+  return { ok: failed === 0, passed: results.length - failed - skipped, skipped, failed, results };
 }

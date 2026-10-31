@@ -261,7 +261,8 @@ export function validatePluginManifest(m, opts = {}) {
 /**
  * 校验 uendos.config.json。返回 { ok, errors }，errors 是可直接展示的中文文案。
  * @param {object} cfg
- * @param {{allowHttp?: boolean}} [opts] 允许 http（仅限本地开发/内网店根）
+ * @param {{allowHttp?: boolean, capabilities?: string[]}} [opts] allowHttp 允许 http（仅限本地开发/内网店根）；
+ *   capabilities 额外允许的能力名（插件能力），与当前档位能力合并后校验 caps.allow
  */
 export function validateConfig(cfg, opts = {}) {
   const errors = [];
@@ -412,6 +413,31 @@ export function validateConfig(cfg, opts = {}) {
     }
   }
 
+  if (cfg.caps !== undefined) {
+    if (!isObj(cfg.caps)) errors.push('caps 必须是对象');
+    else {
+      for (const k of Object.keys(cfg.caps)) {
+        if (k !== 'allow') errors.push(`caps 不支持的键：${k}`);
+      }
+      if (cfg.caps.allow !== undefined) {
+        if (!Array.isArray(cfg.caps.allow)) errors.push('caps.allow 必须是能力名数组');
+        else {
+          // 只能收窄：allow 必须是当前档位能力 ∪ 插件能力的子集
+          const base = (PROFILES[cfg.profile] && PROFILES[cfg.profile].capabilities) || CAPABILITIES;
+          const allowed = [...new Set([...base, ...(Array.isArray(opts.capabilities) ? opts.capabilities : [])])];
+          const seen = new Set();
+          for (const cap of cfg.caps.allow) {
+            if (typeof cap !== 'string' || !cap.trim()) errors.push('caps.allow 含非法能力名');
+            else if (seen.has(cap)) errors.push(`caps.allow 能力重复：${cap}`);
+            else if (!allowed.includes(cap)) {
+              errors.push(`caps.allow 含未知能力：${cap}（当前可用：${allowed.join('/')}）`);
+            } else seen.add(cap);
+          }
+        }
+      }
+    }
+  }
+
   if (cfg.targets) {
     if (!Array.isArray(cfg.targets) || cfg.targets.some((t) => !TARGETS.includes(t))) {
       errors.push(`targets 只能是 ${TARGETS.join(' / ')} 的子集`);
@@ -438,5 +464,6 @@ export function runtimeConfig(cfg) {
     endKey: cfg.endKey,
     ends: cfg.ends,
     theme: cfg.theme,
+    caps: cfg.caps,
   };
 }

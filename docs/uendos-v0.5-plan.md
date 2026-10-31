@@ -101,7 +101,7 @@
 
 | 里程碑 | 内容 | 验收标准 |
 |---|---|---|
-| M1 `caps.allow` | 契约、schema、运行时 masking、`call()` 门禁、doctor、conformance skip | 裁剪后 `Shell.capabilities.share='─'`、`core.share` 返回 `E_UNSUPPORTED`；未配置时 39/39 不变 |
+| M1 `caps.allow`（已实现） | 契约、schema、运行时 masking、`call()` 门禁、doctor、conformance skip | 裁剪后 `Shell.capabilities.share='─'`、`core.share` 返回 `E_UNSUPPORTED`；未配置时 39/39 不变 |
 | M2 插件体验 | `plugin list`、断言提示、帮助文案 | 两种输出格式正确；缺断言提示各出现一次且不判失败 |
 | M3 `0.5.0` | 版本、文档、出包、Release | 全新解压 `npm ci && npm test` 全绿；带 `caps` 示例工程 `doctor`/`conformance`/`sync --check` 全过 |
 

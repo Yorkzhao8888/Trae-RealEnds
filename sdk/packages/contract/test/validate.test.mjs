@@ -252,12 +252,40 @@ test('配置 plugins：合法、去重、lite 拒绝', () => {
   assert.equal(validateConfig(cfg).ok, false, 'lite 档不得启用插件');
 });
 
+test('配置 caps.allow：只能收窄、未知能力与重复被拒', () => {
+  const cfg = base();
+  cfg.caps = { allow: ['share', 'vibrate'] };
+  assert.equal(validateConfig(cfg).ok, true, validateConfig(cfg).errors.join('；'));
+
+  cfg.caps = { allow: ['share', 'share'] };
+  assert.equal(validateConfig(cfg).ok, false, '重复能力应被拒');
+
+  cfg.caps = { allow: 'share' };
+  assert.equal(validateConfig(cfg).ok, false, 'allow 必须是数组');
+
+  cfg.caps = { allow: ['bogus'] };
+  assert.equal(validateConfig(cfg).ok, false, '未知能力应被拒');
+
+  cfg.caps = { deny: ['share'] };
+  assert.equal(validateConfig(cfg).ok, false, 'caps 不支持的键应被拒');
+
+  cfg.caps = { allow: ['printer'] };
+  assert.equal(validateConfig(cfg).ok, false, '未声明插件能力默认不可用');
+  assert.equal(validateConfig(cfg, { capabilities: ['printer'] }).ok, true, '插件能力应可通过 opts 放行');
+
+  cfg.profile = 'lite';
+  cfg.targets = ['app'];
+  cfg.caps = { allow: ['camera'] };
+  assert.equal(validateConfig(cfg).ok, false, 'lite 档不含 camera，不得出现在 allow');
+});
+
 test('runtimeConfig 只收敛运行时字段', () => {
   const rt = runtimeConfig(base());
   assert.deepEqual(Object.keys(rt).sort(), [
     'accent',
     'alias',
     'brand',
+    'caps',
     'endKey',
     'ends',
     'prefix',
