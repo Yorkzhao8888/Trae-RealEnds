@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <!-- 基础主题：白底 + 深色系统栏图标，与站点 --bg #FFFFFF 一致，冷启动后不闪色 -->
+    <!-- 基础主题：白底 + 深色系统栏图标，与站点底色 #FFFFFF 一致，冷启动后不闪色 -->
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="colorPrimary">@color/jechan_accent</item>
         <item name="colorPrimaryDark">@color/jechan_splash</item>
