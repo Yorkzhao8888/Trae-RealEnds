@@ -21,8 +21,8 @@ sdk/
 
 ## 分发包
 
-- [BTOS-UendOS-SDK-0.3.1.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.1/BTOS-UendOS-SDK-0.3.1.zip)（85,385 B，SHA-256 `dcfa07b839d36e05d63f532f8d68dbea12bc2b3c5b23ef73138fc80bc7bf0146`）
-- [BTOS-UendOS-SDK-0.3.1.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.1/BTOS-UendOS-SDK-0.3.1.tar.gz)（58,553 B，SHA-256 `3afcf14f3acef29fa07daf029d8ea3edea1d45cbea1aa0b0f36668b1ba943df3`）
+- [BTOS-UendOS-SDK-0.3.2.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.2/BTOS-UendOS-SDK-0.3.2.zip)（100,025 B，SHA-256 `5048215aa34836597043292cf8bcc4cacc228f71aeecee1d92f5877e39dc9d85`）
+- [BTOS-UendOS-SDK-0.3.2.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.3.2/BTOS-UendOS-SDK-0.3.2.tar.gz)（70,968 B，SHA-256 `2ddced149b8247c167b3990dfa3677dd80cf340496ad5a34296c9a74c8812225`）
 
 解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
@@ -63,11 +63,12 @@ uendos sync --check              # CI 用：产物必须与配置一致
 
 | 命令 | 作用 | 关键参数 |
 |---|---|---|
-| `uendos init <项目名>` | 建工程：拷模板 → 替换占位符 → 写配置 → 生成品牌桥与 `assets/` 源图 | `--brand` `--ends` `--targets` `--app-id` `--display` `--accent` `--mp-appid` `--launch-mode` `--dir` |
+| `uendos init <项目名>` | 建工程：拷模板 → 替换占位符 → 写配置 → 生成品牌桥与 `assets/` 源图 | `--brand` `--ends` `--profile` `--targets` `--app-id` `--display` `--accent` `--mp-appid` `--launch-mode` `--dir` |
 | `uendos add-end <id>` | 增加一个端并重新生成桥 | `--name` `--url` |
 | `uendos sync` | 重新合成品牌桥 | `--check` 只校验不写，不一致时退出码 1 |
 | `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址 |
 | `uendos conformance` | 对品牌桥跑 39 项契约断言 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
+| `uendos profile` | 查看 `lite/standard/pro` 三档默认 target 与能力集 | `--json` 输出机器可读结果 |
 | `uendos assets` | 按主色与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732） | `--force` 覆盖已有图 |
 | `uendos pack` | 本地打包（缺 `node_modules` / `android` / `ios` 时自动安装与生成平台工程） | `--target app`（Debug APK；`--release` 走签名）、`ios`（需 macOS）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传） |
 | `uendos publish` | 计算 SHA-256/大小并回写商店清单 | `--file` `--item` `--manifest` `--url` 或 `--download-dir` `--version` `--status`（默认 `beta`） |
@@ -86,8 +87,9 @@ uendos sync --check              # CI 用：产物必须与配置一致
   "accent": "#4C8DFF",
   "statusBarStyle": "dark",
   "endKey": "acme.end",
-  "contractVersion": "0.3.1",
-  "targets": ["app", "pc", "mp"],
+  "contractVersion": "0.3.2",
+  "profile": "standard",
+  "targets": ["app", "pc"],
   "packageId": "com.acme.app",
   "launchMode": "portal",
   "ends": {
@@ -103,6 +105,17 @@ uendos sync --check              # CI 用：产物必须与配置一致
 - `ends` 至少 1 个，`id` 2–4 位小写字母；`url` 必须是 https（`--allow-http` 仅供内网联调）
 - `targets` 取值 `app` / `pc` / `mp`；`contractVersion` 主版本必须与 SDK 当前契约一致
 - `launchMode` 为 `portal`（默认，启动直进主端）或 `launcher`（本机选择页，记住上次所选端）
+- `profile` 为 `lite` / `standard` / `pro`，决定默认 target 与声明的端能力集；不是权限边界
+
+### 三档 profile
+
+| 档位 | 默认 target | 允许 target | 端能力 |
+|---|---|---|---|
+| `lite` 轻量版 | `app` | `app` | 9/18（无推送/相机/店根/离线队列） |
+| `standard` 标准版 | `app/pc` | `app/pc/mp` | 16/18（无订阅消息/店根） |
+| `pro` 增强版 | `app/pc/mp` | `app/pc/mp` | 18/18 |
+
+`uendos init <项目名> --profile lite` 会自动只出 App；显式给不允许的 target 会被拒绝。完整边界与分发建议见 [版本档位与能力矩阵](../docs/uendos-editions.md)。
 
 ## 三套模板
 
@@ -154,7 +167,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
     "$UENDOS" sync --check
 ```
 
-`npm test` 先跑运行时源一致性（`check-core`），再跑 15 项测试：契约校验 9 项、CLI 端到端 5 项（init → launcher → add-end → doctor → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
+`npm test` 先跑运行时源一致性（`check-core`），再跑 16 项测试：契约校验 9 项、CLI 端到端 6 项（init → profile → launcher → add-end → doctor → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
 
 ## 打包与签名
 
