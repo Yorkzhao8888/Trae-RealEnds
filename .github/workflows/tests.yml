@@ -1,0 +1,71 @@
+name: tests
+
+on:
+  push:
+    paths:
+      - 'edge-store/**'
+      - 'cloud-root/**'
+      - 'sdk/**'
+      - 'shell-core/src/core.js'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    paths:
+      - 'edge-store/**'
+      - 'cloud-root/**'
+      - 'sdk/**'
+      - 'shell-core/src/core.js'
+      - '.github/workflows/tests.yml'
+  workflow_dispatch:
+
+jobs:
+  edge-store:
+    name: edge-store（店根）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: npm test
+        working-directory: edge-store
+        run: npm test
+
+  cloud-root:
+    name: cloud-root（云根）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: npm test
+        working-directory: cloud-root
+        run: npm test
+
+  sdk:
+    name: sdk（UendOS）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: sdk/package-lock.json
+      - name: 安装 workspace
+        working-directory: sdk
+        run: npm ci
+      - name: 运行时源一致 + 契约自测
+        working-directory: sdk
+        run: npm test && npm run check
+      - name: 端到端：init → doctor → conformance → sync --check
+        working-directory: sdk
+        run: |
+          set -e
+          UENDOS="$GITHUB_WORKSPACE/sdk/node_modules/.bin/uendos"
+          "$UENDOS" init ci-smoke --brand ci-smoke \
+            --ends "hp:个人端:https://hp.example.com/" --targets app,pc,mp --dir /tmp/ci-smoke
+          cd /tmp/ci-smoke
+          "$UENDOS" doctor --offline
+          "$UENDOS" conformance
+          "$UENDOS" sync --check
