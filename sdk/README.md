@@ -121,12 +121,18 @@ npx uendos sync --check          # CI 用：产物必须与配置一致
 ```yaml
 - uses: actions/setup-node@v4
   with: { node-version: '24' }
-- run: cd sdk && npm install && npm test && npm run check
-- run: cd sdk && npx uendos doctor --offline
-- run: npx uendos sync --check && npx uendos conformance
+- run: cd sdk && npm ci && npm test && npm run check
+- run: |
+    UENDOS="$PWD/sdk/node_modules/.bin/uendos"
+    "$UENDOS" init ci-smoke --brand ci-smoke --ends "hp:个人端:https://hp.example.com/" \
+      --targets app,pc,mp --dir /tmp/ci-smoke
+    cd /tmp/ci-smoke
+    "$UENDOS" doctor --offline
+    "$UENDOS" conformance
+    "$UENDOS" sync --check
 ```
 
-`npm test` 跑运行时源码一致性 + conformance 自测；`npm run check` 校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。
+`npm test` 跑运行时源一致性（`check-core`）+ conformance 自测；`npm run check` 再单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
 
 ## 发布
 
