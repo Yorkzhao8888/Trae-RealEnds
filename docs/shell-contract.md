@@ -1,4 +1,4 @@
-# 真实端壳契约 v0.3.1
+# 真实端壳契约 v0.3.2
 
 > 适用范围：`Trae-RealEnds` 内全部壳工程（App / 小程序 / PC / 浏览器兜底）。
 > 本文件是**唯一真相**：壳、H5、发行部署都以本文对齐。改契约先改本文，再改实现。
@@ -22,7 +22,7 @@
 
 | 字段 | 当前值 | 说明 |
 |---|---|---|
-| `contractVersion` | `0.3.1` | 本文版本，语义化 |
+| `contractVersion` | `0.3.2` | 本文版本，语义化 |
 | `shellVersion` | 各壳自报 | 壳内核版本 |
 | `appVersion` | 各壳自报 | 商店发版版本 |
 
@@ -111,7 +111,7 @@
 ```js
 window.dispatchEvent(new CustomEvent('shell:ready', {
   detail: {
-    contractVersion: '0.3.1',
+    contractVersion: '0.3.2',
     shellVersion: '0.1.0',
     appVersion: '0.1.0',
     brand: 'ziway',
@@ -370,3 +370,21 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 2. **品牌资源**：`uendos init` / `uendos assets` 按 `accent` 与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732），首次 `pack` 通过 `@capacitor/assets` 展开到 Android/iOS 各尺寸，之后不覆盖自定义图标。
 3. **打包**：`pack --target app` 自动补齐 `npm install` 与 `cap add android`；`--release` 生成 `android/uendos-signing.gradle`，密码只从 `UENDOS_KEYSTORE_PASSWORD` / `UENDOS_KEY_PASSWORD` 读取，不落盘。`pack --target ios` 需 macOS，`--release` 产出 `.xcarchive`。
 4. **远程端白名单**：`capacitor.config.json` 的 `server.allowNavigation` 由 `ends` 的 host 自动生成，避免远程端被 WebView 拦截。
+
+---
+
+## 18. v0.3.2 变更（版本档位）
+
+运行时不改，新增构建期档位 `profile`，同一套云根与壳代码按档裁剪产物与声明能力：
+
+| 档位 | 默认 target | 允许 target | 声明能力 |
+|---|---|---|---|
+| `lite` 轻量版 | `app` | `app` | 9/18（无 push/camera/biometric/offlineQueue/deeplink/edge.storeRoot） |
+| `standard` 标准版 | `app/pc` | `app/pc/mp` | 16/18（无 subscribeMsg/edge.storeRoot） |
+| `pro` 增强版 | `app/pc/mp` | `app/pc/mp` | 18/18 |
+
+1. `uendos.config.json` 新增可选 `profile`；`contractVersion` 升为 `0.3.2`。
+2. `uendos init --profile` 决定默认 target 与默认 `launchMode`；`lite` 不允许 `pc/mp`。
+3. `uendos profile [--json]` 输出三档矩阵；`uendos doctor` 校验档位与 target 是否匹配。
+4. **边界**：`profile` 只裁剪构建期产物与声明能力，不是权限边界；租户/角色权限仍由云根校验。业务规则不得因档位分叉。
+5. 设计说明与分发建议见 [`uendos-editions.md`](./uendos-editions.md)。

@@ -11,7 +11,7 @@ import { basename, dirname, join, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { CONTRACT_VERSION, validateConfig } from '../../contract/src/index.js';
+import { CAPABILITIES, CONTRACT_VERSION, PROFILES, PROFILE_NAMES, validateConfig } from '../../contract/src/index.js';
 import { composeShellFile, shellFileName, SHELL_VERSION } from '../../shell/src/index.js';
 import { runConformance } from '../../conformance/src/index.js';
 import { assetFiles } from './assets.mjs';
@@ -238,9 +238,16 @@ function cmdInit(pos, flags) {
   const name = pos[0] || flags.name;
   if (!name) fail('用法：uendos init <项目名> --brand <brand> --ends "hp:个人端:https://...，ep:企业端:https://..." --targets app');
   const brand = flags.brand || name.toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 12);
-  const targets = String(flags.targets || 'app').split(',').map((s) => s.trim()).filter(Boolean);
+  const profile = flags.profile || 'pro';
+  const profileDef = PROFILES[profile];
+  if (!profileDef) fail(`未知 profile：${profile}（${PROFILE_NAMES.join(' / ')}）`);
+  const targets = String(flags.targets || (flags.profile ? profileDef.targets.join(',') : 'app'))
+    .split(',').map((s) => s.trim()).filter(Boolean);
   for (const t of targets) {
     if (!['app', 'pc', 'mp'].includes(t)) fail(`未知 target：${t}（app / pc / mp）`);
+    if (!profileDef.allowedTargets.includes(t)) {
+      fail(`profile=${profile} 不允许 target=${t}（允许：${profileDef.allowedTargets.join('/')}）`);
+    }
     if (!existsSync(join(TEMPLATES, t))) fail(`模板缺失：${t}`);
   }
   const ends = parseEnds(flags.ends || `hp:个人端:https://hp.${brand}.example.com/`);
@@ -250,7 +257,7 @@ function cmdInit(pos, flags) {
   const appId = flags['app-id'] || `com.uendos.${brand.replace(/-/g, '')}`;
   const displayName = flags.display || ends[Object.keys(ends)[0]].name;
   const accent = flags.accent || '#4C8DFF';
-  const launchMode = flags['launch-mode'] || 'portal';
+  const launchMode = flags['launch-mode'] || profileDef.launchMode;
   if (!['portal', 'launcher'].includes(launchMode)) fail(`未知 launch-mode：${launchMode}（portal / launcher）`);
   // 品牌名允许连字符，但别名必须是标识符：acme → acmeOS，ci-smoke → ciSmokeOS
   const aliasBase = brand.replace(/-+([a-z0-9])/g, (_, c) => c.toUpperCase());
@@ -264,6 +271,7 @@ function cmdInit(pos, flags) {
     statusBarStyle: 'dark',
     endKey: `${brand}.end`,
     contractVersion: CONTRACT_VERSION,
+    profile,
     targets,
     packageId: appId,
     launchMode,
@@ -300,7 +308,7 @@ function cmdInit(pos, flags) {
   }
 
   okMark(`工程已创建：${dir}`);
-  okMark(`品牌 ${brand} · 端 ${Object.keys(ends).join('/')} · target ${targets.join('/')} · 启动 ${launchMode}`);
+  okMark(`品牌 ${brand} · 端 ${Object.keys(ends).join('/')} · ${profileDef.label}（${profile}） · target ${targets.join('/')} · 启动 ${launchMode}`);
   const out = syncProject(cfg, dir);
   okMark(`品牌桥已生成：${out}（${(readFileSync(out, 'utf8').length / 1024).toFixed(1)} KB）`);
   log('\n下一步：cd ' + dir + ' && npm install && uendos doctor');
@@ -347,6 +355,17 @@ async function cmdDoctor(flags) {
     report(true, `品牌桥与配置一致：shell/${basename(out)}`);
   } catch (e) {
     report(false, e.message);
+  }
+
+  if (cfg.profile) {
+    const p = PROFILES[cfg.profile];
+    report(!!p, p ? `版本档位：${cfg.profile}（${p.label}）` : `未知 profile：${cfg.profile}`);
+    if (p) {
+      const bad = (cfg.targets || []).filter((t) => !p.allowedTargets.includes(t));
+      report(bad.length === 0, bad.length ? `档位不允许的 target：${bad.join('/')}` : `档位 target 合法：${(cfg.targets || []).join('/')}`);
+    }
+  } else {
+    log('· 未设置 profile（旧配置按 pro 能力全集处理）');
   }
 
   for (const t of cfg.targets || []) {
@@ -400,6 +419,20 @@ async function cmdConformance(flags) {
     log(`\n${r.ok ? '通过' : '失败'}：${r.passed} 通过 / ${r.failed} 失败`);
   }
   if (!r.ok) process.exitCode = 1;
+}
+
+// ---------------------------------------------------------------- profile
+function cmdProfile(flags) {
+  if (flags.json) return log(JSON.stringify(PROFILES, null, 2));
+  log('档位         默认 target        允许 target        端能力');
+  for (const name of PROFILE_NAMES) {
+    const p = PROFILES[name];
+    const denied = CAPABILITIES.filter((c) => !p.capabilities.includes(c));
+    log(`${name.padEnd(10)} ${p.targets.join('/').padEnd(18)} ${p.allowedTargets.join('/').padEnd(18)} ${p.capabilities.length}/${CAPABILITIES.length}` +
+      (denied.length ? `（不含：${denied.join('/')}）` : '（全量）'));
+  }
+  log('\n用法：uendos init <项目名> --profile lite|standard|pro');
+  log('说明：profile 只裁剪构建期产物与默认能力集，不是权限边界；租户/角色权限仍由云根校验。');
 }
 
 // ---------------------------------------------------------------- assets
@@ -518,10 +551,12 @@ function help() {
   uendos doctor [--offline]      配置 / 产物 / 端地址 / 模板体检
   uendos conformance [--json]    跑 39 项契约断言
   uendos assets [--force]        按品牌色生成 assets/icon.png 与 splash.png
+  uendos profile [--json]        查看 lite / standard / pro 三档默认 target 与能力集
   uendos pack --target <app|ios|pc|mp> [--release]
   uendos publish --file <包> --item <apps.json 条目> --manifest <清单> --url <下载地址> [--status beta]
 
-init 选项：--launch-mode portal|launcher（默认 portal）
+init 选项：--profile lite|standard|pro（默认 pro，决定默认 target 与端能力集）
+           --launch-mode portal|launcher（默认 portal）
   portal   启动直接进主端（原生插件可用）
   launcher 先落本机选择页，记住上次所选端（?picker=1 强制回选择页）
 
@@ -547,6 +582,7 @@ export async function main(argv) {
     }
     case 'doctor': return cmdDoctor(flags);
     case 'conformance': return cmdConformance(flags);
+    case 'profile': return cmdProfile(flags);
     case 'assets': return cmdAssets(flags);
     case 'pack': return cmdPack(flags);
     case 'publish': return cmdPublish(flags);

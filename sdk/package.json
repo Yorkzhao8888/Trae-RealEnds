@@ -2,12 +2,16 @@
   "name": "uendos-sdk",
   "private": true,
   "type": "module",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "UendOS · 真实端壳开发者 SDK（契约 + 运行时 + CLI + 模板 + 一致性测试）",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "test": "node packages/shell/scripts/check-core.mjs && node --test",
     "check": "node packages/shell/scripts/check-core.mjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

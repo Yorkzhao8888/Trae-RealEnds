@@ -1,10 +1,18 @@
 {
   "name": "uendos",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
-  "description": "UendOS 壳工程 CLI：init / add-end / sync / doctor / conformance / assets / pack / publish",
-  "bin": { "uendos": "bin/uendos.mjs" },
+  "description": "UendOS 壳工程 CLI：init / add-end / sync / doctor / conformance / profile / assets / pack / publish",
+  "bin": {
+    "uendos": "bin/uendos.mjs"
+  },
   "main": "src/cli.mjs",
-  "files": ["bin", "src", "templates"],
-  "engines": { "node": ">=18" }
+  "files": [
+    "bin",
+    "src",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
 }

@@ -68,6 +68,28 @@ test('init 生成配置、品牌桥与三套模板', () => {
   assert.equal(rt.shellFile, 'demo-acme-shell.js');
 });
 
+test('profile=lite：默认只出 App、portal 启动，档位信息可查询', () => {
+  const dir = join(DIR, 'lite-demo');
+  run([
+    'init', 'lite-demo',
+    '--brand', 'lite-demo',
+    '--ends', 'hp:个人端:https://hp.acme.example.com/',
+    '--profile', 'lite',
+    '--dir', dir,
+  ]);
+
+  const cfg = JSON.parse(readFileSync(join(dir, 'uendos.config.json'), 'utf8'));
+  assert.equal(cfg.profile, 'lite');
+  assert.deepEqual(cfg.targets, ['app']);
+  assert.equal(cfg.launchMode, 'portal');
+  assert.ok(!existsSync(join(dir, 'main.js')), 'lite 不应生成 PC 模板');
+
+  const out = JSON.parse(run(['profile', '--json']));
+  assert.deepEqual(Object.keys(out).sort(), ['lite', 'pro', 'standard']);
+  assert.equal(out.lite.capabilities.length, 9);
+  assert.equal(out.pro.capabilities.length, 18);
+});
+
 test('launcher 模式：不固定主端 URL，选择页可记住所选端', () => {
   const dir = join(DIR, 'launcher-demo');
   run([

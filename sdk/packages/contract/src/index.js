@@ -5,7 +5,7 @@
  * （@uendos/conformance）都以本文件为准；改契约先改这里，再改实现。
  */
 
-export const CONTRACT_VERSION = '0.3.1';
+export const CONTRACT_VERSION = '0.3.2';
 export const SCHEMA_VERSION = 1;
 
 /** 能力矩阵：键名固定，值由运行时按环境计算（✓ / ◐ / ─ / web） */
@@ -90,6 +90,38 @@ export const ERRORS = {
 
 export const TARGETS = ['app', 'pc', 'mp', 'web'];
 
+const LITE_CAPS = ['vibrate', 'share', 'geolocation', 'statusBar', 'splash', 'backButton', 'openExternal', 'network', 'safeArea'];
+
+/**
+ * 版本档位：同一套云根与壳代码，按档位裁剪「端能力 + 默认产物」。
+ * 注意：profile 是构建期策略，不是权限边界；权限必须由云根按租户/角色校验。
+ */
+export const PROFILES = {
+  lite: {
+    label: '轻量版',
+    targets: ['app'],
+    allowedTargets: ['app'],
+    launchMode: 'portal',
+    capabilities: LITE_CAPS,
+  },
+  standard: {
+    label: '标准版',
+    targets: ['app', 'pc'],
+    allowedTargets: ['app', 'pc', 'mp'],
+    launchMode: 'portal',
+    capabilities: [...LITE_CAPS, 'push', 'haptics', 'files', 'camera', 'biometric', 'offlineQueue', 'deeplink'],
+  },
+  pro: {
+    label: '增强版',
+    targets: ['app', 'pc', 'mp'],
+    allowedTargets: ['app', 'pc', 'mp'],
+    launchMode: 'portal',
+    capabilities: [...CAPABILITIES],
+  },
+};
+
+export const PROFILE_NAMES = Object.keys(PROFILES);
+
 const RE_URL = /^(https?:\/\/[^\s]+)$/;
 const RE_BRAND = /^[a-z][a-z0-9-]{1,15}$/;
 const RE_END_ID = /^[a-z]{2,4}$/;
@@ -130,6 +162,17 @@ export function validateConfig(cfg, opts = {}) {
   }
   if (cfg.launchMode && !['portal', 'launcher'].includes(cfg.launchMode)) {
     errors.push('launchMode 只能是 portal 或 launcher');
+  }
+  if (cfg.profile) {
+    const p = PROFILES[cfg.profile];
+    if (!p) errors.push(`profile 只能是 ${PROFILE_NAMES.join(' / ')}`);
+    else {
+      for (const t of cfg.targets || []) {
+        if (!p.allowedTargets.includes(t)) {
+          errors.push(`profile=${cfg.profile} 不允许 target=${t}（允许：${p.allowedTargets.join('/')}）`);
+        }
+      }
+    }
   }
 
   if (!isObj(cfg.ends) || !Object.keys(cfg.ends).length) {
