@@ -96,8 +96,8 @@ cd btos-app-store && python3 -m http.server 8099
 # 开发者 SDK：一致性测试 + 源同步校验
 cd sdk && npm install && npm test && npm run check
 # 新工程：init → doctor → conformance → sync --check
-cd sdk && npx uendos init acme --brand acme --ends "hp:个人端:https://hp.acme.example.com/" --targets app,pc,mp --dir /tmp/acme
-cd /tmp/acme && npx uendos doctor --offline && npx uendos conformance && npx uendos sync --check
+cd sdk && node packages/cli/bin/uendos.mjs init acme --brand acme --ends "hp:个人端:https://hp.acme.example.com/" --targets app,pc,mp --dir /tmp/acme
+cd /tmp/acme && node /workspace/Trae-RealEnds/sdk/packages/cli/bin/uendos.mjs doctor --offline && node /workspace/Trae-RealEnds/sdk/packages/cli/bin/uendos.mjs conformance && node /workspace/Trae-RealEnds/sdk/packages/cli/bin/uendos.mjs sync --check
 ```
 
 ## 6. 待办与外部依赖

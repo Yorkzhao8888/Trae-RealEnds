@@ -26,12 +26,17 @@ sdk/
 
 解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
+首次接入请先读：[开发者接入指南（v0.3.1）](../docs/uendos-dev-onboarding-v0.3.1.md)，其中第 6 节是 launcher 与原生插件的真机验证步骤。
+
 ## 快速开始
 
 ```bash
-cd sdk && npm install            # 安装 workspace，得到 npx uendos
+cd sdk && npm install
 
-npx uendos init acme \
+# SDK 未发布到 npm：用 alias 让 uendos 在任意目录可用
+alias uendos="node $(pwd)/packages/cli/bin/uendos.mjs"
+
+uendos init acme \
   --brand acme \
   --ends "hp:个人端:https://hp.acme.example.com/,ep:企业端:https://ep.acme.example.com/" \
   --targets app,pc,mp \
@@ -40,9 +45,9 @@ npx uendos init acme \
   --dir ./acme
 
 cd acme
-npx uendos doctor                # 配置 / 产物 / 端可达性 / 模板体检
-npx uendos conformance           # 39 项契约断言
-npx uendos sync --check          # CI 用：产物必须与配置一致
+uendos doctor                    # 配置 / 产物 / 端可达性 / 模板体检
+uendos conformance               # 39 项契约断言
+uendos sync --check              # CI 用：产物必须与配置一致
 ```
 
 产物：
