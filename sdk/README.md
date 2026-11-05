@@ -22,7 +22,7 @@ sdk/
 
 ## 分发包
 
-0.6.0 分发包已生成（GitHub Release `uendos-sdk-v0.6.0` 待推送）：
+0.6.0 分发包随 GitHub Release [`uendos-sdk-v0.6.0`](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/tag/uendos-sdk-v0.6.0) 发布：
 
 - [BTOS-UendOS-SDK-0.6.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.6.0/BTOS-UendOS-SDK-0.6.0.zip)（214,427 B，SHA-256 `11eba27f4efeaa811c3fca5e6874618c832ac2fbb3c9a8f2de969f21b4f92576`）
 - [BTOS-UendOS-SDK-0.6.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.6.0/BTOS-UendOS-SDK-0.6.0.tar.gz)（173,091 B，SHA-256 `dfed51dcbe329d58f1849835b596e7c2a215489dfcd37f226350415a087a2f16`）
