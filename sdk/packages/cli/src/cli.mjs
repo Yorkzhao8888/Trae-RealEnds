@@ -6,13 +6,13 @@
  *   2. 配置驱动，开发者只改 uendos.config.json；
  *   3. 所有产物可复现：`uendos sync --check` 可在 CI 里拦住手改。
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, resolve, extname } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join, resolve, extname, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import {
-  CAPABILITIES, CONTRACT_VERSION, PROFILES, PROFILE_NAMES,
+  CAPABILITIES, CONTRACT_VERSION, PROFILES, PROFILE_NAMES, SCHEMA_VERSION,
   resolveEntry, resolveTheme, validateConfig, validatePluginManifest,
 } from '../../contract/src/index.js';
 import { composeShellFile, shellFileName, SHELL_VERSION } from '../../shell/src/index.js';
@@ -22,6 +22,7 @@ import { assetFiles } from './assets.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES = resolve(HERE, '../templates');
 const CONFIG_NAME = 'uendos.config.json';
+const LOCK_NAME = 'uendos.plugins.lock';
 const TEXT_EXT = new Set(['.json', '.js', '.mjs', '.cjs', '.html', '.sh', '.css', '.md', '.wxml', '.wxss', '.yml', '.yaml']);
 
 // ---------------------------------------------------------------- 参数
@@ -210,6 +211,29 @@ function installedManifest(dir, name) {
   try { return JSON.parse(readFileSync(p, 'utf8')); } catch (e) { return null; }
 }
 
+// 依赖先注册：config 里的顺序不决定激活顺序，按 requires 拓扑排序；缺依赖或成环直接失败。
+function orderPlugins(list) {
+  const byId = new Map(list.map((p) => [p.id, p]));
+  const done = new Set();
+  const visiting = [];
+  const out = [];
+  function visit(id) {
+    if (done.has(id)) return;
+    const at = visiting.indexOf(id);
+    if (at >= 0) fail(`插件依赖存在循环：${[...visiting.slice(at), id].join(' → ')}`);
+    visiting.push(id);
+    for (const dep of byId.get(id).manifest.requires || []) {
+      if (!byId.has(dep)) fail(`插件 ${id} 依赖的 ${dep} 未在配置中（先安装并 uendos plugin add ${dep}）`);
+      visit(dep);
+    }
+    visiting.pop();
+    done.add(id);
+    out.push(byId.get(id));
+  }
+  for (const p of list) visit(p.id);
+  return out;
+}
+
 function resolvePlugins(cfg, dir) {
   const out = [];
   for (const name of cfg.plugins || []) {
@@ -235,7 +259,7 @@ function resolvePlugins(cfg, dir) {
       manifest,
     });
   }
-  return out;
+  return orderPlugins(out);
 }
 
 async function loadAssertions(p) {
@@ -244,6 +268,76 @@ async function loadAssertions(p) {
   const arr = mod.default || mod.assertions;
   if (!Array.isArray(arr)) fail(`插件 ${p.id} 的断言文件必须默认导出数组`);
   return arr;
+}
+
+// ---------------------------------------------------------------- 插件锁
+// 锁住的是「版本 + 运行时内容哈希」：只锁版本挡不住代码被替换。
+function runtimeIntegrity(text) {
+  return `sha256-${crypto.createHash('sha256').update(text, 'utf8').digest('hex')}`;
+}
+
+function lockEntry(p) {
+  const entry = {
+    version: p.version,
+    integrity: runtimeIntegrity(p.runtime),
+    env: p.manifest.env || [],
+    capabilities: p.manifest.capabilities,
+    methods: p.manifest.methods,
+  };
+  if (p.manifest.requires && p.manifest.requires.length) entry.requires = p.manifest.requires;
+  return entry;
+}
+
+function readLock(dir) {
+  const p = join(dir, LOCK_NAME);
+  if (!existsSync(p)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(p, 'utf8'));
+    if (!raw || !raw.plugins || typeof raw.plugins !== 'object') fail(`${LOCK_NAME} 结构不合法（缺少 plugins）`);
+    return raw;
+  } catch (e) {
+    if (e.uendos) throw e;
+    fail(`${LOCK_NAME} 不是合法 JSON：${e.message}`);
+  }
+}
+
+function lockDiff(dir, plugins) {
+  const errors = [];
+  const lock = readLock(dir);
+  if (!plugins.length) {
+    if (lock) errors.push(`${LOCK_NAME} 存在但配置没有插件（运行 uendos sync 清理）`);
+    return errors;
+  }
+  if (!lock) return [`插件锁缺失（运行 uendos sync 生成 ${LOCK_NAME}）`];
+  for (const p of plugins) {
+    const e = lock.plugins[p.id];
+    if (!e) { errors.push(`插件锁缺少 ${p.id}（运行 uendos sync）`); continue; }
+    if (e.version !== p.version) errors.push(`${p.id} 版本与锁不一致：锁 ${e.version} / 实装 ${p.version}`);
+    if (e.integrity !== runtimeIntegrity(p.runtime)) errors.push(`${p.id} 运行时与锁不一致（插件被改动或重装）`);
+  }
+  for (const id of Object.keys(lock.plugins)) {
+    if (!plugins.some((p) => p.id === id)) errors.push(`插件锁含未配置插件：${id}`);
+  }
+  return errors;
+}
+
+function writeLock(dir, plugins) {
+  const entries = plugins.map((p) => [p.id, lockEntry(p)]);
+  writeFileSync(join(dir, LOCK_NAME), JSON.stringify({ version: 1, plugins: Object.fromEntries(entries) }, null, 2) + '\n');
+}
+
+function syncLock(dir, plugins, check) {
+  const errors = lockDiff(dir, plugins);
+  if (check) {
+    if (errors.length) fail(`插件锁不一致：${errors.join('；')}`);
+    return;
+  }
+  const lockPath = join(dir, LOCK_NAME);
+  if (!plugins.length) {
+    if (existsSync(lockPath)) unlinkSync(lockPath);
+    return;
+  }
+  if (errors.length) writeLock(dir, plugins);
 }
 
 // ---------------------------------------------------------------- picker
@@ -371,6 +465,7 @@ function renderPicker(cfg) {
 export function syncProject(cfg, dir, { check = false } = {}) {
   const file = shellFileName(cfg);
   const plugins = resolvePlugins(cfg, dir);
+  syncLock(dir, plugins, check);
   const pluginCaps = [...new Set(plugins.flatMap((p) => p.manifest.capabilities))];
   // 只在这里拦 caps 相关错误，避免把历史工程里其它宽松项（如 http 端地址）也一并拦掉
   if (cfg.caps !== undefined) {
@@ -591,6 +686,10 @@ async function cmdDoctor(flags) {
         if (!p.assertsPath) log(`· 插件 ${p.id} 未提供断言（可选：manifest 加 "asserts": "conformance.mjs"）`);
         else if (!existsSync(p.assertsPath)) report(false, `插件 ${p.id} 的断言文件不存在：${p.assertsPath}`);
       }
+      const lockErrors = lockDiff(dir, pluginList);
+      report(lockErrors.length === 0, lockErrors.length
+        ? `插件锁：${lockErrors.join('；')}`
+        : `插件锁：${pluginList.length} 个一致（${LOCK_NAME}）`);
     }
   } else {
     log(`· 未配置插件（生效能力集：内置 ${CAPABILITIES.length} 项）`);
@@ -623,6 +722,35 @@ async function cmdDoctor(flags) {
     }
     if (t === 'pc') report(existsSync(join(dir, 'main.js')), 'PC 模板：main.js 存在');
     if (t === 'mp') report(existsSync(join(dir, 'project.config.json')), '小程序模板：project.config.json 存在');
+  }
+
+  if (flags['release-check']) {
+    const mp = join(dir, RELEASE_MANIFEST);
+    if (!existsSync(mp)) report(false, `发布清单缺失：${RELEASE_MANIFEST}（先 uendos pack）`);
+    else {
+      let m = null;
+      try { m = JSON.parse(readFileSync(mp, 'utf8')); } catch (e) { report(false, `发布清单不是合法 JSON：${e.message}`); }
+      if (m) {
+        report(true, `发布清单：v${m.version} · target ${Object.keys(m.targets || {}).join('/') || '无'}`);
+        for (const [t, e] of Object.entries(m.targets || {})) {
+          for (const a of e.artifacts || []) {
+            const f = join(dir, a.path);
+            if (!existsSync(f)) { report(false, `发布清单产物缺失：${a.path}`); continue; }
+            report(statSync(f).size === a.size && sha256(f) === a.sha256, `${t} 产物与清单一致：${a.name}（${a.size} B）`);
+          }
+          if (!e.signed) log(`! ${t} 未签名或未验证（${e.signMode || '未知'}）：不可对外分发`);
+        }
+        if ((m.targets || {}).pc) {
+          const relDir = join(dir, RELEASE_DIR);
+          const yml = existsSync(relDir) && readdirSync(relDir).find((n) => /^latest(-mac|-linux)?\.yml$/.test(n));
+          if (!yml) report(false, 'PC 更新源缺少 latest.yml');
+          else {
+            const v = (readFileSync(join(relDir, yml), 'utf8').match(/^version:\s*(.+)$/m) || [])[1];
+            report(v === m.version, `PC 更新源版本：${yml} ${v || '缺失'}${v === m.version ? ' 与清单一致' : ` ≠ 清单 ${m.version}`}`);
+          }
+        }
+      }
+    }
   }
 
   if (flags.offline) {
@@ -673,6 +801,112 @@ async function cmdConformance(flags) {
     log(`\n${r.ok ? '通过' : '失败'}：${r.passed} 通过${skip} / ${r.failed} 失败`);
   }
   if (!r.ok) process.exitCode = 1;
+}
+
+// ---------------------------------------------------------------- upgrade / diff
+const CONFIG_KEYS = [
+  'schemaVersion', 'contractVersion', 'brand', 'displayName', 'alias', 'accent', 'prefix',
+  'ends', 'endKey', 'targets', 'launchMode', 'profile', 'theme', 'entry', 'plugins', 'caps',
+];
+
+function expectedProducts(cfg, dir) {
+  const plugins = resolvePlugins(cfg, dir);
+  const file = shellFileName(cfg);
+  const bridge = composeShellFile(cfg, { plugins });
+  const withPicker = (cfg.targets || []).includes('app');
+  const picker = withPicker ? renderPicker(cfg) : '';
+  const items = [{ label: `shell/${file}`, path: join(dir, 'shell', file), body: bridge }];
+  if (withPicker) items.push({ label: 'shell/picker.html', path: join(dir, 'shell', 'picker.html'), body: picker });
+  if (existsSync(join(dir, 'dist'))) {
+    items.push({ label: `dist/${file}`, path: join(dir, 'dist', file), body: bridge });
+    if (withPicker) items.push({ label: 'dist/picker.html', path: join(dir, 'dist', 'picker.html'), body: picker });
+  }
+  return { items, plugins };
+}
+
+// 生成物变化通常是局部的：公共前缀/后缀之外就是增删块，足够定位手改。
+function simpleLineDiff(expected, actual) {
+  const a = expected.split('\n');
+  const b = actual.split('\n');
+  let pre = 0;
+  while (pre < a.length && pre < b.length && a[pre] === b[pre]) pre++;
+  let suf = 0;
+  while (suf < a.length - pre && suf < b.length - pre && a[a.length - 1 - suf] === b[b.length - 1 - suf]) suf++;
+  return { removed: a.slice(pre, a.length - suf), added: b.slice(pre, b.length - suf) };
+}
+
+// 老工程升级：只补版本字段，未知键原样保留；产物与插件锁交给 sync 重新生成。
+function cmdUpgrade(flags) {
+  const { cfg, path } = loadConfig(flags);
+  const dir = projectDir(flags);
+  const changes = [];
+  if (cfg.schemaVersion !== SCHEMA_VERSION) changes.push(['schemaVersion', cfg.schemaVersion, SCHEMA_VERSION]);
+  if (cfg.contractVersion !== CONTRACT_VERSION) changes.push(['contractVersion', cfg.contractVersion, CONTRACT_VERSION]);
+  const unknown = Object.keys(cfg).filter((k) => !CONFIG_KEYS.includes(k));
+
+  if (changes.length) {
+    const text = changes.map(([k, from, to]) => `${k} ${from == null ? '（缺失）' : from} → ${to}`).join('；');
+    if (flags.check) log(`! 需要升级：${text}`);
+    else {
+      cpSync(path, `${path}.bak`);
+      for (const [k, , to] of changes) cfg[k] = to;
+      saveConfig(path, cfg);
+      okMark(`配置已升级：${text}（备份 ${basename(path)}.bak）`);
+    }
+  } else {
+    log('· 配置版本已是最新');
+  }
+  if (unknown.length) log(`· 保留未识别的键（需人工确认）：${unknown.join('/')}`);
+
+  if (flags.check) {
+    let drift = false;
+    try {
+      syncProject(cfg, dir, { check: true });
+      log('· 产物与插件锁一致');
+    } catch (e) {
+      drift = true;
+      badMark(`产物或插件锁不一致：${e.message}`);
+    }
+    if (changes.length || drift) process.exitCode = 1;
+    return;
+  }
+
+  syncProject(cfg, dir);
+  okMark('产物与插件锁已重新生成');
+  log('下一步：uendos doctor --offline && uendos conformance');
+}
+
+function cmdDiff(flags) {
+  const { cfg } = loadConfig(flags);
+  const dir = projectDir(flags);
+  const { items, plugins } = expectedProducts(cfg, dir);
+  const products = items.map((it) => {
+    const cur = existsSync(it.path) ? readFileSync(it.path, 'utf8') : '';
+    const consistent = cur === it.body;
+    return { file: it.label, consistent, ...(consistent ? { removed: [], added: [] } : simpleLineDiff(it.body, cur)) };
+  });
+  const lockIssues = plugins.length
+    ? lockDiff(dir, plugins)
+    : (readLock(dir) ? [`${LOCK_NAME} 存在但配置没有插件（运行 uendos sync 清理）`] : []);
+  const report = { products, lock: { consistent: lockIssues.length === 0, issues: lockIssues } };
+
+  if (flags.json) log(JSON.stringify(report, null, 2));
+  else {
+    for (const p of products) {
+      if (p.consistent) { log(`· ${p.file} 一致`); continue; }
+      log(`✗ ${p.file} 不一致（- ${p.removed.length} 行 / + ${p.added.length} 行）`);
+      for (const line of p.removed.slice(0, 20)) log(`  - ${line}`);
+      for (const line of p.added.slice(0, 20)) log(`  + ${line}`);
+    }
+    if (lockIssues.length) {
+      log(`✗ 插件锁不一致（${LOCK_NAME}）`);
+      for (const issue of lockIssues) log(`  - ${issue}`);
+    } else {
+      log(`· 插件锁一致${plugins.length ? `（${plugins.length} 个）` : '（未配置插件）'}`);
+    }
+    log('\n提示：运行 uendos sync 重新生成产物与锁。');
+  }
+  if (products.some((p) => !p.consistent) || lockIssues.length) process.exitCode = 1;
 }
 
 // ---------------------------------------------------------------- profile
@@ -726,6 +960,13 @@ function cmdPack(flags) {
     log(release
       ? '\nAPK（已签名）：android/app/build/outputs/apk/release/app-release.apk'
       : '\nAPK：android/app/build/outputs/apk/debug/app-debug.apk');
+    const apk = join(dir, 'android', 'app', 'build', 'outputs', 'apk',
+      release ? 'release/app-release.apk' : 'debug/app-debug.apk');
+    if (!existsSync(apk)) fail(`打包成功但未找到 APK：${apk}`);
+    const rec = recordRelease(dir, 'app', [apk], release, release ? 'release' : 'debug',
+      release ? null : 'debug 签名，不可对外分发');
+    const a0 = rec.items[0];
+    okMark(`发布清单：${RELEASE_MANIFEST}（app · ${a0.name} · ${a0.size} B · ${a0.sha256.slice(0, 12)}…）`);
   } else if (target === 'ios') {
     if (process.platform !== 'darwin') fail('iOS 打包需要 macOS + Xcode（CI 请用 macos runner）');
     if (!existsSync(join(dir, 'capacitor.config.json'))) fail('缺少 capacitor.config.json：先 uendos init');
@@ -740,6 +981,7 @@ function cmdPack(flags) {
         '-archivePath', 'build/App.xcarchive', 'archive', '-allowProvisioningUpdates'], dir);
       log('\n归档：build/App.xcarchive');
       log('导出 IPA：Xcode Organizer，或 xcodebuild -exportArchive -exportOptionsPlist <plist>');
+      log('· 归档目录不写入发布清单；导出 IPA 后再用 uendos publish --verify 校验');
     } else {
       run('xcodebuild', ['-workspace', ws, '-scheme', 'App', '-configuration', 'Debug',
         '-sdk', 'iphonesimulator', '-derivedDataPath', 'build', 'build'], dir);
@@ -749,6 +991,15 @@ function cmdPack(flags) {
     const pkg = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8'));
     if (!pkg.scripts || !pkg.scripts.dist) fail('package.json 缺少 scripts.dist（electron-builder）');
     run('npm', ['run', 'dist'], dir);
+    const files = pcArtifacts(dir);
+    if (!files.length) fail('electron-builder 未产出安装包（检查 build.directories.output）');
+    const rec = recordRelease(dir, 'pc', files, false, null, '未检测签名：取决于构建环境凭据');
+    for (const a of rec.items) log(`  产物 ${a.name} · ${a.size} B · ${a.sha256.slice(0, 12)}…`);
+    okMark(`发布清单：${RELEASE_MANIFEST}（pc · ${rec.items.length} 个产物 · ${rec.manifest.version}）`);
+    const y = writeLatestYml(dir, projectVersion(dir));
+    if (y && y.written) okMark(`更新源：${RELEASE_DIR}/${y.written}（v${projectVersion(dir)}）`);
+    else if (y && y.skipped) log(`· 已存在 ${RELEASE_DIR}/${y.skipped}（electron-builder 生成，跳过）`);
+    else log('· 未找到可写 latest.yml 的安装包');
   } else if (target === 'mp') {
     log('小程序不走本地打包：用微信开发者工具导入项目根（project.config.json）后上传。');
     log('AppID 与业务域名需在微信后台配置，CLI 不代持凭证。');
@@ -764,6 +1015,69 @@ function sha256(file) {
   return h.digest('hex');
 }
 
+// ---------------------------------------------------------------- 发布清单
+const RELEASE_DIR = 'release';
+const RELEASE_MANIFEST = 'release/MANIFEST.json';
+const PC_EXTS = ['.dmg', '.zip', '.exe', '.AppImage', '.deb', '.rpm', '.pkg'];
+
+function projectVersion(dir) {
+  try { return JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version || '0.0.0'; } catch (e) { return '0.0.0'; }
+}
+
+function sha512b64(file) {
+  return crypto.createHash('sha512').update(readFileSync(file)).digest('base64');
+}
+
+// 同一工程的多个 target 累积到一份清单：app 出 APK、pc 出安装包，互不覆盖。
+function recordRelease(dir, target, artifacts, signed, signMode, note) {
+  const p = join(dir, RELEASE_MANIFEST);
+  let m = { version: projectVersion(dir), generatedAt: null, targets: {} };
+  if (existsSync(p)) {
+    try {
+      const old = JSON.parse(readFileSync(p, 'utf8'));
+      if (old && old.targets && typeof old.targets === 'object') m = old;
+    } catch (e) { /* 旧清单损坏则重建 */ }
+  }
+  m.version = projectVersion(dir);
+  m.generatedAt = new Date().toISOString();
+  const items = artifacts.filter((f) => existsSync(f)).map((f) => ({
+    path: relative(dir, f).split(sep).join('/'),
+    name: basename(f),
+    size: statSync(f).size,
+    sha256: sha256(f),
+  }));
+  m.targets[target] = { artifacts: items, signed, signMode, ...(note ? { note } : {}) };
+  mkdirSync(join(dir, RELEASE_DIR), { recursive: true });
+  writeFileSync(p, JSON.stringify(m, null, 2) + '\n');
+  return { manifest: m, items };
+}
+
+function pcArtifacts(dir) {
+  const out = join(dir, RELEASE_DIR);
+  if (!existsSync(out)) return [];
+  return readdirSync(out)
+    .filter((n) => PC_EXTS.includes(extname(n)) && statSync(join(out, n)).isFile())
+    .map((n) => join(out, n));
+}
+
+// electron-builder 已生成则跳过；没有才按 generic 更新源格式补一份。
+function writeLatestYml(dir, version) {
+  const out = join(dir, RELEASE_DIR);
+  const existing = existsSync(out) && readdirSync(out).find((n) => /^latest(-mac|-linux)?\.yml$/.test(n));
+  if (existing) return { skipped: existing };
+  const picks = pcArtifacts(dir);
+  if (!picks.length) return null;
+  const name = process.platform === 'darwin' ? 'latest-mac.yml' : process.platform === 'win32' ? 'latest.yml' : 'latest-linux.yml';
+  const primary = basename(picks[0]);
+  const lines = [`version: ${version}`, 'files:'];
+  for (const f of picks) {
+    lines.push(`  - url: ${basename(f)}`, `    sha512: ${sha512b64(f)}`, `    size: ${statSync(f).size}`);
+  }
+  lines.push(`path: ${primary}`, `sha512: ${sha512b64(picks[0])}`, `releaseDate: '${new Date().toISOString()}'`);
+  writeFileSync(join(out, name), `${lines.join('\n')}\n`);
+  return { written: name };
+}
+
 function cmdPublish(flags) {
   const { cfg } = loadConfig(flags);
   const file = flags.file;
@@ -774,6 +1088,19 @@ function cmdPublish(flags) {
   const size = statSync(file).size;
   const sum = sha256(file);
   const name = basename(file);
+  if (flags.verify) {
+    const mp = resolve(flags['release-manifest'] || join(projectDir(flags), RELEASE_MANIFEST));
+    if (!existsSync(mp)) fail(`找不到发布清单：${mp}（先 uendos pack）`);
+    let rel;
+    try { rel = JSON.parse(readFileSync(mp, 'utf8')); } catch (e) { fail(`发布清单不是合法 JSON：${e.message}`); }
+    const hits = Object.entries(rel.targets || {}).flatMap(([t, e]) => (e.artifacts || []).map((a) => ({ t, a })));
+    const hit = hits.find(({ a }) => a.name === name);
+    if (!hit) fail(`发布清单里没有 ${name}（重新 uendos pack 后再发布）`);
+    if (hit.a.size !== size || hit.a.sha256 !== sum) {
+      fail(`产物与发布清单不一致：清单 ${hit.a.size} B / ${hit.a.sha256.slice(0, 12)}…，实物 ${size} B / ${sum.slice(0, 12)}…`);
+    }
+    okMark(`已校验发布清单：${hit.t} · ${name}（${size} B）`);
+  }
   const version = flags.version || cfg.version || JSON.parse(readFileSync(join(projectDir(flags), 'package.json'), 'utf8')).version;
   const itemId = flags.item || `${cfg.brand}-app-android`;
   const status = flags.status || 'beta';
@@ -826,15 +1153,117 @@ function cmdPluginUpdate(names, flags, cfg, dir) {
   log('插件变更随壳包发布：记得提交 package-lock.json 并重新出包。');
 }
 
+function pluginShortName(id) {
+  const base = id.includes('/') ? id.split('/')[1] : id;
+  return (base.replace(/^uendos-plugin-/, '') || base).replace(/[^a-z0-9-]/g, '');
+}
+
+function deriveCapability(base) {
+  const c = base.toLowerCase().replace(/[^a-z0-9]/g, '');
+  return /^[a-z]/.test(c) && c ? c : `plugin${c}`;
+}
+
+// 插件脚手架只生成「可安装的最小包」，不自动改配置：必须先 npm install 才能 plugin add。
+function cmdPluginInit(name, flags, dir) {
+  if (!name) fail('用法：uendos plugin init <包名> --capability <能力> [--dir <路径>]');
+  const version = flags.version ? String(flags.version) : '0.1.0';
+  const short = pluginShortName(name);
+  const cap = flags.capability ? String(flags.capability) : deriveCapability(short);
+  const env = flags.env
+    ? String(flags.env).split(',').map((s) => s.trim()).filter(Boolean)
+    : ['capacitor', 'electron', 'mp', 'web'];
+  const outDir = resolve(dir, flags.dir ? String(flags.dir) : join('plugins', short));
+  const manifest = {
+    id: name,
+    version,
+    runtime: 'runtime.js',
+    asserts: 'conformance.mjs',
+    env,
+    capabilities: [cap],
+    methods: [`${cap}.ping`, `${cap}.status`],
+  };
+  const v = validatePluginManifest(manifest, { name });
+  if (!v.ok) fail(`插件声明不合法：${v.errors.join('；')}`);
+  if (existsSync(outDir) && !flags.force) fail(`目录已存在：${outDir}（加 --force 覆盖）`);
+
+  const runtime = `// ${name} 插件运行时：由 uendos sync 包进函数作用域注入品牌桥（顶层 return 合法）。
+// 方法返回完整结果对象：{ ok: true, data } 或 { ok: false, code, message }。
+// 抛异常由运行时统一映射为 E_NATIVE。
+return {
+  version: '${version}',
+  capabilities: { ${cap}: '\u2713' },
+  methods: {
+    '${cap}.ping': function () {
+      return { ok: true, data: { pong: true, at: Date.now() } };
+    },
+    '${cap}.status': function () {
+      return { ok: true, data: { ready: true } };
+    },
+  },
+};
+`;
+  const asserts = `/**
+ * ${name} 插件断言：uendos conformance 会合并到内置断言之后。
+ * 每项形如 { name, run(Shell) }；run 抛异常即失败。
+ */
+export default [
+  {
+    name: '插件已注册且版本正确',
+    run: (Shell) => {
+      const p = (Shell.plugins || []).find((x) => x.id === '${name}');
+      if (!p) throw new Error('Shell.plugins 里没有 ${name}');
+      if (p.version !== '${version}') throw new Error('version=' + p.version);
+    },
+  },
+  {
+    name: '能力 ${cap} 已声明',
+    run: (Shell) => {
+      if (Shell.capabilities.${cap} !== '\u2713') throw new Error('${cap}=' + Shell.capabilities.${cap});
+    },
+  },
+  {
+    name: '${cap}.ping 正常返回',
+    run: async (Shell) => {
+      const r = await Shell.call('${cap}.ping');
+      if (!r || !r.ok || !r.data || r.data.pong !== true) throw new Error(JSON.stringify(r));
+    },
+  },
+];
+`;
+  const pkg = {
+    name,
+    version,
+    private: true,
+    description: `UendOS 插件：${cap}`,
+    files: ['uendos.plugin.json', 'runtime.js', 'conformance.mjs'],
+  };
+
+  mkdirSync(outDir, { recursive: true });
+  writeFileSync(join(outDir, 'uendos.plugin.json'), JSON.stringify(manifest, null, 2) + '\n');
+  writeFileSync(join(outDir, 'package.json'), JSON.stringify(pkg, null, 2) + '\n');
+  writeFileSync(join(outDir, 'runtime.js'), runtime);
+  writeFileSync(join(outDir, 'conformance.mjs'), asserts);
+
+  okMark(`已生成插件包 ${outDir}（${name}@${version}）`);
+  log(`  能力 ${cap} · 方法 ${cap}.ping / ${cap}.status · 环境 ${env.join('/')}`);
+  const rel = outDir.startsWith(`${dir}/`) ? `./${outDir.slice(dir.length + 1)}` : outDir;
+  log('下一步：');
+  log(`  npm install ${rel} --save-exact`);
+  log(`  uendos plugin add ${name}`);
+  log('  uendos doctor && uendos conformance');
+}
+
 function pluginHelp() {
   log(`uendos plugin — 插件管理（构建期注册，运行时禁止远程加载）
 
-  uendos plugin list [--json]        列出配置中的插件、安装状态、环境与断言
+  uendos plugin list [--json]        列出配置中的插件、安装状态、环境、断言与锁
+  uendos plugin init <包名>          生成插件包脚手架（--capability/--env/--dir/--version）
   uendos plugin add <包名>           把已安装的插件写入配置并重新生成品牌桥
   uendos plugin remove <包名>        从配置移除插件并重新生成品牌桥
   uendos plugin update [<包名>...]   构建期升级（默认 @latest），--spec 指定版本或 tarball
 
-  插件包根目录需提供 uendos.plugin.json（id / version / runtime / asserts / env / capabilities / methods）。`);
+  插件包根目录需提供 uendos.plugin.json（id / version / runtime / asserts / env / capabilities / methods / requires）。
+  uendos sync 会生成 ${LOCK_NAME}（版本 + 运行时哈希），sync --check 与 doctor 据此拦截漂移。`);
 }
 
 function cmdPluginList(flags) {
@@ -847,17 +1276,23 @@ function cmdPluginList(flags) {
   }
   const rows = names.map((id) => {
     const m = installedManifest(dir, id);
-    if (!m) return { id, installed: false };
+    if (!m) return { id, installed: false, requires: [], locked: false };
     const asserts = m.asserts || null;
     const assertsExists = !!asserts && existsSync(join(dir, 'node_modules', ...id.split('/'), asserts));
+    const lock = readLock(dir);
+    const entry = lock && lock.plugins[id];
+    const rtPath = join(dir, 'node_modules', ...id.split('/'), m.runtime);
+    const rt = existsSync(rtPath) ? readFileSync(rtPath, 'utf8') : '';
     return {
       id,
       installed: true,
       version: m.version,
       env: m.env || [],
       capabilities: m.capabilities || [],
+      requires: m.requires || [],
       asserts,
       assertsExists,
+      locked: !!entry && entry.version === m.version && entry.integrity === runtimeIntegrity(rt),
     };
   });
   if (flags.json) return log(JSON.stringify(rows, null, 2));
@@ -869,7 +1304,9 @@ function cmdPluginList(flags) {
     }
     const env = r.env.length ? r.env.join('/') : '任意';
     const asserts = r.asserts ? `${r.asserts}${r.assertsExists ? '' : '（文件缺失）'}` : '未提供';
-    log(`✓ ${r.id}@${r.version}  环境 ${env}  能力 ${r.capabilities.join('/')}  断言 ${asserts}`);
+    const deps = r.requires.length ? `  依赖 ${r.requires.join('/')}` : '';
+    const lock = r.locked ? '' : '  锁 ✗';
+    log(`✓ ${r.id}@${r.version}  环境 ${env}  能力 ${r.capabilities.join('/')}  断言 ${asserts}${deps}${lock}`);
   }
 }
 
@@ -877,6 +1314,7 @@ function cmdPlugin(pos, flags) {
   const sub = pos[0];
   if (!sub) return pluginHelp();
   if (sub === 'list') return cmdPluginList(flags);
+  if (sub === 'init') return cmdPluginInit(pos[1], flags, projectDir(flags));
   if (!['add', 'remove', 'update'].includes(sub)) {
     pluginHelp();
     fail(`未知子命令：${sub}`);
@@ -900,6 +1338,11 @@ function cmdPlugin(pos, flags) {
     okMark(`已添加插件 ${name}（记得提交 package-lock.json）`);
   } else {
     if (!list.includes(name)) fail(`插件不在配置中：${name}`);
+    const dependents = list.filter((n) => {
+      const m = installedManifest(dir, n);
+      return m && Array.isArray(m.requires) && m.requires.includes(name);
+    });
+    if (dependents.length) fail(`插件 ${name} 被以下插件依赖：${dependents.join('、')}（先移除依赖方）`);
     cfg.plugins = list.filter((x) => x !== name);
     saveConfig(path, cfg);
     syncProject(cfg, dir);
@@ -914,18 +1357,24 @@ function help() {
 用法：
   uendos init <项目名> --brand <brand> --ends "hp:个人端:https://a，ep:企业端:https://b" [--targets app,pc,mp] [--app-id com.x.y] [--dir .]
   uendos add-end <id> --name <名称> --url <https://...>
+  uendos upgrade [--check]       迁移配置版本（备份 .bak）并重新生成产物与插件锁
+  uendos diff [--json]           比对配置期望与现有产物/插件锁，不一致退出码 1
   uendos sync [--check]          生成 shell/<brand>-shell.js 与 shell/picker.html（--check 供 CI 校验一致性）
-  uendos doctor [--offline]      配置 / 产物 / 端地址 / 模板体检
+  uendos doctor [--offline] [--release-check]
+                                 配置 / 产物 / 端地址 / 模板体检（--release-check 校验发布清单与更新源）
   uendos conformance [--json]    跑契约断言（内置 39 项 + 插件断言，能力被裁剪时跳过）
   uendos assets [--force]        按品牌色生成 assets/icon.png 与 splash.png
   uendos profile [--json]        查看 lite / standard / pro 三档默认 target 与能力集
   uendos plugin list [--json]    列出配置中的插件、安装状态、环境与断言
+  uendos plugin init <包名>      生成插件包脚手架（manifest / runtime / 断言）
   uendos plugin add <包名>       把已安装的插件写入配置并重新生成品牌桥
   uendos plugin remove <包名>    从配置移除插件并重新生成品牌桥
   uendos plugin update [<包名>...] [--spec <npm spec>]
                                  构建期升级插件（默认 npm <包名>@latest），重新校验并 sync
   uendos pack --target <app|ios|pc|mp> [--release]
-  uendos publish --file <包> --item <apps.json 条目> --manifest <清单> --url <下载地址> [--status beta]
+                                 出包并写 release/MANIFEST.json（PC 同时补 latest.yml）
+  uendos publish --file <包> --item <apps.json 条目> --manifest <清单> --url <下载地址> [--status beta] [--verify]
+                                 --verify 要求产物与 release/MANIFEST.json 的大小/哈希一致
 
 init 选项：--profile lite|standard|pro（默认 pro，决定默认 target 与端能力集）
            --launch-mode portal|launcher（默认 portal）
@@ -946,6 +1395,8 @@ export async function main(argv) {
   switch (cmd) {
     case 'init': return cmdInit(pos, flags);
     case 'add-end': return cmdAddEnd(pos, flags);
+    case 'upgrade': return cmdUpgrade(flags);
+    case 'diff': return cmdDiff(flags);
     case 'sync': {
       const { cfg } = loadConfig(flags);
       const out = syncProject(cfg, projectDir(flags), { check: !!flags.check });

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, statSync, cpSync, chmodSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync, rmSync, statSync, cpSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -355,6 +356,26 @@ test('publish 计算哈希、复制安装包并回写清单', () => {
   const apk = join(DIR, 'demo-1.2.3.apk');
   writeFileSync(apk, 'fake-apk-binary');
 
+  // 发布清单：先由 pack 生成，这里按同样结构造一份供 --verify 校验
+  const rel = join(DIR, 'release', 'MANIFEST.json');
+  mkdirSync(join(DIR, 'release'), { recursive: true });
+  const relManifest = {
+    version: '1.2.3',
+    targets: {
+      app: {
+        artifacts: [{
+          path: 'demo-1.2.3.apk',
+          name: 'demo-1.2.3.apk',
+          size: statSync(apk).size,
+          sha256: crypto.createHash('sha256').update(readFileSync(apk)).digest('hex'),
+        }],
+        signed: false,
+        signMode: 'debug',
+      },
+    },
+  };
+  writeFileSync(rel, JSON.stringify(relManifest, null, 2) + '\n');
+
   const manifest = join(DIR, 'apps.json');
   writeFileSync(manifest, JSON.stringify({
     generatedAt: '',
@@ -379,7 +400,9 @@ test('publish 计算哈希、复制安装包并回写清单', () => {
     '--manifest', manifest,
     '--download-dir', join(DIR, 'downloads'),
     '--version', '1.2.3',
+    '--verify',
   ]);
+  assert.match(out, /已校验发布清单：app · demo-1\.2\.3\.apk/);
   assert.match(out, /已更新 demo-app-android/);
 
   const item = JSON.parse(readFileSync(manifest, 'utf8')).items[0];
@@ -391,4 +414,250 @@ test('publish 计算哈希、复制安装包并回写清单', () => {
   assert.equal(item.available, false, 'publish 不应自行放开 available');
 
   assert.ok(existsSync(join(DIR, 'downloads', 'demo-1.2.3.apk')));
+
+  // 清单哈希被改 → --verify 必须拒绝
+  const tampered = JSON.parse(readFileSync(rel, 'utf8'));
+  tampered.targets.app.artifacts[0].sha256 = '0'.repeat(64);
+  writeFileSync(rel, JSON.stringify(tampered, null, 2) + '\n');
+  assert.throws(
+    () => run(['publish', '--verify', '--file', apk, '--item', 'demo-app-android',
+      '--manifest', manifest, '--url', 'https://example.com/demo.apk']),
+    (e) => /产物与发布清单不一致/.test(`${e.stderr || ''}${e.stdout || ''}${e.message}`),
+    '哈希不符应拒绝发布',
+  );
+});
+
+test('pack --target pc 写发布清单与 latest.yml，doctor --release-check 校验', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-ppack-'));
+  const opts = { cwd: dir };
+  try {
+    run([
+      'init', 'pack-demo',
+      '--brand', 'pack-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'pc',
+      '--dir', dir,
+    ], opts);
+    const version = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).version;
+
+    // 假 npm：只模拟 electron-builder 产出，避免真实下载与构建
+    const bin = join(dir, '.fakebin');
+    mkdirSync(bin, { recursive: true });
+    const stub = join(bin, 'npm');
+    writeFileSync(stub, [
+      '#!/bin/sh',
+      'if [ "$1" = "run" ] && [ "$2" = "dist" ]; then',
+      '  mkdir -p release',
+      '  printf "fake-installer" > "release/App-$UENDOS_FAKE_VERSION.exe"',
+      'fi',
+      'exit 0',
+      '',
+    ].join('\n'));
+    chmodSync(stub, 0o755);
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, UENDOS_FAKE_VERSION: version };
+
+    const out = run(['pack', '--target', 'pc'], { ...opts, env });
+    assert.match(out, /发布清单/);
+    assert.match(out, /更新源：release\/latest/);
+    const mf = JSON.parse(readFileSync(join(dir, 'release', 'MANIFEST.json'), 'utf8'));
+    assert.equal(mf.version, version);
+    const art = mf.targets.pc.artifacts[0];
+    assert.equal(art.name, `App-${version}.exe`);
+    assert.equal(art.size, Buffer.byteLength('fake-installer'));
+    assert.match(art.sha256, /^[0-9a-f]{64}$/);
+    assert.equal(mf.targets.pc.signed, false, '未检测签名时不能写成已签名');
+
+    const ymlName = readdirSync(join(dir, 'release')).find((n) => /^latest(-mac|-linux)?\.yml$/.test(n));
+    assert.ok(ymlName, '应生成 latest.yml');
+    const yml = readFileSync(join(dir, 'release', ymlName), 'utf8');
+    assert.match(yml, new RegExp(`version: ${version.replace(/\./g, '\\.')}`));
+    assert.match(yml, /sha512: [A-Za-z0-9+/=]+/);
+
+    const doc = run(['doctor', '--offline', '--release-check'], opts);
+    assert.match(doc, /发布清单：v/);
+    assert.match(doc, /产物与清单一致：App-/);
+    assert.match(doc, new RegExp(`PC 更新源版本：${ymlName} ${version} 与清单一致`));
+    assert.match(doc, /未签名或未验证/);
+
+    // 产物被换 → release-check 必须失败
+    writeFileSync(join(dir, 'release', `App-${version}.exe`), 'tampered');
+    assert.throws(
+      () => run(['doctor', '--offline', '--release-check'], opts),
+      (e) => /项未通过/.test(`${e.stdout || ''}`),
+      '产物被改应判失败',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin init 生成脚手架，锁拦截运行时漂移', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-pinit-'));
+  const opts = { cwd: dir };
+  const name = '@acme/uendos-plugin-weather';
+  try {
+    run([
+      'init', 'pinit-demo',
+      '--brand', 'pinit-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'app',
+      '--dir', dir,
+    ], opts);
+
+    const out = run(['plugin', 'init', name, '--capability', 'weather'], opts);
+    assert.match(out, /已生成插件包/);
+    assert.match(out, /uendos plugin add/);
+    const mf = JSON.parse(readFileSync(join(dir, 'plugins', 'weather', 'uendos.plugin.json'), 'utf8'));
+    assert.equal(mf.id, name);
+    assert.deepEqual(mf.capabilities, ['weather']);
+    assert.deepEqual(mf.methods, ['weather.ping', 'weather.status']);
+    assert.equal(mf.asserts, 'conformance.mjs');
+    assert.throws(() => run(['plugin', 'init', name], opts), /Command failed/, '重复生成应拒绝');
+
+    // 模拟已安装：直接拷进 node_modules，避免测试联网
+    const dst = join(dir, 'node_modules', '@acme', 'uendos-plugin-weather');
+    mkdirSync(join(dir, 'node_modules', '@acme'), { recursive: true });
+    cpSync(join(dir, 'plugins', 'weather'), dst, { recursive: true });
+
+    run(['plugin', 'add', name], opts);
+    const lockPath = join(dir, 'uendos.plugins.lock');
+    assert.ok(existsSync(lockPath), 'plugin add 后应生成插件锁');
+    const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
+    assert.equal(lock.plugins[name].version, '0.1.0');
+    assert.match(lock.plugins[name].integrity, /^sha256-[0-9a-f]{64}$/);
+    assert.match(run(['sync', '--check'], opts), /产物一致/);
+    assert.match(run(['conformance'], opts), /42 通过 \/ 0 失败/, '内置 39 + 脚手架 3');
+    assert.match(run(['plugin', 'list'], opts), new RegExp(`${name}@0\\.1\\.0`));
+    assert.doesNotMatch(run(['plugin', 'list'], opts), /锁 ✗/);
+
+    // 运行时被改 → 锁不一致，sync --check 与 doctor 都要拦住
+    const rt = join(dst, 'runtime.js');
+    writeFileSync(rt, `${readFileSync(rt, 'utf8')}\n// tampered\n`);
+    assert.throws(() => run(['sync', '--check'], opts),
+      (e) => /运行时与锁不一致/.test(`${e.stderr || ''}${e.message}`));
+    assert.match(run(['plugin', 'list'], opts), /锁 ✗/);
+
+    run(['sync'], opts);
+    assert.match(run(['sync', '--check'], opts), /产物一致/, '重新 sync 后锁应回到一致');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('插件依赖：逆序配置按 requires 注册，缺依赖 / 成环 / 被依赖时移除均报错', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-pdep-'));
+  const opts = { cwd: dir };
+  const base = '@acme/uendos-plugin-base';
+  const ext = '@acme/uendos-plugin-ext';
+  try {
+    run([
+      'init', 'dep-demo',
+      '--brand', 'dep-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'app',
+      '--dir', dir,
+    ], opts);
+
+    const make = (id, cap, requires) => {
+      const p = join(dir, 'node_modules', ...id.split('/'));
+      mkdirSync(p, { recursive: true });
+      const manifest = { id, version: '1.0.0', runtime: 'runtime.js', capabilities: [cap], methods: [`${cap}.ping`] };
+      if (requires) manifest.requires = requires;
+      writeFileSync(join(p, 'uendos.plugin.json'), JSON.stringify(manifest, null, 2) + '\n');
+      writeFileSync(join(p, 'runtime.js'),
+        `return { version: '1.0.0', capabilities: { ${cap}: '\u2713' }, methods: { '${cap}.ping': function () { return { ok: true }; } } };\n`);
+    };
+    make(base, 'base');
+    make(ext, 'ext', [base]);
+
+    const writePlugins = (list) => {
+      const cfg = JSON.parse(readFileSync(join(dir, 'uendos.config.json'), 'utf8'));
+      cfg.plugins = list;
+      writeFileSync(join(dir, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+    };
+
+    writePlugins([ext, base]);
+    run(['sync'], opts);
+    const bridge = readFileSync(join(dir, 'shell', 'dep-demo-shell.js'), 'utf8');
+    const ib = bridge.indexOf(`ShellCore.registerPlugin("${base}"`);
+    const ie = bridge.indexOf(`ShellCore.registerPlugin("${ext}"`);
+    assert.ok(ib >= 0 && ie > ib, '依赖应先注册（config 逆序不影响激活顺序）');
+
+    writePlugins([ext]);
+    assert.throws(() => run(['sync'], opts), (e) => /未在配置中/.test(`${e.stderr || ''}${e.message}`), '缺依赖应拒绝');
+
+    // 成环：base 反向依赖 ext
+    const bp = join(dir, 'node_modules', ...base.split('/'), 'uendos.plugin.json');
+    const bm = JSON.parse(readFileSync(bp, 'utf8'));
+    bm.requires = [ext];
+    writeFileSync(bp, JSON.stringify(bm, null, 2) + '\n');
+    writePlugins([ext, base]);
+    assert.throws(() => run(['sync'], opts), (e) => /循环/.test(`${e.stderr || ''}${e.message}`), '环依赖应拒绝');
+
+    // 恢复后：被依赖的插件不允许直接移除
+    delete bm.requires;
+    writeFileSync(bp, JSON.stringify(bm, null, 2) + '\n');
+    run(['sync'], opts);
+    assert.throws(() => run(['plugin', 'remove', base], opts),
+      (e) => /被以下插件依赖/.test(`${e.stderr || ''}${e.message}`), '被依赖时移除应拒绝');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('upgrade 迁移旧契约版本，diff 拦截手改', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-pupg-'));
+  const opts = { cwd: dir };
+  const capture = (args) => {
+    try { return { out: run(args, opts), code: 0 }; } catch (e) { return { out: `${e.stdout || ''}${e.stderr || ''}`, code: e.status ?? 1 }; }
+  };
+  try {
+    run([
+      'init', 'upg-demo',
+      '--brand', 'upg-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'app',
+      '--dir', dir,
+    ], opts);
+    const cfgPath = join(dir, 'uendos.config.json');
+    const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
+    delete cfg.contractVersion;
+    cfg.schemaVersion = 0;
+    writeFileSync(cfgPath, JSON.stringify(cfg, null, 2) + '\n');
+
+    // --check 只报告，不改文件
+    const chk = capture(['upgrade', '--check']);
+    assert.equal(chk.code, 1);
+    assert.match(chk.out, /需要升级/);
+    assert.equal(JSON.parse(readFileSync(cfgPath, 'utf8')).contractVersion, undefined, '--check 不应写配置');
+
+    const up = capture(['upgrade']);
+    assert.equal(up.code, 0);
+    assert.match(up.out, /配置已升级/);
+    assert.match(up.out, /产物与插件锁已重新生成/);
+    assert.ok(existsSync(`${cfgPath}.bak`), '升级前应备份配置');
+    const after = JSON.parse(readFileSync(cfgPath, 'utf8'));
+    assert.equal(after.schemaVersion, 1);
+    assert.match(after.contractVersion, /^0\.5\./);
+    assert.match(run(['upgrade'], opts), /配置版本已是最新/);
+    assert.match(run(['sync', '--check'], opts), /产物一致/);
+
+    // 手改产物后 diff 必须失败并给出增删行
+    const bridge = join(dir, 'shell', 'upg-demo-shell.js');
+    writeFileSync(bridge, `${readFileSync(bridge, 'utf8')}// hand edit\n`);
+    const d = capture(['diff']);
+    assert.equal(d.code, 1);
+    assert.match(d.out, /不一致/);
+    assert.match(d.out, /\n  \+ /, '手改新增行应以 + 标出');
+    const dj = capture(['diff', '--json']);
+    assert.equal(dj.code, 1);
+    const report = JSON.parse(dj.out);
+    assert.equal(report.products.find((p) => p.file === 'shell/upg-demo-shell.js').consistent, false);
+
+    run(['sync'], opts);
+    assert.equal(capture(['diff']).code, 0);
+    assert.match(run(['diff'], opts), /一致/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

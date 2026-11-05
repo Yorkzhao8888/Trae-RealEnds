@@ -217,6 +217,7 @@ test('插件声明校验：能力、方法与命名空间', () => {
   };
   const ok = validatePluginManifest(good, { name: '@acme/uendos-plugin-printer' });
   assert.equal(ok.ok, true, ok.errors.join('；'));
+  assert.equal(validatePluginManifest({ ...good, requires: ['@acme/uendos-plugin-core'] }, { name: good.id }).ok, true, '合法依赖应通过');
 
   const bad = [
     { ...good, capabilities: ['vibrate'] },
@@ -227,6 +228,10 @@ test('插件声明校验：能力、方法与命名空间', () => {
     { ...good, methods: ['printer.print', 'printer.print'] },
     { ...good, env: ['browser'] },
     { ...good, extra: true },
+    { ...good, requires: 'not-an-array' },
+    { ...good, requires: ['bad name'] },
+    { ...good, requires: ['@acme/uendos-plugin-printer'] },
+    { ...good, requires: ['@acme/uendos-plugin-core', '@acme/uendos-plugin-core'] },
   ];
   for (const m of bad) {
     assert.equal(validatePluginManifest(m, { name: '@acme/uendos-plugin-printer' }).ok, false, JSON.stringify(m));

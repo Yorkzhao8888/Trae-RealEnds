@@ -72,16 +72,19 @@ uendos sync --check              # CI 用：产物必须与配置一致
 |---|---|---|
 | `uendos init <项目名>` | 建工程：拷模板 → 替换占位符 → 写配置 → 生成品牌桥、选择页与 `assets/` 源图 | `--brand` `--ends` `--profile` `--targets` `--app-id` `--display` `--accent` `--mp-appid` `--launch-mode` `--dir` |
 | `uendos add-end <id>` | 增加一个端并重新生成桥 | `--name` `--url` |
+| `uendos upgrade` | 老工程迁移：补齐/升级 `schemaVersion` / `contractVersion`，备份 `.bak`，重生成产物与插件锁 | `--check` 只报告差异、退出码 1，不写文件 |
+| `uendos diff` | 比对「配置期望 vs 现有产物」与「插件锁 vs 实装」，输出 `-`/`+` 行 | `--json` 输出机器可读结果；不一致退出码 1 |
 | `uendos sync` | 重新合成品牌桥与选择页 | `--check` 只校验不写，不一致时退出码 1 |
-| `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址 |
+| `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址；`--release-check` 校验 `release/MANIFEST.json` 与 PC `latest.yml` |
 | `uendos conformance` | 对品牌桥跑 39 项契约断言；配置了插件时合并插件断言，输出 `39 + N`；能力被裁剪时对应断言记为跳过 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
 | `uendos profile` | 查看 `lite/standard/pro` 三档默认 target 与能力集 | `--json` 输出机器可读结果 |
-| `uendos plugin list` | 列出配置中的插件：安装状态、版本、环境、能力、断言 | `--json` 输出机器可读结果 |
-| `uendos plugin add <包名>` | 把**已安装**的插件写入 `plugins` 并重新生成品牌桥（先预检声明合法） | `remove` 反向操作 |
+| `uendos plugin list` | 列出配置中的插件：安装状态、版本、环境、能力、断言、依赖与锁状态 | `--json` 输出机器可读结果 |
+| `uendos plugin init <包名>` | 生成插件包脚手架（`uendos.plugin.json` / `runtime.js` / `conformance.mjs`），不自动改配置 | `--capability` `--env` `--dir` `--version` `--force` |
+| `uendos plugin add <包名>` | 把**已安装**的插件写入 `plugins` 并重新生成品牌桥（先预检声明合法） | `remove` 反向操作，被依赖时拒绝 |
 | `uendos plugin update [<包名>...]` | 构建期升级插件：`npm install <包名>@latest` → 重新校验 → `sync`；变更随壳包发布 | `--spec` 指定版本/tarball/内网源；不给包名则升级全部 |
 | `uendos assets` | 按主色与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732） | `--force` 覆盖已有图 |
-| `uendos pack` | 本地打包（缺 `node_modules` / `android` / `ios` 时自动安装与生成平台工程） | `--target app`（Debug APK；`--release` 走签名）、`ios`（需 macOS）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传） |
-| `uendos publish` | 计算 SHA-256/大小并回写商店清单 | `--file` `--item` `--manifest` `--url` 或 `--download-dir` `--version` `--status`（默认 `beta`） |
+| `uendos pack` | 本地打包（缺 `node_modules` / `android` / `ios` 时自动安装与生成平台工程）；成功后写 `release/MANIFEST.json`（版本/产物/大小/SHA-256/签名态），PC 同时补 `latest.yml` | `--target app`（Debug APK；`--release` 走签名）、`ios`（需 macOS）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传） |
+| `uendos publish` | 计算 SHA-256/大小并回写商店清单；`--verify` 要求产物与 `release/MANIFEST.json` 完全一致 | `--file` `--item` `--manifest` `--url` 或 `--download-dir` `--version` `--status`（默认 `beta`） |
 
 `doctor` / `conformance` / `sync --check` 失败均以非 0 退出，可直接挂 CI。
 
@@ -205,6 +208,9 @@ return {
 ```
 
 - 接入：`npm install @acme/uendos-plugin-printer` → `uendos plugin add @acme/uendos-plugin-printer`（写配置 + 重新 `sync`）；移除用 `plugin remove`。
+- 写新插件：`uendos plugin init @acme/uendos-plugin-printer` 生成最小可安装包（默认按短名推导能力名，可用 `--capability` 覆盖），再按上面的接入步骤安装。
+- **插件锁**：`sync` / `plugin add|remove|update` 会生成 `uendos.plugins.lock`（版本 + 运行时内容 SHA-256）；`sync --check` 与 `doctor` 据此拦截「锁了版本但代码被换」的漂移。首次在旧工程启用插件时先跑一次 `uendos sync`。
+- **插件依赖**：manifest 可选 `requires: ["@acme/uendos-plugin-core"]`；`sync` 按依赖拓扑排序注册（配置顺序不决定激活顺序），缺依赖或成环直接失败，被依赖的插件不允许直接 `remove`。
 - **升级走构建期热更新**：`uendos plugin update`（默认 `@latest`，`--spec` 可指定版本/内网源）→ 重新校验声明 → `sync`；插件变更随壳包发布，业务侧不会在运行时拉取插件代码。
 - **只允许构建期嵌入**，禁止运行时远程加载；包版本由 `package-lock.json` 锁定，必须提交。
 - 注册即校验：id 唯一、能力不得与内置 18 项重名、多插件不得共享能力、方法命名空间必须是插件自己的能力且不占用 `core/edge/offline/desktop/shell`、方法不得与内置或其他插件重名，任一不满足 `sync` 直接报错。
@@ -265,7 +271,7 @@ return {
     "$UENDOS" sync --check
 ```
 
-`npm test` 先跑运行时源一致性（`check-core`），再跑 25 项测试：契约校验 15 项、CLI 端到端 9 项（init → profile → launcher → theme → entry → add-end → doctor → 插件 → publish）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
+`npm test` 先跑运行时源一致性（`check-core`），再跑 32 项测试：契约校验 16 项、CLI 端到端 15 项（init → profile → launcher → theme → entry → add-end → doctor → 插件 → publish → plugin init → 插件依赖 → upgrade/diff → pack/publish 清单）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
 
 ## 打包与签名
 
@@ -287,9 +293,10 @@ uendos pack --target ios --release   # 归档 build/App.xcarchive，再用 Xcode
 
 ## 发布
 
-1. `uendos publish --file <包> --item <apps.json 条目 id> --manifest <清单路径> --download-dir <目录>`：复制安装包、算 SHA-256/大小、把清单条目改为 `beta`（或 `--status stable`）并更新 `generatedAt`。
+1. `uendos publish --file <包> --item <apps.json 条目 id> --manifest <清单路径> --download-dir <目录> --verify`：先校验产物与 `release/MANIFEST.json` 的大小/SHA-256 一致，再复制安装包、算哈希、把清单条目改为 `beta`（或 `--status stable`）并更新 `generatedAt`。
 2. 稳定通道仍以 `btos-app-store/data/apps.json` 为唯一真相；SDK 不自行放开 `available`。
-3. PC 更新：`pack --target pc` 后把安装包与 `latest.yml` / `latest-mac.yml` 同版本上传到 `/download/latest/`，缺 yml 会导致 updater 静默 404。
+3. PC 更新：`pack --target pc` 后把安装包与 `latest.yml` / `latest-mac.yml` 同版本上传到 `/download/latest/`，缺 yml 会导致 updater 静默 404；`doctor --release-check` 会核对清单哈希与 yml 版本。
+4. `release/MANIFEST.json` 是「出包实物」的账本：`targets.<app|pc>.artifacts[]` 记路径/文件名/大小/SHA-256；未签名时写 `signed: false` 并注明 `signMode`/`note`，不会伪造成已签名。
 
 ## 与现有仓的关系
 

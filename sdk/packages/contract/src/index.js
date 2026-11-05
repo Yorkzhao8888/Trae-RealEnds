@@ -186,7 +186,7 @@ const RE_PLUGIN_METHOD = /^[a-z][a-z0-9]*(\.[a-z][A-Za-z0-9]*)+$/;
 /** 插件不得占用的内置命名空间 */
 export const PLUGIN_RESERVED_NS = ['core', 'edge', 'offline', 'desktop', 'shell'];
 
-export const PLUGIN_MANIFEST_KEYS = ['id', 'version', 'runtime', 'asserts', 'env', 'capabilities', 'methods'];
+export const PLUGIN_MANIFEST_KEYS = ['id', 'version', 'runtime', 'asserts', 'env', 'capabilities', 'methods', 'requires'];
 export const PLUGIN_ENVS = ['capacitor', 'electron', 'mp', 'web'];
 
 /**
@@ -250,6 +250,19 @@ export function validatePluginManifest(m, opts = {}) {
       else if (!(m.capabilities || []).includes(ns)) errors.push(`插件方法 ${method} 不在声明的能力命名空间内`);
       if (seen.has(method)) errors.push(`插件方法重复：${method}`);
       else seen.add(method);
+    }
+  }
+
+  if (m.requires !== undefined) {
+    if (!Array.isArray(m.requires)) errors.push('插件 requires 必须是插件包名数组');
+    else {
+      const seen = new Set();
+      for (const dep of m.requires) {
+        if (typeof dep !== 'string' || !RE_PKG.test(dep)) errors.push(`插件 requires 包名不合法：${dep}`);
+        else if (dep === m.id) errors.push('插件 requires 不能引用自身');
+        else if (seen.has(dep)) errors.push(`插件 requires 重复：${dep}`);
+        else seen.add(dep);
+      }
     }
   }
 

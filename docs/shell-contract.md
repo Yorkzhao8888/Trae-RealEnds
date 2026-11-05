@@ -420,7 +420,7 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 桥版本 `2 → 3`，契约版本 `0.4.0`。新增的是**构建期插件**，不是远程加载：
 
 1. `ShellCore.registerPlugin(id, factory)`：CLI 在 `sync` 时把插件运行时以 `ShellCore.registerPlugin("<id>", function () { <runtime.js 原文> });` 嵌进品牌桥，位置在 `ShellCore.create(cfg)` 之前。**禁止运行时远程加载插件代码**，插件必须 `npm install` 进工程并锁版本（提交 `package-lock.json`）。
-2. 插件包根目录提供 `uendos.plugin.json`：`{ id, version, runtime, asserts?, env?, capabilities, methods }`；配置只写包名：`{ "plugins": ["@scope/uendos-plugin-x"] }`。能力声明以插件包为唯一真相。
+2. 插件包根目录提供 `uendos.plugin.json`：`{ id, version, runtime, asserts?, env?, capabilities, methods, requires? }`；配置只写包名：`{ "plugins": ["@scope/uendos-plugin-x"] }`。能力声明以插件包为唯一真相。
 3. 注册即校验，任一条不满足则返回 `false` 且不注册（不静默降级）：
    - `id` 唯一，且与配置中的包名一致；
    - 能力不得与内置 18 项重名；多个插件不得声明同一能力（暂无 provider 优先级机制）；
@@ -448,3 +448,14 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 5. `conformance`：被裁剪能力对应的断言段记为 `跳过`（不再判失败），输出「通过 / 跳过 / 失败」三档；配置了 `caps` 时额外断言「白名单外能力值为 ─」「白名单外方法返回 `E_UNSUPPORTED`」。
 6. **口径**：这是构建期裁剪，不是权限边界；租户/角色授权仍由云根裁决。`profile` 同理。
 7. CLI：`uendos plugin list [--json]` 列出声明/安装状态/环境/断言；插件缺 `asserts` 时 `doctor` 提示一次（不判失败），`conformance` 记一条跳过。
+
+---
+
+## 23. v0.6 M1 变更（插件脚手架、锁与依赖）
+
+桥版本保持 `3`，运行协议不变；变化集中在插件工程化：
+
+1. `uendos plugin init <包名>` 生成最小可安装插件包（`package.json` / `uendos.plugin.json` / `runtime.js` / `conformance.mjs`），生成前按 manifest 规则自检；不自动改 `uendos.config.json`，必须先 `npm install` 再 `plugin add`。
+2. `uendos.plugins.lock`：记录每个插件的 `version` 与 `runtime` 内容哈希 `sha256-…`，由 `sync` / `plugin add|remove|update` 生成；`sync --check` 与 `doctor` 校验，版本漂移或运行时被改动即失败。锁不是签名，只保证「构建输入的代码与锁一致」。
+3. manifest 新增可选 `requires`（插件包名数组）：不得引用自身、不得重复；`sync` 按依赖拓扑排序注册，缺依赖或成环直接失败；被依赖的插件不允许直接 `plugin remove`。
+4. `plugin list` 增加 `requires` 与 `locked` 字段（`--json` 同步），文本输出对漂移标 `锁 ✗`。
