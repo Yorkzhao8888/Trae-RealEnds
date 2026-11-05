@@ -12,7 +12,7 @@ sdk/
 ├── packages/
 │   ├── contract/                # @uendos/contract：能力/方法/事件/错误码 + 配置校验 + JSON Schema
 │   ├── shell/                   # @uendos/shell：运行时合成（把 shell-core 的 core.js + 品牌配置出桥）
-│   ├── conformance/             # @uendos/conformance：39 项契约断言（vm 沙箱，不依赖真机）
+│   ├── conformance/             # @uendos/conformance：44 项契约断言（vm 沙箱，不依赖真机）
 │   ├── plugin-fixture/          # @uendos/plugin-fixture：插件机制 fixture（假打印机，仅测试用）
 │   └── cli/                     # uendos CLI + App/PC/小程序三套模板
 └── README.md
@@ -31,7 +31,7 @@ sdk/
 
 解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md`、`docs/uendos-customization-v0.4.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
-> 仓库当前代码版本为 **0.5.0**（v0.5 M1 能力白名单 `caps.allow`、M2 插件体验 `plugin list`/断言提示、M3 发版）；分发包与代码同版本。
+> 仓库当前代码版本为 **0.5.0**，v0.6 开发中（M1-M4 已实现，见 [v0.6 方案](../docs/uendos-v0.6-plan.md)）；分发包仍为 0.5.0。
 
 首次接入请先读：[开发者接入指南（v0.3.1）](../docs/uendos-dev-onboarding-v0.3.1.md)，其中第 6 节是 launcher 与原生插件的真机验证步骤。
 
@@ -53,7 +53,7 @@ uendos init acme \
 
 cd acme
 uendos doctor                    # 配置 / 产物 / 端可达性 / 模板体检
-uendos conformance               # 39 项契约断言（配置了插件时为 39 + N）
+uendos conformance               # 44 项契约断言（配置了插件时为 44 + N）
 uendos sync --check              # CI 用：产物必须与配置一致
 ```
 
@@ -76,7 +76,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
 | `uendos diff` | 比对「配置期望 vs 现有产物」与「插件锁 vs 实装」，输出 `-`/`+` 行 | `--json` 输出机器可读结果；不一致退出码 1 |
 | `uendos sync` | 重新合成品牌桥与选择页 | `--check` 只校验不写，不一致时退出码 1 |
 | `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址；`--release-check` 校验 `release/MANIFEST.json` 与 PC `latest.yml` |
-| `uendos conformance` | 对品牌桥跑 39 项契约断言；配置了插件时合并插件断言，输出 `39 + N`；能力被裁剪时对应断言记为跳过 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
+| `uendos conformance` | 对品牌桥跑 44 项契约断言；配置了插件时合并插件断言，输出 `44 + N`；能力被裁剪时对应断言记为跳过 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
 | `uendos profile` | 查看 `lite/standard/pro` 三档默认 target 与能力集 | `--json` 输出机器可读结果 |
 | `uendos plugin list` | 列出配置中的插件：安装状态、版本、环境、能力、断言、依赖与锁状态 | `--json` 输出机器可读结果 |
 | `uendos plugin init <包名>` | 生成插件包脚手架（`uendos.plugin.json` / `runtime.js` / `conformance.mjs`），不自动改配置 | `--capability` `--env` `--dir` `--version` `--force` |
@@ -216,10 +216,30 @@ return {
 - 注册即校验：id 唯一、能力不得与内置 18 项重名、多插件不得共享能力、方法命名空间必须是插件自己的能力且不占用 `core/edge/offline/desktop/shell`、方法不得与内置或其他插件重名，任一不满足 `sync` 直接报错。
 - 激活与回落：只有 `detect(env)` 为真才算 `active`，否则能力记 `─`、方法返回 `E_UNSUPPORTED`；插件抛错映射 `E_NATIVE`。
 - `Shell.plugins` 与握手 payload 携带 `[{ id, version, active }]`，线上可按版本排障。
-- `uendos conformance` 合并插件自带的 `conformance.mjs`（导出 `[{ name, run(Shell) }]`），输出 `39 + N`；`doctor` 打印插件清单与合并后的能力集。
+- `uendos conformance` 合并插件自带的 `conformance.mjs`（导出 `[{ name, run(Shell) }]`），输出 `44 + N`；`doctor` 打印插件清单与合并后的能力集。
 - `uendos pack` 打包前强制 `sync --check`，桥里的插件运行时必须与配置一致。
 
 完整契约见 [shell-contract §21](../docs/shell-contract.md)，设计背景见 [个性化壳方案 §3](../docs/uendos-customization-v0.4.md)。
+
+### 离线队列与事件回看（v0.6 M4）
+
+离线队列落在 `localStorage`，键按品牌作用域隔离，避免同源多品牌串队：
+
+```js
+// 键名：shell:offline-queue:<prefix>，值为版本化信封
+{ "v": 1, "items": [{ idem, method, url, body, headers, at, tries }] }
+```
+
+- 容量上限 200 条（超出淘汰最旧）；旧版裸数组键 `shell:offline-queue` 会在首次读取时一次性迁移。
+- 重启恢复：队列非空时 `shell:ready` 之后派发 `shell:queue-restored`，载荷 `{ count, oldestAt }`；**不自动重放**，由 `offline.flush` 或联网事件触发，幂等键 `X-Idem-Key` 保证不重复。
+- 事件回看：`Shell.events.recent([event], [limit=20])` 返回内存中最近 50 条事件（时间正序，可按事件名过滤）。只读、进程内有效，不落盘，用于调试与断线对账，不替代 `on()` 订阅。
+
+```js
+const pending = await Shell.call('offline.list');
+const missed = Shell.events.recent('shell:queue-replayed', 10);
+```
+
+完整契约见 [shell-contract §24](../docs/shell-contract.md)。
 
 ## 三套模板
 
@@ -238,7 +258,7 @@ return {
 
 `launcher` 模式的业务页由远程加载，Capacitor 原生插件是否可用取决于远程页能否拿到运行时；需要强原生能力（推送/震动/生物识别）时用 `portal`，由主端门户页负责切换。
 
-## 39 项断言覆盖什么
+## 44 项断言覆盖什么
 
 `@uendos/conformance` 用 `vm` 构造最小浏览器沙箱（window / document / navigator / localStorage / fetch / CustomEvent），对生成的桥逐项断言：
 
@@ -247,13 +267,13 @@ return {
 | 结构 | 8 | `window.Shell` 单例、品牌别名、版本、`ends` / `currentEnd` / 能力矩阵 |
 | 握手 | 4 | `core.handshake` 可重放、`core.ready`、bridgeVersion |
 | 端切换 | 4 | `core.switchEnd` 合法/非法 id、`endKey` 持久化、事件载荷 |
-| 事件 | 4 | seq 单调、`at` 存在、品牌事件双写、`off` 退订 |
+| 事件 | 6 | seq 单调、`at` 存在、品牌事件双写、`off` 退订、`events.recent` 过滤/限流 |
 | 错误协议 | 5 | `E_BAD_ARGS` / `E_UNSUPPORTED` / `E_DENIED` 等错误结构统一 |
-| 离线队列 | 6 | 幂等键、顺序重放、4xx 出队、上限裁剪 |
+| 离线队列 | 9 | 幂等键、顺序重放、4xx 出队、品牌作用域信封、旧数组迁移、重启恢复 |
 | 店根适配 | 6 | 未配置 `E_UNSUPPORTED`、超时、`E_STOCK` 映射、租约缓存 |
 | 契约自洽 | 2 | 导出常量与运行时能力一一对应 |
 
-断言在 `vm` 中跑，不需要 Android SDK / Xcode，CI 与本地一致。配置了 `plugins` 时，再按顺序执行各插件自带断言，总数为 `39 + N`（fixture 插件为 5 项，合计 44 项）。
+断言在 `vm` 中跑，不需要 Android SDK / Xcode，CI 与本地一致。配置了 `plugins` 时，再按顺序执行各插件自带断言，总数为 `44 + N`（fixture 插件为 5 项，合计 49 项）。
 
 ## CI 接法
 

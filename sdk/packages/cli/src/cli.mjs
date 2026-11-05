@@ -1362,7 +1362,7 @@ function help() {
   uendos sync [--check]          生成 shell/<brand>-shell.js 与 shell/picker.html（--check 供 CI 校验一致性）
   uendos doctor [--offline] [--release-check]
                                  配置 / 产物 / 端地址 / 模板体检（--release-check 校验发布清单与更新源）
-  uendos conformance [--json]    跑契约断言（内置 39 项 + 插件断言，能力被裁剪时跳过）
+  uendos conformance [--json]    跑契约断言（内置 44 项 + 插件断言，能力被裁剪时跳过）
   uendos assets [--force]        按品牌色生成 assets/icon.png 与 splash.png
   uendos profile [--json]        查看 lite / standard / pro 三档默认 target 与能力集
   uendos plugin list [--json]    列出配置中的插件、安装状态、环境与断言

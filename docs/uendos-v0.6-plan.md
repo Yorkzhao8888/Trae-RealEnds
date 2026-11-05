@@ -16,7 +16,7 @@
 | M1 插件生态闭环（已实现） | `plugin init` 脚手架、`uendos.plugins.lock`、`requires` 依赖与拓扑激活、锁校验进 `doctor`/`sync --check` | 低（纯 CLI/契约） | 脚手架产物通过自身 `validatePluginManifest`；新工程 `plugin init → 安装 → add → conformance` 全过；改插件运行时后 `sync --check` 必须失败 |
 | M2 老工程升级（已实现） | `uendos upgrade`（迁移配置版本 + 备份 + 重生成 + 回归）、`uendos diff`（配置/产物/插件锁差异） | 中（要兼容历史配置） | 无 `caps`/`theme` 的旧工程 `upgrade` 后 `doctor`/`conformance`/`sync --check` 全过；`--check` 只报差异不改文件 |
 | M3 发布与真机闭环（已实现） | `pack` 产物清单（`release/MANIFEST.json`：版本/大小/SHA-256/签名态）、PC `latest.yml` 自动生成、`publish --verify` 校验清单、`doctor --release-check` | 中（依赖证书的部分仍受外部阻塞） | 出包后清单与实物哈希一致；`publish` 拒绝哈希不符；无证书时明确标注「未签名」而非静默通过 |
-| M4 运行时深化 | 离线队列持久化（重启不丢、容量上限、版本迁移）、断线事件重放、桥能力扩展评估 | 高（触及 `shell-core` 与四品牌桥） | 重启后离线队列可继续重放且不重复；四品牌桥 `build.mjs --check` 一致；`conformance` 不退化 |
+| M4 运行时深化（已实现） | 离线队列持久化（重启不丢、容量上限、版本迁移）、`shell:queue-restored` 恢复上报、`Shell.events.recent` 事件回看、桥能力扩展评估（本阶段保持 bridge=3） | 高（触及 `shell-core` 与四品牌桥） | 重启后离线队列可继续重放且不重复；四品牌桥 `build.mjs --check` 一致；`conformance` 不退化（39 → 44） |
 
 顺序理由：M1/M2 只动 SDK 层，先落地；M3 依赖真实产物与证书，能做的先做、做不了的显式标注；M4 改共享运行时，放最后单独评审。
 
@@ -93,9 +93,9 @@ plugins/<短名>/
 
 ## 5. M4：运行时深化
 
-- 离线队列持久化：`localStorage`（web/capacitor）与内存（mp 不存在时降级），键含品牌前缀；容量上限淘汰最旧；启动时恢复并继续重放，幂等键保证不重复。
-- 事件重放：`on()` 断线期间缓存最近 N 条，恢复后按序补发，配 `replayWindow` 上限。
-- 桥能力扩展（如确需）：评估 `BRIDGE_VERSION=4`，握手新增字段必须可选，旧端可忽略；默认仍报 3，配置开启才升。
+- 离线队列持久化：`localStorage` 键按品牌作用域 `shell:offline-queue:<prefix>`，版本化信封 `{v:1,items:[]}`，容量上限 200 条淘汰最旧；兼容旧裸数组一次性迁移；启动恢复非空队列时派发 `shell:queue-restored`（不自动重放，重放仍由 `offline.flush` / 联网事件触发，幂等键保证不重复）。
+- 事件回看：`Shell.events.recent([event], [limit=20])` 内存环形缓冲最近 50 条事件，供调试与断线对账；只读、不落盘、不自动重放，不改变 `on()` 的即时派发语义。
+- 桥能力扩展：评估 `BRIDGE_VERSION=4`；本阶段保持 `3`，握手字段不变，旧端零改动。
 
 ## 6. 风险与对策
 
@@ -110,4 +110,5 @@ plugins/<短名>/
 - **v0.6 M1（已实现，2026-11-04）**：`plugin init` 脚手架、`uendos.plugins.lock`（版本 + 运行时 SHA-256，`sync --check` / `doctor` 校验）、manifest `requires` 依赖拓扑注册、`plugin remove` 依赖保护、`plugin list` 增加依赖与锁状态；契约 §23；测试 30/30。
 - **v0.6 M2（已实现，2026-11-04）**：`uendos upgrade`（补/升 `schemaVersion` 与 `contractVersion`，备份 `.bak`，重生成产物与锁，保留未知键）、`uendos upgrade --check`（只读报告，退出码 1）、`uendos diff [--json]`（产物 `-`/`+` 行与插件锁差异）；测试 31/31。
 - **v0.6 M3（已实现，2026-11-04）**：`pack` 写 `release/MANIFEST.json`（多 target 累积、产物 SHA-256、签名态如实标注）、PC 缺省时补 `latest.yml`（sha512/size/releaseDate，electron-builder 已生成则跳过）、`publish --verify`、`doctor --release-check`；测试 32/32。
-- **v0.6 规划（2026-11-04）**：M4 运行时深化，单独评审后推进。
+- **v0.6 M4（已实现，2026-11-05）**：离线队列按品牌作用域存储（`shell:offline-queue:<prefix>`，版本化信封，旧数组迁移）、启动派发 `shell:queue-restored`、`Shell.events.recent` 事件回看；契约 §24；conformance 内置断言 39 → 44；四品牌桥重建一致，测试 32/32。
+- **v0.6 发版（待办）**：M1-M4 完成后统一升版本号与契约版本、重出分发包。

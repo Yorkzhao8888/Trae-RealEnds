@@ -459,3 +459,16 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 2. `uendos.plugins.lock`：记录每个插件的 `version` 与 `runtime` 内容哈希 `sha256-…`，由 `sync` / `plugin add|remove|update` 生成；`sync --check` 与 `doctor` 校验，版本漂移或运行时被改动即失败。锁不是签名，只保证「构建输入的代码与锁一致」。
 3. manifest 新增可选 `requires`（插件包名数组）：不得引用自身、不得重复；`sync` 按依赖拓扑排序注册，缺依赖或成环直接失败；被依赖的插件不允许直接 `plugin remove`。
 4. `plugin list` 增加 `requires` 与 `locked` 字段（`--json` 同步），文本输出对漂移标 `锁 ✗`。
+
+---
+
+## 24. v0.6 M4 变更（离线队列作用域与事件回看）
+
+桥版本保持 `3`，契约版本保持 `0.5.0`（统一发版时再升）；不新增 `call` 方法、不改变 `on()` 的即时派发语义。
+
+1. **队列键按品牌作用域**：`shell:offline-queue:<prefix>`（`prefix` 来自品牌配置，如 `ziwayos`）。同源多品牌共用 `localStorage` 时互不串队；无 `prefix` 时退回旧键 `shell:offline-queue`。
+2. **版本化信封**：`{ "v": 1, "items": [] }`，容量上限仍为 200 条（超出淘汰最旧）。读取兼容旧版裸数组：作用域键不存在且旧键非空时一次性迁移；作用域键一旦存在（含空信封）即不再回读旧键，避免重复迁移。
+3. **启动恢复**：`create` 已完成时若队列非空，在 `shell:ready` 之后派发 `shell:queue-restored`，载荷 `{ count, oldestAt }`（`oldestAt` 为首条入队时间，缺失时为 `null`）。**不自动重放**：重放仍由 `offline.flush` 或浏览器 `online` 事件触发，幂等键 `X-Idem-Key` 保证不重复投递。
+4. **事件回看**：`Shell.events.recent([event], [limit=20])` 返回内存环形缓冲中的最近事件（上限 50 条），按时间正序；`event` 可按事件名过滤，`limit` 超过 50 时按 50 截断。只读、进程内有效、不写 `localStorage`，用于调试与断线对账，**不替代 `on()`**，也不构成投递保证。
+5. **兼容性**：既有事件名、`seq` / `at` / `data` 载荷不变；`BRIDGE_VERSION` 仍为 `3`。H5 未使用新能力时零改动。
+6. **校验**：`conformance` 内置断言由 39 增至 44（事件 +2、离线队列 +3，含作用域信封、旧数组迁移与重启恢复）；四品牌桥 `build.mjs --check` 一致。

@@ -62,7 +62,7 @@ function makeStorage() {
  * @param {string} source 品牌桥源码
  * @param {object} cfg uendos.config.json
  */
-function createHarness(source, cfg) {
+function createHarness(source, cfg, opts = {}) {
   const history = [];
   let fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({}) });
   let replacedWith = null;
@@ -100,7 +100,7 @@ function createHarness(source, cfg) {
   };
 
   const documentObj = makeDocument();
-  const localStorage = makeStorage();
+  const localStorage = opts.storage || makeStorage();
 
   const sandbox = {
     window: windowObj,
@@ -135,6 +135,7 @@ function createHarness(source, cfg) {
   return {
     sandbox,
     history,
+    localStorage,
     get replacedWith() { return replacedWith; },
     get shell() { return windowObj.Shell; },
     setFetch(fn) { fetchImpl = fn; },
@@ -317,6 +318,23 @@ export async function runConformance(shellFile, opts = {}) {
     await Shell.call('core.switchEnd', { id: first });
     if (received !== before) throw new Error(`取消后仍收到事件（${received}）`);
   });
+  await record(results, 'events.recent 可回看最近事件', () => {
+    if (!Shell.events || typeof Shell.events.recent !== 'function') throw new Error('缺 events.recent');
+    const all = Shell.events.recent();
+    if (!Array.isArray(all) || !all.length) throw new Error('事件日志为空');
+    if (all.length > 20) throw new Error(`默认条数=${all.length}`);
+    for (const e of all) {
+      if (typeof e.event !== 'string' || typeof e.seq !== 'number') throw new Error('载荷不合法');
+    }
+  });
+  await record(results, 'events.recent 支持按事件名过滤与 limit', () => {
+    const ready = Shell.events.recent('shell:ready');
+    if (!ready.length || ready.some((e) => e.event !== 'shell:ready')) throw new Error('过滤失效');
+    const one = Shell.events.recent(1);
+    if (one.length !== 1) throw new Error(`limit=1 返回 ${one.length} 条`);
+    const tail = Shell.events.recent();
+    if (one[0].seq !== tail[tail.length - 1].seq) throw new Error('recent 顺序不一致');
+  });
 
   // ---------------------------------------------------------------- 错误协议
   await record(results, '未知方法返回 E_UNSUPPORTED', async () => {
@@ -398,6 +416,43 @@ export async function runConformance(shellFile, opts = {}) {
     if (list.data.length !== 1) throw new Error('网络异常时队列被清空');
     h.setFetch(async () => mkRes(200, {}));
     await Shell.call('offline.flush');
+  });
+  await recordCap(results, '队列按品牌作用域存储且为版本化信封', 'offlineQueue', async () => {
+    h.sandbox.navigator.onLine = false;
+    await Shell.call('offline.enqueue', { url: 'https://demo.local/scope', method: 'POST', body: {} });
+    const key = `shell:offline-queue:${cfg.prefix}`;
+    const raw = h.localStorage.getItem(key);
+    if (!raw) throw new Error('未写入品牌作用域键');
+    const env = JSON.parse(raw);
+    if (env.v !== 1 || !Array.isArray(env.items) || env.items.length !== 1) throw new Error('信封不合法');
+    h.localStorage.removeItem(key);
+  });
+  await recordCap(results, '旧版裸数组队列可读取并迁移', 'offlineQueue', async () => {
+    const store = makeStorage();
+    store.setItem('shell:offline-queue', JSON.stringify([
+      { idem: 'old-1', method: 'POST', url: 'https://demo.local/q', body: null, headers: {}, at: 1, tries: 0 },
+    ]));
+    const old = createHarness(source, cfg, { storage: store });
+    await old.wait(20);
+    const list = await old.shell.call('offline.list');
+    if (!list.ok || list.data.length !== 1 || list.data[0].idem !== 'old-1') throw new Error('旧队列未迁移');
+    const raw = store.getItem(`shell:offline-queue:${cfg.prefix}`);
+    if (!raw || JSON.parse(raw).v !== 1) throw new Error('未写入版本化信封');
+  });
+  await recordCap(results, '重启后恢复队列并发出 queue-restored', 'offlineQueue', async () => {
+    const store = makeStorage();
+    const first = createHarness(source, cfg, { storage: store });
+    await first.wait(20);
+    first.sandbox.navigator.onLine = false;
+    await first.shell.call('offline.enqueue', { url: 'https://demo.local/restart', method: 'POST', body: {} });
+    const next = createHarness(source, cfg, { storage: store });
+    await next.wait(20);
+    const ev = next.history.find((e) => e.type === 'shell:queue-restored');
+    if (!ev) throw new Error('缺 shell:queue-restored');
+    if (!ev.detail.data || ev.detail.data.count !== 1) throw new Error('恢复数量不对');
+    if (typeof ev.detail.data.oldestAt !== 'number') throw new Error('缺 oldestAt');
+    const list = await next.shell.call('offline.list');
+    if (!list.ok || list.data.length !== 1) throw new Error('恢复后队列为空');
   });
 
   // ---------------------------------------------------------------- 店根适配

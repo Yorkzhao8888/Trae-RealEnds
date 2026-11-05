@@ -183,7 +183,7 @@ test('doctor --offline 与 conformance 通过', () => {
   assert.match(doctor, /全部通过/);
 
   const conf = run(['conformance']);
-  assert.match(conf, /39 通过 \/ 0 失败/);
+  assert.match(conf, /44 通过 \/ 0 失败/);
 });
 
 test('能力白名单：裁剪能力位、拦住方法、conformance 跳过', () => {
@@ -298,7 +298,7 @@ test('插件：注册进品牌桥、doctor 体检、断言合并', () => {
   assert.match(doctor, /内置 18 项 \+ 插件 1 项（printer）/);
 
   const conf = run(['conformance']);
-  assert.match(conf, /44 通过 \/ 0 失败/, '内置 39 + 插件 5 项');
+  assert.match(conf, /49 通过 \/ 0 失败/, '内置 44 + 插件 5 项');
 
   // 构建期热更新：plugin update 走 npm install → 重新校验 → sync，不涉及运行时远程加载
   const v2 = join(DIR, '.fixtures', 'plugin-v2');
@@ -526,7 +526,7 @@ test('plugin init 生成脚手架，锁拦截运行时漂移', () => {
     assert.equal(lock.plugins[name].version, '0.1.0');
     assert.match(lock.plugins[name].integrity, /^sha256-[0-9a-f]{64}$/);
     assert.match(run(['sync', '--check'], opts), /产物一致/);
-    assert.match(run(['conformance'], opts), /42 通过 \/ 0 失败/, '内置 39 + 脚手架 3');
+    assert.match(run(['conformance'], opts), /47 通过 \/ 0 失败/, '内置 44 + 脚手架 3');
     assert.match(run(['plugin', 'list'], opts), new RegExp(`${name}@0\\.1\\.0`));
     assert.doesNotMatch(run(['plugin', 'list'], opts), /锁 ✗/);
 

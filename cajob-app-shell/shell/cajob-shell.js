@@ -38,6 +38,7 @@
 
   function emit(event, detail) {
     var payload = { event: event, seq: ++seq, at: nowMonotonic(), data: detail === undefined ? null : detail };
+    recordEvent(payload);
     try {
       window.dispatchEvent(new CustomEvent(event, { detail: payload }));
     } catch (e) {}
@@ -56,6 +57,27 @@
   }
 
   var listeners = [];
+
+  // 最近事件环形缓冲：只记录、不自动重放，供 H5 断线恢复后对账（Shell.events.recent）
+  var EVENT_LOG_MAX = 50;
+  var eventLog = [];
+
+  function recordEvent(payload) {
+    eventLog.push(payload);
+    if (eventLog.length > EVENT_LOG_MAX) eventLog.shift();
+  }
+
+  // recent([event], [limit=20])：按时间正序返回最近 limit 条；event 可省略
+  function recentEvents(event, limit) {
+    var n = typeof event === 'number' ? event : limit;
+    var name = typeof event === 'string' ? event : null;
+    n = n === undefined ? 20 : Number(n);
+    if (!isFinite(n) || n < 1) n = 20;
+    if (n > EVENT_LOG_MAX) n = EVENT_LOG_MAX;
+    var picked = name ? eventLog.filter(function (e) { return e.event === name; }) : eventLog.slice();
+    return picked.slice(Math.max(0, picked.length - n));
+  }
+
   // 契约事件 → 品牌事件后缀（兼容 v0.1 命名）
   var ALIAS_SUFFIX = {
     'shell:ready': 'shell-ready',
@@ -551,20 +573,48 @@
 
   // 条目：{ idem, method, url, body, at, tries }
   // 规则：幂等键由端生成；联网后按入队顺序重放；4xx 视为永久失败并出队，5xx/网络错误保留重试。
-  var QUEUE_KEY = 'shell:offline-queue';
+  // 队列按品牌作用域隔离：同源多品牌共用 localStorage 时互不串队。
+  var QUEUE_BASE_KEY = 'shell:offline-queue';
   var flushing = false;
 
-  function queueRead() {
+  function queueKey() {
+    var prefix = state.config && state.config.prefix;
+    return prefix ? QUEUE_BASE_KEY + ':' + prefix : QUEUE_BASE_KEY;
+  }
+
+  // 兼容旧版裸数组：读到即迁移为版本化信封 {v:1,items:[]}
+  function queueParse(raw) {
+    if (!raw) return null;
     try {
-      var raw = localStorage.getItem(QUEUE_KEY);
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      return [];
+      var v = JSON.parse(raw);
+      if (Array.isArray(v)) return { items: v };
+      if (v && typeof v === 'object' && Array.isArray(v.items)) return { items: v.items };
+    } catch (e) {}
+    return null;
+  }
+
+  function queueRead() {
+    var key = queueKey();
+    var raw = null;
+    try { raw = localStorage.getItem(key); } catch (e) {}
+    // 作用域键存在（即使是空信封）即以它为准，避免旧队列被反复迁移
+    if (raw !== null) {
+      var cur = queueParse(raw);
+      return cur ? cur.items : [];
     }
+    try {
+      var old = queueParse(localStorage.getItem(QUEUE_BASE_KEY));
+      if (old && old.items.length) {
+        var items = old.items.slice(0, 200);
+        try { localStorage.setItem(key, JSON.stringify({ v: 1, items: items })); } catch (e) {}
+        return items;
+      }
+    } catch (e) {}
+    return [];
   }
 
   function queueWrite(list) {
-    try { localStorage.setItem(QUEUE_KEY, JSON.stringify(list.slice(0, 200))); } catch (e) {}
+    try { localStorage.setItem(queueKey(), JSON.stringify({ v: 1, items: list.slice(0, 200) })); } catch (e) {}
   }
 
   function uuid() {
@@ -895,6 +945,9 @@
       theme: state.theme,
       ends: config.ends,
       plugins: pluginList(),
+      events: {
+        recent: recentEvents,
+      },
       call: call,
       on: function (event, fn) {
         if (typeof fn !== 'function') return function () {};
@@ -953,6 +1006,11 @@
       Shell.ready = true;
       state.ready = true;
       emit('shell:ready', handshakePayload());
+      // 重启恢复：只上报待重放数量，不自动重放（重放由 offline.flush 或联网事件触发）
+      var restored = queueRead();
+      if (restored.length) {
+        emit('shell:queue-restored', { count: restored.length, oldestAt: restored[0].at || null });
+      }
     }, 0);
 
     console.log('[shell-core] v' + CORE_VERSION + ' ready (' + state.env + ')');
