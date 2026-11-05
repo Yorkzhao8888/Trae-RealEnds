@@ -17,8 +17,9 @@
 | M2 老工程升级（已实现） | `uendos upgrade`（迁移配置版本 + 备份 + 重生成 + 回归）、`uendos diff`（配置/产物/插件锁差异） | 中（要兼容历史配置） | 无 `caps`/`theme` 的旧工程 `upgrade` 后 `doctor`/`conformance`/`sync --check` 全过；`--check` 只报差异不改文件 |
 | M3 发布与真机闭环（已实现） | `pack` 产物清单（`release/MANIFEST.json`：版本/大小/SHA-256/签名态）、PC `latest.yml` 自动生成、`publish --verify` 校验清单、`doctor --release-check` | 中（依赖证书的部分仍受外部阻塞） | 出包后清单与实物哈希一致；`publish` 拒绝哈希不符；无证书时明确标注「未签名」而非静默通过 |
 | M4 运行时深化（已实现） | 离线队列持久化（重启不丢、容量上限、版本迁移）、`shell:queue-restored` 恢复上报、`Shell.events.recent` 事件回看、桥能力扩展评估（本阶段保持 bridge=3） | 高（触及 `shell-core` 与四品牌桥） | 重启后离线队列可继续重放且不重复；四品牌桥 `build.mjs --check` 一致；`conformance` 不退化（39 → 44） |
+| M5 `0.6.0` 发版（已实现） | 版本/契约升 `0.6.0`、文档收口、四品牌桥重建、分发包与 Release | 全新解压 `npm ci && npm test` 全绿；`init → doctor --offline → conformance 44/44 → sync --check` 全过；包内 `check-core` 一致 |
 
-顺序理由：M1/M2 只动 SDK 层，先落地；M3 依赖真实产物与证书，能做的先做、做不了的显式标注；M4 改共享运行时，放最后单独评审。
+顺序理由：M1/M2 只动 SDK 层，先落地；M3 依赖真实产物与证书，能做的先做、做不了的显式标注；M4 改共享运行时，放最后单独评审；M5 统一发版。
 
 ## 2. M1：插件生态闭环
 
@@ -111,4 +112,4 @@ plugins/<短名>/
 - **v0.6 M2（已实现，2026-11-04）**：`uendos upgrade`（补/升 `schemaVersion` 与 `contractVersion`，备份 `.bak`，重生成产物与锁，保留未知键）、`uendos upgrade --check`（只读报告，退出码 1）、`uendos diff [--json]`（产物 `-`/`+` 行与插件锁差异）；测试 31/31。
 - **v0.6 M3（已实现，2026-11-04）**：`pack` 写 `release/MANIFEST.json`（多 target 累积、产物 SHA-256、签名态如实标注）、PC 缺省时补 `latest.yml`（sha512/size/releaseDate，electron-builder 已生成则跳过）、`publish --verify`、`doctor --release-check`；测试 32/32。
 - **v0.6 M4（已实现，2026-11-05）**：离线队列按品牌作用域存储（`shell:offline-queue:<prefix>`，版本化信封，旧数组迁移）、启动派发 `shell:queue-restored`、`Shell.events.recent` 事件回看；契约 §24；conformance 内置断言 39 → 44；四品牌桥重建一致，测试 32/32。
-- **v0.6 发版（待办）**：M1-M4 完成后统一升版本号与契约版本、重出分发包。
+- **v0.6 发版（已实现，2026-11-05）**：版本/契约/内核统一升 `0.6.0`（`BRIDGE_VERSION` 保持 `3`），四品牌桥与 3 个 preload 重建；分发包 `BTOS-UendOS-SDK-0.6.0.zip`（214,427 B）/ `.tar.gz`（173,091 B）已生成并解压实测（`npm ci && npm test` 32/32、`init → doctor --offline → conformance 44/44 → sync --check` 全过）；GitHub Release 待推送。

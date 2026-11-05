@@ -1,4 +1,4 @@
-# 真实端壳契约 v0.5.0
+# 真实端壳契约 v0.6.0
 
 > 适用范围：`Trae-RealEnds` 内全部壳工程（App / 小程序 / PC / 浏览器兜底）。
 > 本文件是**唯一真相**：壳、H5、发行部署都以本文对齐。改契约先改本文，再改实现。
@@ -22,7 +22,7 @@
 
 | 字段 | 当前值 | 说明 |
 |---|---|---|
-| `contractVersion` | `0.5.0` | 本文版本，语义化 |
+| `contractVersion` | `0.6.0` | 本文版本，语义化 |
 | `shellVersion` | 各壳自报 | 壳内核版本 |
 | `appVersion` | 各壳自报 | 商店发版版本 |
 
@@ -111,7 +111,7 @@
 ```js
 window.dispatchEvent(new CustomEvent('shell:ready', {
   detail: {
-    contractVersion: '0.5.0',
+    contractVersion: '0.6.0',
     shellVersion: '0.1.0',
     appVersion: '0.1.0',
     brand: 'ziway',
@@ -464,7 +464,7 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 
 ## 24. v0.6 M4 变更（离线队列作用域与事件回看）
 
-桥版本保持 `3`，契约版本保持 `0.5.0`（统一发版时再升）；不新增 `call` 方法、不改变 `on()` 的即时派发语义。
+桥版本保持 `3`，契约版本升至 `0.6.0`；不新增 `call` 方法、不改变 `on()` 的即时派发语义。
 
 1. **队列键按品牌作用域**：`shell:offline-queue:<prefix>`（`prefix` 来自品牌配置，如 `ziwayos`）。同源多品牌共用 `localStorage` 时互不串队；无 `prefix` 时退回旧键 `shell:offline-queue`。
 2. **版本化信封**：`{ "v": 1, "items": [] }`，容量上限仍为 200 条（超出淘汰最旧）。读取兼容旧版裸数组：作用域键不存在且旧键非空时一次性迁移；作用域键一旦存在（含空信封）即不再回读旧键，避免重复迁移。

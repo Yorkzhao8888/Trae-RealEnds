@@ -22,16 +22,16 @@ sdk/
 
 ## 分发包
 
-0.5.0 分发包随 GitHub Release [`uendos-sdk-v0.5.0`](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/tag/uendos-sdk-v0.5.0) 发布：
+0.6.0 分发包已生成（GitHub Release `uendos-sdk-v0.6.0` 待推送）：
 
-- [BTOS-UendOS-SDK-0.5.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.5.0/BTOS-UendOS-SDK-0.5.0.zip)（191,854 B，SHA-256 `4c954194654c029895ff55bb1e806ea23eb34d772f65e5f03153c660cfe8f225`）
-- [BTOS-UendOS-SDK-0.5.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.5.0/BTOS-UendOS-SDK-0.5.0.tar.gz)（153,985 B，SHA-256 `960d32cf0e7bee32c8369fd6282d0d395cec61766e46fc1d48fbc473c65f8451`）
+- [BTOS-UendOS-SDK-0.6.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.6.0/BTOS-UendOS-SDK-0.6.0.zip)（214,427 B，SHA-256 `11eba27f4efeaa811c3fca5e6874618c832ac2fbb3c9a8f2de969f21b4f92576`）
+- [BTOS-UendOS-SDK-0.6.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.6.0/BTOS-UendOS-SDK-0.6.0.tar.gz)（173,091 B，SHA-256 `dfed51dcbe329d58f1849835b596e7c2a215489dfcd37f226350415a087a2f16`）
 
-> 0.5.0 包已在仓库 `dist/` 实测：解压后 `cd sdk && npm ci && npm test` 为 28/28，`init → doctor --offline → conformance → sync --check` 全过；`caps.allow` 示例为 27 通过 / 14 跳过 / 0 失败。
+> 0.6.0 包已在仓库 `dist/` 实测：解压后 `cd sdk && npm ci && npm test` 为 32/32，`init → doctor --offline → conformance 44/44 → sync --check` 全过。
 
 解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md`、`docs/uendos-customization-v0.4.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
-> 仓库当前代码版本为 **0.5.0**，v0.6 开发中（M1-M4 已实现，见 [v0.6 方案](../docs/uendos-v0.6-plan.md)）；分发包仍为 0.5.0。
+> 仓库当前代码版本为 **0.6.0**（v0.6 M1-M4 已实现并随发版收口，见 [v0.6 方案](../docs/uendos-v0.6-plan.md)）。
 
 首次接入请先读：[开发者接入指南（v0.3.1）](../docs/uendos-dev-onboarding-v0.3.1.md)，其中第 6 节是 launcher 与原生插件的真机验证步骤。
 
@@ -100,7 +100,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
   "accent": "#4C8DFF",
   "statusBarStyle": "dark",
   "endKey": "acme.end",
-  "contractVersion": "0.5.0",
+  "contractVersion": "0.6.0",
   "profile": "standard",
   "targets": ["app", "pc"],
   "packageId": "com.acme.app",

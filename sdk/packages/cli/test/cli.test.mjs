@@ -41,7 +41,7 @@ test('init 生成配置、品牌桥与三套模板', () => {
   assert.deepEqual(cfg.targets, ['app', 'pc', 'mp']);
   assert.deepEqual(Object.keys(cfg.ends).sort(), ['ep', 'hp']);
   assert.equal(cfg.launchMode, 'portal');
-  assert.match(cfg.contractVersion, /^0\.5\./);
+  assert.match(cfg.contractVersion, /^0\.6\./);
 
   const cap = JSON.parse(readFileSync(join(DIR, 'capacitor.config.json'), 'utf8'));
   assert.equal(cap.server.url, 'https://hp.acme.example.com/');
@@ -638,7 +638,7 @@ test('upgrade 迁移旧契约版本，diff 拦截手改', () => {
     assert.ok(existsSync(`${cfgPath}.bak`), '升级前应备份配置');
     const after = JSON.parse(readFileSync(cfgPath, 'utf8'));
     assert.equal(after.schemaVersion, 1);
-    assert.match(after.contractVersion, /^0\.5\./);
+    assert.match(after.contractVersion, /^0\.6\./);
     assert.match(run(['upgrade'], opts), /配置版本已是最新/);
     assert.match(run(['sync', '--check'], opts), /产物一致/);
 
