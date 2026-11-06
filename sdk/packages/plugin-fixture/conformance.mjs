@@ -1,5 +1,5 @@
 /**
- * fixture 插件自带断言：uendos conformance 会把它合并到 44 项之后。
+ * fixture 插件自带断言：uendos conformance 会把它合并到 46 项之后。
  * 每项形如 { name, run(Shell) }；run 抛异常即失败。
  */
 export default [

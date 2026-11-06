@@ -6,6 +6,8 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, exist
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { BRIDGE_VERSION } from '../../shell/src/index.js';
+import { CONTRACT_VERSION } from '../../contract/src/index.js';
 
 const BIN = fileURLToPath(new URL('../bin/uendos.mjs', import.meta.url));
 const DIR = mkdtempSync(join(tmpdir(), 'uendos-cli-'));
@@ -41,7 +43,7 @@ test('init 生成配置、品牌桥与三套模板', () => {
   assert.deepEqual(cfg.targets, ['app', 'pc', 'mp']);
   assert.deepEqual(Object.keys(cfg.ends).sort(), ['ep', 'hp']);
   assert.equal(cfg.launchMode, 'portal');
-  assert.match(cfg.contractVersion, /^0\.6\./);
+  assert.match(cfg.contractVersion, /^0\.7\./);
 
   const cap = JSON.parse(readFileSync(join(DIR, 'capacitor.config.json'), 'utf8'));
   assert.equal(cap.server.url, 'https://hp.acme.example.com/');
@@ -89,7 +91,7 @@ test('profile=lite：默认只出 App、portal 启动，档位信息可查询', 
   const out = JSON.parse(run(['profile', '--json']));
   assert.deepEqual(Object.keys(out).sort(), ['lite', 'pro', 'standard']);
   assert.equal(out.lite.capabilities.length, 9);
-  assert.equal(out.pro.capabilities.length, 18);
+  assert.equal(out.pro.capabilities.length, 21);
 });
 
 test('launcher 模式：不固定主端 URL，选择页可记住所选端', () => {
@@ -182,8 +184,16 @@ test('doctor --offline 与 conformance 通过', () => {
   const doctor = run(['doctor', '--offline']);
   assert.match(doctor, /全部通过/);
 
+  const raw = run(['doctor', '--offline', '--json']);
+  const doc = JSON.parse(raw);
+  assert.equal(doc.ok, true, 'doctor --json 应报告 ok');
+  assert.equal(typeof doc.bridgeVersion, 'string');
+  assert.ok(Array.isArray(doc.checks) && doc.checks.length > 0, '缺 checks');
+  assert.ok(doc.capabilities && doc.capabilities.builtin > 0, '缺 capabilities');
+  assert.ok(!/(token|secret|password|deviceId|"phone")/i.test(raw), '诊断包不应含敏感字段');
+
   const conf = run(['conformance']);
-  assert.match(conf, /44 通过 \/ 0 失败/);
+  assert.match(conf, /55 通过 \/ 0 失败/);
 });
 
 test('能力白名单：裁剪能力位、拦住方法、conformance 跳过', () => {
@@ -251,7 +261,7 @@ test('plugin list 与断言缺省提示', () => {
     const cfg = JSON.parse(readFileSync(join(dir, 'uendos.config.json'), 'utf8'));
     cfg.plugins = ['@uendos/plugin-fixture'];
     writeFileSync(join(dir, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
-    run(['sync'], opts);
+    run(['sync', '--allow-unsigned'], opts);
 
     const text = run(['plugin', 'list'], opts);
     assert.match(text, /插件（声明 1 个）/);
@@ -265,7 +275,7 @@ test('plugin list 与断言缺省提示', () => {
     assert.equal(rows[0].asserts, null);
     assert.deepEqual(rows[0].capabilities, ['printer']);
 
-    assert.match(run(['doctor', '--offline'], opts), /未提供断言/);
+    assert.match(run(['doctor', '--offline', '--allow-unsigned'], opts), /未提供断言/);
     const conf = run(['conformance'], opts);
     assert.match(conf, /未提供断言/);
     assert.match(conf, /\d+ 通过 \/ 1 跳过 \/ 0 失败/);
@@ -286,19 +296,19 @@ test('插件：注册进品牌桥、doctor 体检、断言合并', () => {
   cfg.plugins = ['@uendos/plugin-fixture'];
   writeFileSync(join(DIR, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
 
-  assert.match(run(['sync']), /已生成/);
-  assert.match(run(['sync', '--check']), /产物一致/);
+  assert.match(run(['sync', '--allow-unsigned']), /已生成/);
+  assert.match(run(['sync', '--check', '--allow-unsigned']), /产物一致/);
 
   const bridge = readFileSync(join(DIR, 'shell', 'demo-acme-shell.js'), 'utf8');
   assert.match(bridge, /ShellCore\.registerPlugin\("@uendos\/plugin-fixture"/);
   assert.match(bridge, /'printer\.print'/, '插件 runtime 应被原样嵌入');
 
-  const doctor = run(['doctor', '--offline']);
+  const doctor = run(['doctor', '--offline', '--allow-unsigned']);
   assert.match(doctor, /插件：1 个 · @uendos\/plugin-fixture@0\.1\.0/);
-  assert.match(doctor, /内置 18 项 \+ 插件 1 项（printer）/);
+  assert.match(doctor, /内置 21 项 \+ 插件 1 项（printer）/);
 
   const conf = run(['conformance']);
-  assert.match(conf, /49 通过 \/ 0 失败/, '内置 44 + 插件 5 项');
+  assert.match(conf, /60 通过 \/ 0 失败/, '内置 55 + 插件 5 项');
 
   // 构建期热更新：plugin update 走 npm install → 重新校验 → sync，不涉及运行时远程加载
   const v2 = join(DIR, '.fixtures', 'plugin-v2');
@@ -329,12 +339,12 @@ test('插件：注册进品牌桥、doctor 体检、断言合并', () => {
   chmodSync(npmStub, 0o755);
   const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, UENDOS_FAKE_PLUGIN_SRC: v2 };
 
-  const up = run(['plugin', 'update'], { env });
+  const up = run(['plugin', 'update', '--allow-unsigned'], { env });
   assert.match(up, /@uendos\/plugin-fixture 0\.1\.0 → 0\.2\.0/);
   assert.match(readFileSync(join(DIR, 'shell', 'demo-acme-shell.js'), 'utf8'), /version: '0\.2\.0'/, '升级后桥内插件版本应更新');
-  assert.match(run(['sync', '--check']), /产物一致/);
-  assert.match(run(['doctor', '--offline']), /@uendos\/plugin-fixture@0\.2\.0/);
-  assert.match(run(['plugin', 'update'], { env }), /已是最新/);
+  assert.match(run(['sync', '--check', '--allow-unsigned']), /产物一致/);
+  assert.match(run(['doctor', '--offline', '--allow-unsigned']), /@uendos\/plugin-fixture@0\.2\.0/);
+  assert.match(run(['plugin', 'update', '--allow-unsigned'], { env }), /已是最新/);
 
   // 负例：能力与内置重名 → sync 必须失败
   const bad = join(DIR, 'node_modules', '@uendos', 'bad-plugin');
@@ -349,7 +359,7 @@ test('插件：注册进品牌桥、doctor 体检、断言合并', () => {
   writeFileSync(join(bad, 'runtime.js'), 'return { capabilities: { vibrate: "✓" }, methods: {} };\n');
   cfg.plugins = ['@uendos/bad-plugin'];
   writeFileSync(join(DIR, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
-  assert.throws(() => run(['sync']), /Command failed|插件/);
+  assert.throws(() => run(['sync', '--allow-unsigned']), /Command failed|插件/);
 });
 
 test('publish 计算哈希、复制安装包并回写清单', () => {
@@ -361,6 +371,10 @@ test('publish 计算哈希、复制安装包并回写清单', () => {
   mkdirSync(join(DIR, 'release'), { recursive: true });
   const relManifest = {
     version: '1.2.3',
+    signature: 'dev',
+    bridgeVersion: BRIDGE_VERSION,
+    contractVersion: CONTRACT_VERSION,
+    plugins: [],
     targets: {
       app: {
         artifacts: [{
@@ -371,6 +385,7 @@ test('publish 计算哈希、复制安装包并回写清单', () => {
         }],
         signed: false,
         signMode: 'debug',
+        signature: 'dev',
       },
     },
   };
@@ -466,6 +481,10 @@ test('pack --target pc 写发布清单与 latest.yml，doctor --release-check �
     assert.equal(art.size, Buffer.byteLength('fake-installer'));
     assert.match(art.sha256, /^[0-9a-f]{64}$/);
     assert.equal(mf.targets.pc.signed, false, '未检测签名时不能写成已签名');
+    assert.equal(mf.signature, 'dev', 'PC 未验证构建凭据时应标注 dev');
+    assert.equal(mf.bridgeVersion, BRIDGE_VERSION);
+    assert.equal(mf.contractVersion, CONTRACT_VERSION);
+    assert.deepEqual(mf.plugins, []);
 
     const ymlName = readdirSync(join(dir, 'release')).find((n) => /^latest(-mac|-linux)?\.yml$/.test(n));
     assert.ok(ymlName, '应生成 latest.yml');
@@ -473,8 +492,11 @@ test('pack --target pc 写发布清单与 latest.yml，doctor --release-check �
     assert.match(yml, new RegExp(`version: ${version.replace(/\./g, '\\.')}`));
     assert.match(yml, /sha512: [A-Za-z0-9+/=]+/);
 
-    const doc = run(['doctor', '--offline', '--release-check'], opts);
+    const doc = run(['doctor', '--offline', '--release-check', '--integrity'], opts);
     assert.match(doc, /发布清单：v/);
+    assert.match(doc, /发布清单签名态：dev/);
+    assert.match(doc, new RegExp(`发布清单桥版本：${BRIDGE_VERSION} 与当前 ${BRIDGE_VERSION} 一致`));
+    assert.match(doc, new RegExp(`发布清单契约版本：${CONTRACT_VERSION.replace(/\./g, '\\.')} 与当前`));
     assert.match(doc, /产物与清单一致：App-/);
     assert.match(doc, new RegExp(`PC 更新源版本：${ymlName} ${version} 与清单一致`));
     assert.match(doc, /未签名或未验证/);
@@ -485,6 +507,102 @@ test('pack --target pc 写发布清单与 latest.yml，doctor --release-check �
       () => run(['doctor', '--offline', '--release-check'], opts),
       (e) => /项未通过/.test(`${e.stdout || ''}`),
       '产物被改应判失败',
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('pack --channel：stable/beta 指针互不影响，publish 灰度与 rollback 生效', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-chan-'));
+  const opts = { cwd: dir };
+  try {
+    run([
+      'init', 'chan-demo',
+      '--brand', 'chan-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'pc',
+      '--dir', dir,
+    ], opts);
+    const pkgPath = join(dir, 'package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    const v1 = pkg.version;
+
+    const bin = join(dir, '.fakebin');
+    mkdirSync(bin, { recursive: true });
+    const stub = join(bin, 'npm');
+    writeFileSync(stub, [
+      '#!/bin/sh',
+      'if [ "$1" = "run" ] && [ "$2" = "dist" ]; then',
+      '  mkdir -p release',
+      '  printf "fake-installer-$UENDOS_FAKE_VERSION" > "release/App-$UENDOS_FAKE_VERSION.exe"',
+      'fi',
+      'exit 0',
+      '',
+    ].join('\n'));
+    chmodSync(stub, 0o755);
+    const baseEnv = { ...process.env, PATH: `${bin}:${process.env.PATH}` };
+    const pack = (version, channel) => run(['pack', '--target', 'pc', '--channel', channel],
+      { ...opts, env: { ...baseEnv, UENDOS_FAKE_VERSION: version } });
+
+    pack(v1, 'stable');
+    const stableYml = join(dir, 'release', 'latest-linux.yml');
+    const betaYml = join(dir, 'release', 'latest-linux-beta.yml');
+    const stable1 = readFileSync(stableYml, 'utf8');
+    const mf1 = JSON.parse(readFileSync(join(dir, 'release', 'MANIFEST.json'), 'utf8'));
+    assert.equal(mf1.channel, 'stable');
+    assert.equal(mf1.rollout, 100);
+    assert.equal(mf1.killSwitch, false);
+
+    pack(v1, 'beta');
+    assert.ok(existsSync(betaYml), 'beta 应写独立指针');
+    assert.equal(readFileSync(stableYml, 'utf8'), stable1, 'beta 不应改动 stable 指针');
+
+    // 只调灰度：不碰指针，只改通道注册表
+    run(['publish', '--channel', 'beta', '--rollout', '30'], opts);
+    let reg = JSON.parse(readFileSync(join(dir, 'release', 'channels.json'), 'utf8'));
+    assert.equal(reg.channels.beta.current.rollout, 30);
+    assert.equal(reg.channels.stable.current.rollout, 100, 'beta 灰度不影响 stable');
+    assert.equal(reg.channels.beta.current.bridgeVersion, BRIDGE_VERSION);
+
+    // 新版本进 beta：指针更新、previous 记录旧版本，stable 仍不变
+    pkg.version = '0.7.1';
+    writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    pack('0.7.1', 'beta');
+    reg = JSON.parse(readFileSync(join(dir, 'release', 'channels.json'), 'utf8'));
+    assert.equal(reg.channels.beta.current.version, '0.7.1');
+    assert.equal(reg.channels.beta.previous.version, v1);
+    assert.match(readFileSync(betaYml, 'utf8'), /version: 0\.7\.1/);
+    assert.equal(readFileSync(stableYml, 'utf8'), stable1, 'stable 指针仍指向旧版本');
+
+    // 回滚：指针退回上一版本快照
+    const rb = run(['publish', '--rollback', '--channel', 'beta'], opts);
+    assert.match(rb, /已回滚通道 beta：0\.7\.1 → /);
+    reg = JSON.parse(readFileSync(join(dir, 'release', 'channels.json'), 'utf8'));
+    assert.equal(reg.channels.beta.current.version, v1);
+    assert.equal(reg.channels.beta.previous, null);
+    assert.match(readFileSync(betaYml, 'utf8'), new RegExp(`version: ${v1.replace(/\./g, '\\.')}`));
+
+    const doc = run(['doctor', '--offline', '--release-check', '--channel', 'beta'], opts);
+    assert.match(doc, new RegExp(`通道 beta 桥版本：${BRIDGE_VERSION} 与当前 ${BRIDGE_VERSION} 一致`));
+    assert.match(doc, /通道 beta 指针版本：latest-linux-beta\.yml/);
+    assert.match(doc, /通道 beta 产物与指针一致：App-/);
+    assert.match(doc, /全部通过/);
+
+    // 无上一版本时软回滚：指针不动，灰度置 0 + killSwitch
+    const soft = run(['publish', '--rollback', '--channel', 'stable'], opts);
+    assert.match(soft, /已软回滚通道 stable/);
+    reg = JSON.parse(readFileSync(join(dir, 'release', 'channels.json'), 'utf8'));
+    assert.equal(reg.channels.stable.current.rollout, 0);
+    assert.equal(reg.channels.stable.current.killSwitch, true);
+    assert.equal(readFileSync(stableYml, 'utf8'), stable1, '软回滚不应改动指针');
+
+    // 指针内产物被换 → 通道体检必须失败
+    writeFileSync(join(dir, 'release', `App-${v1}.exe`), 'tampered');
+    assert.throws(
+      () => run(['doctor', '--offline', '--release-check', '--channel', 'beta'], opts),
+      (e) => /项未通过/.test(`${e.stdout || ''}`),
+      '通道产物被改应判失败',
     );
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -519,26 +637,127 @@ test('plugin init 生成脚手架，锁拦截运行时漂移', () => {
     mkdirSync(join(dir, 'node_modules', '@acme'), { recursive: true });
     cpSync(join(dir, 'plugins', 'weather'), dst, { recursive: true });
 
-    run(['plugin', 'add', name], opts);
+    run(['plugin', 'add', name, '--allow-unsigned'], opts);
     const lockPath = join(dir, 'uendos.plugins.lock');
     assert.ok(existsSync(lockPath), 'plugin add 后应生成插件锁');
     const lock = JSON.parse(readFileSync(lockPath, 'utf8'));
     assert.equal(lock.plugins[name].version, '0.1.0');
     assert.match(lock.plugins[name].integrity, /^sha256-[0-9a-f]{64}$/);
-    assert.match(run(['sync', '--check'], opts), /产物一致/);
-    assert.match(run(['conformance'], opts), /47 通过 \/ 0 失败/, '内置 44 + 脚手架 3');
+    assert.equal(lock.plugins[name].signer, null, '未签名插件锁记 null');
+    assert.match(run(['sync', '--check', '--allow-unsigned'], opts), /产物一致/);
+    assert.match(run(['conformance'], opts), /58 通过 \/ 0 失败/, '内置 55 + 脚手架 3');
     assert.match(run(['plugin', 'list'], opts), new RegExp(`${name}@0\\.1\\.0`));
+    assert.match(run(['plugin', 'list'], opts), /签名 ! 未签名/);
     assert.doesNotMatch(run(['plugin', 'list'], opts), /锁 ✗/);
+    assert.throws(() => run(['sync', '--check'], opts), (e) => /未签名/.test(`${e.stderr || ''}${e.message}`),
+      '默认拒绝未签名插件');
+    assert.match(run(['doctor', '--offline', '--allow-unsigned'], opts), /插件签名：signed 0 \/ unsigned 1/);
 
     // 运行时被改 → 锁不一致，sync --check 与 doctor 都要拦住
     const rt = join(dst, 'runtime.js');
     writeFileSync(rt, `${readFileSync(rt, 'utf8')}\n// tampered\n`);
-    assert.throws(() => run(['sync', '--check'], opts),
+    assert.throws(() => run(['sync', '--check', '--allow-unsigned'], opts),
       (e) => /运行时与锁不一致/.test(`${e.stderr || ''}${e.message}`));
     assert.match(run(['plugin', 'list'], opts), /锁 ✗/);
 
-    run(['sync'], opts);
-    assert.match(run(['sync', '--check'], opts), /产物一致/, '重新 sync 后锁应回到一致');
+    run(['sync', '--allow-unsigned'], opts);
+    assert.match(run(['sync', '--check', '--allow-unsigned'], opts), /产物一致/, '重新 sync 后锁应回到一致');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('plugin init --kind iot 生成适配器，conformance 跑通采集/执行链路', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-iot-'));
+  const opts = { cwd: dir };
+  const name = '@acme/uendos-plugin-ble';
+  try {
+    run([
+      'init', 'iot-demo',
+      '--brand', 'iot-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'app',
+      '--dir', dir,
+    ], opts);
+
+    const out = run(['plugin', 'init', name, '--kind', 'iot', '--transport', 'ble'], opts);
+    assert.match(out, /适配器 transport=ble/);
+    const mf = JSON.parse(readFileSync(join(dir, 'plugins', 'ble', 'uendos.plugin.json'), 'utf8'));
+    assert.deepEqual(mf.capabilities, ['iot.ble']);
+    assert.deepEqual(mf.methods, ['iot.ble.probe']);
+    assert.match(readFileSync(join(dir, 'plugins', 'ble', 'runtime.js'), 'utf8'), /registerIotAdapter/);
+
+    // 模拟已安装：直接拷进 node_modules，避免测试联网
+    const dst = join(dir, 'node_modules', '@acme', 'uendos-plugin-ble');
+    mkdirSync(join(dir, 'node_modules', '@acme'), { recursive: true });
+    cpSync(join(dir, 'plugins', 'ble'), dst, { recursive: true });
+
+    run(['plugin', 'add', name, '--allow-unsigned'], opts);
+    const conf = run(['conformance'], opts);
+    assert.match(conf, /62 通过 \/ 0 失败/, '内置 57 + IoT 插件 5 项');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('插件完整性：keygen / sign / verify，篡改被 sync 与 doctor 拦截', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'uendos-sig-'));
+  const opts = { cwd: dir };
+  const name = '@uendos/plugin-fixture';
+  const keys = join(dir, 'keys');
+  try {
+    run([
+      'init', 'sig-demo',
+      '--brand', 'sig-demo',
+      '--ends', 'hp:个人端:https://hp.example.com/',
+      '--targets', 'app',
+      '--dir', dir,
+    ], opts);
+
+    const dst = join(dir, 'node_modules', '@uendos', 'plugin-fixture');
+    mkdirSync(join(dir, 'node_modules', '@uendos'), { recursive: true });
+    cpSync(fileURLToPath(new URL('../../plugin-fixture', import.meta.url)), dst, { recursive: true });
+
+    const kg = run(['plugin', 'keygen', '--id', 'ci-2026', '--out', keys], opts);
+    assert.match(kg, /Ed25519 密钥对/);
+    assert.match(kg, /请勿提交或入库/);
+    const trusted = JSON.parse(readFileSync(join(dir, 'uendos.trusted.json'), 'utf8'));
+    assert.equal(trusted.keys[0].id, 'ci-2026');
+    assert.match(trusted.keys[0].publicKey, /BEGIN PUBLIC KEY/);
+
+    const sg = run(['plugin', 'sign', name, '--key', join(keys, 'ci-2026.private.pem'), '--id', 'ci-2026'], opts);
+    assert.match(sg, /已签名/);
+    const sig = JSON.parse(readFileSync(join(dst, 'uendos.plugin.sig'), 'utf8'));
+    assert.equal(sig.keyId, 'ci-2026');
+    assert.match(sig.manifest, /^sha256-/);
+
+    const cfg = JSON.parse(readFileSync(join(dir, 'uendos.config.json'), 'utf8'));
+    cfg.plugins = [name];
+    writeFileSync(join(dir, 'uendos.config.json'), JSON.stringify(cfg, null, 2) + '\n');
+    run(['sync'], opts); // 默认要求签名，签名有效时通过
+    const lock = JSON.parse(readFileSync(join(dir, 'uendos.plugins.lock'), 'utf8'));
+    assert.equal(lock.plugins[name].signer, 'ci-2026');
+    assert.match(lock.plugins[name].manifest, /^sha256-/);
+    assert.match(run(['plugin', 'verify'], opts), /验签通过/);
+    assert.match(run(['doctor', '--offline'], opts), /插件签名：signed 1 \/ unsigned 0/);
+
+    // 篡改 runtime → 签名失效，sync / doctor / verify 全部拦截
+    const rt = join(dst, 'runtime.js');
+    writeFileSync(rt, `${readFileSync(rt, 'utf8')}\n// tampered\n`);
+    assert.throws(() => run(['sync', '--check'], opts),
+      (e) => /不匹配|验签失败/.test(`${e.stderr || ''}${e.message}`), '篡改后 sync 应拦截');
+    assert.throws(() => run(['doctor', '--offline'], opts),
+      (e) => /完整性/.test(`${e.stdout || ''}${e.stderr || ''}${e.message}`), '篡改后 doctor 应拦截');
+    assert.throws(() => run(['plugin', 'verify'], opts),
+      (e) => /验签失败/.test(`${e.stderr || ''}${e.message}`), '篡改后验签应失败');
+
+    // 删签名 → 默认拒绝；--allow-unsigned 放行，锁记录 signer=null
+    rmSync(join(dst, 'uendos.plugin.sig'));
+    assert.throws(() => run(['sync', '--check'], opts),
+      (e) => /未签名/.test(`${e.stderr || ''}${e.message}`), '默认应拒绝未签名插件');
+    run(['sync', '--allow-unsigned'], opts);
+    const lock2 = JSON.parse(readFileSync(join(dir, 'uendos.plugins.lock'), 'utf8'));
+    assert.equal(lock2.plugins[name].signer, null);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -577,14 +796,14 @@ test('插件依赖：逆序配置按 requires 注册，缺依赖 / 成环 / 被�
     };
 
     writePlugins([ext, base]);
-    run(['sync'], opts);
+    run(['sync', '--allow-unsigned'], opts);
     const bridge = readFileSync(join(dir, 'shell', 'dep-demo-shell.js'), 'utf8');
     const ib = bridge.indexOf(`ShellCore.registerPlugin("${base}"`);
     const ie = bridge.indexOf(`ShellCore.registerPlugin("${ext}"`);
     assert.ok(ib >= 0 && ie > ib, '依赖应先注册（config 逆序不影响激活顺序）');
 
     writePlugins([ext]);
-    assert.throws(() => run(['sync'], opts), (e) => /未在配置中/.test(`${e.stderr || ''}${e.message}`), '缺依赖应拒绝');
+    assert.throws(() => run(['sync', '--allow-unsigned'], opts), (e) => /未在配置中/.test(`${e.stderr || ''}${e.message}`), '缺依赖应拒绝');
 
     // 成环：base 反向依赖 ext
     const bp = join(dir, 'node_modules', ...base.split('/'), 'uendos.plugin.json');
@@ -592,13 +811,13 @@ test('插件依赖：逆序配置按 requires 注册，缺依赖 / 成环 / 被�
     bm.requires = [ext];
     writeFileSync(bp, JSON.stringify(bm, null, 2) + '\n');
     writePlugins([ext, base]);
-    assert.throws(() => run(['sync'], opts), (e) => /循环/.test(`${e.stderr || ''}${e.message}`), '环依赖应拒绝');
+    assert.throws(() => run(['sync', '--allow-unsigned'], opts), (e) => /循环/.test(`${e.stderr || ''}${e.message}`), '环依赖应拒绝');
 
     // 恢复后：被依赖的插件不允许直接移除
     delete bm.requires;
     writeFileSync(bp, JSON.stringify(bm, null, 2) + '\n');
-    run(['sync'], opts);
-    assert.throws(() => run(['plugin', 'remove', base], opts),
+    run(['sync', '--allow-unsigned'], opts);
+    assert.throws(() => run(['plugin', 'remove', base, '--allow-unsigned'], opts),
       (e) => /被以下插件依赖/.test(`${e.stderr || ''}${e.message}`), '被依赖时移除应拒绝');
   } finally {
     rmSync(dir, { recursive: true, force: true });
@@ -638,7 +857,7 @@ test('upgrade 迁移旧契约版本，diff 拦截手改', () => {
     assert.ok(existsSync(`${cfgPath}.bak`), '升级前应备份配置');
     const after = JSON.parse(readFileSync(cfgPath, 'utf8'));
     assert.equal(after.schemaVersion, 1);
-    assert.match(after.contractVersion, /^0\.6\./);
+    assert.match(after.contractVersion, /^0\.7\./);
     assert.match(run(['upgrade'], opts), /配置版本已是最新/);
     assert.match(run(['sync', '--check'], opts), /产物一致/);
 

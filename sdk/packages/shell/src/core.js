@@ -1,3 +1,4 @@
+/* 同步自 shell-core/src/core.js（勿手改；运行 npm run sync:core 覆盖） */
 /**
  * BTOS 真实端壳 · 共享运行时（shell-core）
  *
@@ -14,7 +15,7 @@
 (function () {
   'use strict';
 
-  var CORE_VERSION = '0.6.0';
+  var CORE_VERSION = '0.7.0';
   var BRIDGE_VERSION = '3';
   var READY_TIMEOUT_MS = 1500;
 
@@ -121,8 +122,80 @@
   // 只允许构建期嵌入，禁止运行时远程加载。
   var PLUGIN_REGISTRY = { list: [], methods: {} };
   var RESERVED_NS = ['core', 'edge', 'offline', 'desktop', 'shell'];
+  var IOT_TRANSPORTS = ['ble', 'serial', 'mqtt', 'nfc'];
+  var IOT_ADAPTERS = [];
+  var SECURE_ADAPTER = null;
+  var CURRENT_PLUGIN_ID = null;
+
+  // 构建期 IoT 适配器：插件 runtime 在 registerPlugin 工厂里调用；
+  // 与插件生命周期绑定，插件注册失败时回滚，禁止运行时远程加载。
+  function registerIotAdapter(spec) {
+    if (!spec || typeof spec !== 'object') return false;
+    var transport = spec.transport;
+    if (typeof transport !== 'string' || IOT_TRANSPORTS.indexOf(transport) < 0) return false;
+    if (typeof spec.id !== 'string' || !spec.id) return false;
+    if (IOT_ADAPTERS.some(function (a) { return a.id === spec.id || a.transport === transport; })) return false;
+    var fns = ['detect', 'devices', 'read', 'write', 'subscribe'];
+    for (var i = 0; i < fns.length; i++) {
+      if (spec[fns[i]] !== undefined && typeof spec[fns[i]] !== 'function') return false;
+    }
+    if (!spec.devices && !spec.read && !spec.write && !spec.subscribe) return false;
+    if (spec.ingestUrl !== undefined && spec.ingestUrl !== null && typeof spec.ingestUrl !== 'string') return false;
+    IOT_ADAPTERS.push({
+      id: spec.id,
+      transport: transport,
+      capability: 'iot.' + transport,
+      pluginId: CURRENT_PLUGIN_ID,
+      detect: spec.detect || null,
+      devices: spec.devices || null,
+      read: spec.read || null,
+      write: spec.write || null,
+      subscribe: spec.subscribe || null,
+      ingestUrl: typeof spec.ingestUrl === 'string' ? spec.ingestUrl : null,
+      active: false,
+    });
+    return true;
+  }
 
   function registerPlugin(id, factory) {
+    var mark = IOT_ADAPTERS.length;
+    var prevSecure = SECURE_ADAPTER;
+    var prev = CURRENT_PLUGIN_ID;
+    CURRENT_PLUGIN_ID = id;
+    var accepted = false;
+    try { accepted = registerPluginImpl(id, factory); } catch (e) { accepted = false; }
+    CURRENT_PLUGIN_ID = prev;
+    if (!accepted) {
+      IOT_ADAPTERS.splice(mark);
+      SECURE_ADAPTER = prevSecure;
+    }
+    return accepted;
+  }
+
+  // 构建期安全存储适配器：必须在 create 之前注册（原生壳在启动脚本里嵌入）。
+  // 只允许一个后端；注册失败或插件回滚时回落内存。
+  function registerSecureStore(spec) {
+    if (SECURE_ADAPTER) return false;
+    if (!spec || typeof spec !== 'object') return false;
+    if (typeof spec.backend !== 'string' || ['keychain', 'keystore', 'native'].indexOf(spec.backend) < 0) return false;
+    var fns = ['get', 'set', 'remove'];
+    for (var i = 0; i < fns.length; i++) {
+      if (typeof spec[fns[i]] !== 'function') return false;
+    }
+    if (spec.detect !== undefined && typeof spec.detect !== 'function') return false;
+    SECURE_ADAPTER = {
+      backend: spec.backend,
+      pluginId: CURRENT_PLUGIN_ID,
+      detect: spec.detect || null,
+      get: spec.get,
+      set: spec.set,
+      remove: spec.remove,
+      active: false,
+    };
+    return true;
+  }
+
+  function registerPluginImpl(id, factory) {
     if (typeof id !== 'string' || !id || typeof factory !== 'function') return false;
     for (var i = 0; i < PLUGIN_REGISTRY.list.length; i++) {
       if (PLUGIN_REGISTRY.list[i].id === id) return false;
@@ -141,6 +214,7 @@
       active: false,
       capabilities: [],
       methods: [],
+      methodCaps: {},
     };
 
     for (var cap in caps) {
@@ -155,15 +229,25 @@
       if (!Object.prototype.hasOwnProperty.call(methods, m)) continue;
       var ns = String(m).split('.')[0];
       if (RESERVED_NS.indexOf(ns) >= 0) return false; // 禁止占用内置命名空间
-      if (item.capabilities.indexOf(ns) < 0) return false; // 方法必须落在插件自己的命名空间
+      var owner = null;
+      for (var c = 0; c < item.capabilities.length; c++) {
+        var cap = item.capabilities[c];
+        if (String(m).indexOf(cap + '.') === 0 && (!owner || cap.length > owner.length)) owner = cap;
+      }
+      if (!owner) return false; // 方法必须落在插件声明的能力命名空间（支持 iot.ble 这类多点能力）
       if (METHODS[m] || PLUGIN_REGISTRY.methods[m]) return false; // 方法重名
       if (typeof methods[m] !== 'function') return false;
       item.methods.push(m);
+      item.methodCaps[m] = owner;
     }
     if (!item.capabilities.length || !item.methods.length) return false;
 
     for (var k = 0; k < item.methods.length; k++) {
-      PLUGIN_REGISTRY.methods[item.methods[k]] = { plugin: item, fn: methods[item.methods[k]] };
+      PLUGIN_REGISTRY.methods[item.methods[k]] = {
+        plugin: item,
+        fn: methods[item.methods[k]],
+        cap: item.methodCaps[item.methods[k]],
+      };
     }
     PLUGIN_REGISTRY.list.push(item);
     return true;
@@ -220,6 +304,12 @@
     set('biometric', has('BiometricAuth') ? '✓' : '─', '─', '─');
     set('offlineQueue', '✓', '✓', '─');
     set('subscribeMsg', '─', '─', '✓');
+    // 安全存储：有构建期原生后端时由 create 提升为 ✓，否则内存降级 ◐
+    cap.secureStore = '◐';
+    // 设备身份：默认 none；配置 security.identity 后由 create 点亮（v0.8 M2）
+    cap.identity = '─';
+    // IoT 总开关：内置占位，由构建期适配器插件点亮 iot.* 子能力（v0.7）
+    cap.iot = '─';
     cap['edge.storeRoot'] = '✓';
 
     return cap;
@@ -236,6 +326,9 @@
     splash: ['core.splash'],
     network: ['core.net'],
     offlineQueue: ['offline.enqueue', 'offline.flush', 'offline.list'],
+    secureStore: ['secure.get', 'secure.set', 'secure.remove'],
+    identity: ['identity.current', 'identity.refresh'],
+    iot: ['iot.devices', 'iot.read', 'iot.write'],
     'edge.storeRoot': ['edge.configure', 'edge.health', 'edge.lease', 'edge.commit', 'edge.snapshot'],
   };
   var allowCaps = null; // null = 不裁剪
@@ -258,9 +351,20 @@
     for (var k in raw) {
       if (!Object.prototype.hasOwnProperty.call(raw, k)) continue;
       var cuttable = Object.prototype.hasOwnProperty.call(builtin, k) || pluginCaps[k];
-      out[k] = cuttable && allowCaps.indexOf(k) < 0 ? '─' : raw[k];
+      var cut = cuttable && allowCaps.indexOf(k) < 0;
+      // 关掉 iot 总开关时，适配器子能力一并置 ─
+      if (!cut && k.indexOf('iot.') === 0 && allowCaps.indexOf('iot') < 0) cut = true;
+      out[k] = cut ? '─' : raw[k];
     }
+    // 安全存储被裁剪时，设备身份没有可用的令牌落点，一并降级
+    if (out.secureStore === '─') out.identity = '─';
     return out;
+  }
+
+  function capAllowed(cap) {
+    if (allowCaps === null) return true;
+    if (allowCaps.indexOf(cap) >= 0) return true;
+    return cap.indexOf('iot.') === 0 && allowCaps.indexOf('iot') >= 0;
   }
 
   function blockedCapability(method) {
@@ -710,6 +814,561 @@
     return ok({ id: id });
   }
 
+  // ---------------------------------------------------------------- IoT 接入
+  function iotOn() {
+    return !!(state.capabilities && state.capabilities.iot && state.capabilities.iot !== '─');
+  }
+
+  function activeIotAdapters() {
+    return IOT_ADAPTERS.filter(function (a) { return a.active; });
+  }
+
+  function normalizeIotDevice(raw, adapter) {
+    if (!raw || typeof raw.id !== 'string' || !raw.id) return null;
+    var status = ['online', 'offline', 'unknown'].indexOf(raw.status) >= 0 ? raw.status : 'unknown';
+    return {
+      id: raw.id,
+      kind: typeof raw.kind === 'string' && raw.kind ? raw.kind : 'device',
+      transport: typeof raw.transport === 'string' && raw.transport ? raw.transport : adapter.transport,
+      status: status,
+      capabilities: Array.isArray(raw.capabilities) ? raw.capabilities.slice() : [],
+    };
+  }
+
+  async function iotDevices() {
+    if (!iotOn()) return err('E_UNSUPPORTED', 'iot.devices', '能力未启用：iot');
+    var ads = activeIotAdapters();
+    if (!ads.length) return err('E_UNSUPPORTED', 'iot.devices', '未安装 IoT 适配器');
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < ads.length; i++) {
+      var ad = ads[i];
+      if (!ad.devices) continue;
+      var list;
+      try { list = await ad.devices(); } catch (e) {
+        emit('shell:iot-error', { transport: ad.transport, code: 'E_NATIVE', message: (e && e.message) || '' });
+        continue;
+      }
+      if (!Array.isArray(list)) continue;
+      for (var j = 0; j < list.length; j++) {
+        var d = normalizeIotDevice(list[j], ad);
+        if (!d) continue;
+        var key = d.transport + ':' + d.id;
+        if (seen[key]) continue;
+        seen[key] = true;
+        out.push(d);
+      }
+    }
+    return ok({ devices: out });
+  }
+
+  async function iotRead(a) {
+    if (!iotOn()) return err('E_UNSUPPORTED', 'iot.read', '能力未启用：iot');
+    var args = a || {};
+    if (typeof args.deviceId !== 'string' || !args.deviceId) {
+      return err('E_BAD_ARGS', 'iot.read', 'deviceId 必填');
+    }
+    var ads = activeIotAdapters();
+    for (var i = 0; i < ads.length; i++) {
+      var ad = ads[i];
+      if (!ad.read) continue;
+      try {
+        var r = await ad.read(args.deviceId, args.metric === undefined ? null : args.metric);
+        if (r && typeof r.value !== 'undefined') {
+          return ok({
+            value: r.value,
+            unit: r.unit === undefined ? null : r.unit,
+            at: typeof r.at === 'number' ? r.at : Date.now(),
+            quality: ['good', 'degraded', 'stale', 'unknown'].indexOf(r.quality) >= 0 ? r.quality : 'unknown',
+          });
+        }
+      } catch (e) {
+        emit('shell:iot-error', {
+          transport: ad.transport,
+          deviceId: args.deviceId,
+          metric: args.metric === undefined ? null : args.metric,
+          code: 'E_NATIVE',
+          message: (e && e.message) || '',
+        });
+      }
+    }
+    return err('E_UNSUPPORTED', 'iot.read', '设备或指标不可用');
+  }
+
+  async function iotWrite(a) {
+    if (!iotOn()) return err('E_UNSUPPORTED', 'iot.write', '能力未启用：iot');
+    var args = a || {};
+    if (typeof args.deviceId !== 'string' || !args.deviceId) return err('E_BAD_ARGS', 'iot.write', 'deviceId 必填');
+    if (typeof args.action !== 'string' || !args.action) return err('E_BAD_ARGS', 'iot.write', 'action 必填');
+    if (typeof args.idem !== 'string' || !args.idem) return err('E_BAD_ARGS', 'iot.write', 'idem 必填（幂等键）');
+
+    var ads = activeIotAdapters();
+    if (!ads.length) return err('E_UNSUPPORTED', 'iot.write', '未安装 IoT 适配器');
+
+    var ackId = 'ack-' + uuid();
+    var done = false;
+    function finish(r) {
+      if (done) return;
+      done = true;
+      var res = r || {};
+      emit('shell:iot-ack', {
+        ackId: ackId,
+        deviceId: args.deviceId,
+        action: args.action,
+        idem: args.idem,
+        ok: res.ok !== false,
+        code: res.code || null,
+        message: res.message || '',
+        data: res.data === undefined ? null : res.data,
+      });
+    }
+
+    for (var i = 0; i < ads.length; i++) {
+      var ad = ads[i];
+      if (!ad.write) continue;
+      try {
+        var r = await ad.write(args.deviceId, args.action, args.params || {}, finish);
+        if (r && r.accepted === false) continue;
+        if (r && typeof r.ackId === 'string' && r.ackId) ackId = r.ackId;
+        if (r && typeof r.ok === 'boolean') finish({ ok: r.ok, code: r.code, message: r.message, data: r.data });
+        return ok({ accepted: true, ackId: ackId });
+      } catch (e) {
+        emit('shell:iot-error', {
+          transport: ad.transport,
+          deviceId: args.deviceId,
+          action: args.action,
+          code: 'E_NATIVE',
+          message: (e && e.message) || '',
+        });
+      }
+    }
+    return err('E_UNSUPPORTED', 'iot.write', '设备不可用');
+  }
+
+  // 适配器上行：统一信封 v1；离线且有 ingestUrl 时进入品牌作用域队列
+  function iotPublish(adapter, raw) {
+    if (!iotOn() || !raw || typeof raw !== 'object') return;
+    if (typeof raw.deviceId !== 'string' || !raw.deviceId) return;
+    if (typeof raw.metric !== 'string' || !raw.metric) return;
+    var data = {
+      v: 1,
+      deviceId: raw.deviceId,
+      kind: typeof raw.kind === 'string' && raw.kind ? raw.kind : 'telemetry',
+      metric: raw.metric,
+      value: typeof raw.value === 'undefined' ? null : raw.value,
+      unit: raw.unit === undefined ? null : raw.unit,
+      at: nowMonotonic(),
+      seq: seq + 1,
+      idem: typeof raw.idem === 'string' && raw.idem ? raw.idem : uuid(),
+      quality: ['good', 'degraded', 'stale', 'unknown'].indexOf(raw.quality) >= 0 ? raw.quality : 'unknown',
+      source: typeof raw.source === 'string' && raw.source ? raw.source : adapter.transport,
+    };
+    emit('shell:iot-data', data);
+    if (!netState().online && adapter.ingestUrl) {
+      enqueue({ url: adapter.ingestUrl, method: 'POST', body: data, idem: data.idem });
+    }
+  }
+
+  // ---------------------------------------------------------------- 安全存储
+  // 凭证边界：只允许字符串、品牌前缀键、单值 ≤ 8 KB；内存降级不落 localStorage。
+  var SECURE_MEMORY = Object.create(null);
+  var SECURE_MAX_VALUE = 8192;
+
+  function securePrefix() {
+    var cfg = state.config || {};
+    return (cfg.prefix || cfg.brand || '') + ':';
+  }
+
+  function secureBackend() {
+    return SECURE_ADAPTER && SECURE_ADAPTER.active ? SECURE_ADAPTER.backend : 'memory';
+  }
+
+  function secureOn() {
+    return state.capabilities.secureStore !== undefined && state.capabilities.secureStore !== '─';
+  }
+
+  function secureKeyError(key) {
+    if (typeof key !== 'string' || !key) return 'key 必填';
+    var prefix = securePrefix();
+    if (key.indexOf(prefix) !== 0) return 'key 必须以 ' + prefix + ' 开头';
+    var purpose = key.slice(prefix.length);
+    if (!/^[A-Za-z][A-Za-z0-9._-]{0,63}$/.test(purpose)) return 'key 的 purpose 不合法（字母开头，≤ 64）';
+    return null;
+  }
+
+  function secureSet(a) {
+    if (!secureOn()) return err('E_UNSUPPORTED', 'secure.set', '能力未启用：secureStore');
+    var key = a && a.key;
+    var value = a && a.value;
+    var kerr = secureKeyError(key);
+    if (kerr) return err('E_BAD_ARGS', 'secure.set', kerr);
+    if (typeof value !== 'string') return err('E_BAD_ARGS', 'secure.set', 'value 必须是字符串');
+    if (value.length > SECURE_MAX_VALUE) return err('E_BAD_ARGS', 'secure.set', 'value 超过 ' + SECURE_MAX_VALUE + ' 字符');
+    if (SECURE_ADAPTER && SECURE_ADAPTER.active) {
+      var backend = SECURE_ADAPTER.backend;
+      return Promise.resolve().then(function () {
+        return SECURE_ADAPTER.set(key, value);
+      }).then(function (r) {
+        if (r === false) throw new Error('安全存储拒绝写入');
+        return ok({ stored: true, backend: backend });
+      }).catch(function (e) {
+        return err('E_NATIVE', 'secure.set', e && e.message);
+      });
+    }
+    SECURE_MEMORY[key] = value;
+    return ok({ stored: true, backend: 'memory' });
+  }
+
+  function secureGet(a) {
+    if (!secureOn()) return err('E_UNSUPPORTED', 'secure.get', '能力未启用：secureStore');
+    var key = a && a.key;
+    var kerr = secureKeyError(key);
+    if (kerr) return err('E_BAD_ARGS', 'secure.get', kerr);
+    if (SECURE_ADAPTER && SECURE_ADAPTER.active) {
+      var backend = SECURE_ADAPTER.backend;
+      return Promise.resolve().then(function () {
+        return SECURE_ADAPTER.get(key);
+      }).then(function (v) {
+        return ok({ value: typeof v === 'string' ? v : null, backend: backend });
+      }).catch(function (e) {
+        return err('E_NATIVE', 'secure.get', e && e.message);
+      });
+    }
+    var hit = Object.prototype.hasOwnProperty.call(SECURE_MEMORY, key);
+    return ok({ value: hit ? SECURE_MEMORY[key] : null, backend: 'memory' });
+  }
+
+  function secureRemove(a) {
+    if (!secureOn()) return err('E_UNSUPPORTED', 'secure.remove', '能力未启用：secureStore');
+    var key = a && a.key;
+    var kerr = secureKeyError(key);
+    if (kerr) return err('E_BAD_ARGS', 'secure.remove', kerr);
+    if (SECURE_ADAPTER && SECURE_ADAPTER.active) {
+      var backend = SECURE_ADAPTER.backend;
+      return Promise.resolve().then(function () {
+        return SECURE_ADAPTER.remove(key);
+      }).then(function (r) {
+        return ok({ removed: r !== false, backend: backend });
+      }).catch(function (e) {
+        return err('E_NATIVE', 'secure.remove', e && e.message);
+      });
+    }
+    var hit = Object.prototype.hasOwnProperty.call(SECURE_MEMORY, key);
+    if (hit) delete SECURE_MEMORY[key];
+    return ok({ removed: hit, backend: 'memory' });
+  }
+
+  // ---------------------------------------------------------------- 设备身份
+  // 设备令牌只存安全存储，identity.current 只返回元数据；令牌不进入 H5、事件与诊断。
+  var IDENTITY_DEFAULT_PURPOSE = 'identity.device';
+  var IDENTITY_REFRESH_INFLIGHT = null;
+
+  function identityConfig() {
+    var sec = state.config && state.config.security;
+    var id = sec && sec.identity;
+    return id && id.mode === 'device' ? id : null;
+  }
+
+  function identityMode() {
+    return identityConfig() ? 'device' : 'none';
+  }
+
+  function identityStoreKey() {
+    var cfg = identityConfig();
+    if (cfg && cfg.storeKey) return cfg.storeKey;
+    var prefix = (state.config && (state.config.prefix || state.config.brand)) || '';
+    return prefix + ':' + IDENTITY_DEFAULT_PURPOSE;
+  }
+
+  function identityEnabled() {
+    return !!identityConfig()
+      && state.capabilities.identity !== undefined && state.capabilities.identity !== '─'
+      && state.capabilities.secureStore !== undefined && state.capabilities.secureStore !== '─';
+  }
+
+  function secureRawGet(key) {
+    if (SECURE_ADAPTER && SECURE_ADAPTER.active) return Promise.resolve(SECURE_ADAPTER.get(key));
+    return Promise.resolve(Object.prototype.hasOwnProperty.call(SECURE_MEMORY, key) ? SECURE_MEMORY[key] : null);
+  }
+
+  function secureRawSet(key, value) {
+    if (SECURE_ADAPTER && SECURE_ADAPTER.active) return Promise.resolve(SECURE_ADAPTER.set(key, value));
+    SECURE_MEMORY[key] = value;
+    return Promise.resolve(true);
+  }
+
+  function secureRawRemove(key) {
+    if (SECURE_ADAPTER && SECURE_ADAPTER.active) return Promise.resolve(SECURE_ADAPTER.remove(key));
+    var hit = Object.prototype.hasOwnProperty.call(SECURE_MEMORY, key);
+    if (hit) delete SECURE_MEMORY[key];
+    return Promise.resolve(hit);
+  }
+
+  function identityRecord(raw) {
+    if (typeof raw !== 'string') return null;
+    try {
+      var r = JSON.parse(raw);
+      if (!r || typeof r !== 'object') return null;
+      if (typeof r.token !== 'string' || !r.token) return null;
+      return r;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function identityMeta(rec) {
+    return {
+      deviceId: rec.deviceId || null,
+      owner: rec.owner || null,
+      scopes: Array.isArray(rec.scopes) ? rec.scopes.slice() : [],
+      expiresAt: rec.expiresAt || null,
+      source: 'device',
+    };
+  }
+
+  function identityCurrent() {
+    if (!identityEnabled()) return err('E_UNSUPPORTED', 'identity.current', '未配置 security.identity');
+    return secureRawGet(identityStoreKey()).then(function (raw) {
+      var rec = identityRecord(raw);
+      return ok({ identity: rec ? identityMeta(rec) : null, backend: secureBackend() });
+    }).catch(function (e) {
+      return err('E_NATIVE', 'identity.current', e && e.message);
+    });
+  }
+
+  function identityRequest(rec, cfg) {
+    return Promise.resolve().then(function () {
+      return fetch(cfg.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + rec.token },
+        body: JSON.stringify({ device_id: rec.deviceId }),
+      });
+    }).then(function (res) {
+      return Promise.resolve().then(function () { return res.json(); }).catch(function () { return null; }).then(function (body) {
+        return { status: res.status, ok: !!res.ok, body: body };
+      });
+    });
+  }
+
+  function identityRefresh() {
+    if (!identityEnabled()) return Promise.resolve(err('E_UNSUPPORTED', 'identity.refresh', '未配置 security.identity'));
+    // 幂等：并发刷新复用同一请求，避免两次换令牌互相覆盖
+    if (IDENTITY_REFRESH_INFLIGHT) return IDENTITY_REFRESH_INFLIGHT;
+    if (!netState().online) return Promise.resolve(err('E_OFFLINE', 'identity.refresh', '离线，稍后重试'));
+    var cfg = identityConfig();
+    var key = identityStoreKey();
+    IDENTITY_REFRESH_INFLIGHT = secureRawGet(key).then(function (raw) {
+      var rec = identityRecord(raw);
+      if (!rec) return err('E_UNSUPPORTED', 'identity.refresh', '设备未配对：无设备令牌');
+      return identityRequest(rec, cfg).then(function (res) {
+        if (res.status === 401 || res.status === 403 || res.status === 410) {
+          return secureRawRemove(key).then(function () {
+            emit('shell:identity-expired', { code: 'E_DENIED', deviceId: rec.deviceId || null });
+            return err('E_DENIED', 'identity.refresh', '设备令牌已吊销或过期');
+          });
+        }
+        if (!res.ok || !res.body) return err('E_NATIVE', 'identity.refresh', '刷新失败：HTTP ' + res.status);
+        var b = res.body;
+        var token = b.device_token || b.deviceToken;
+        if (typeof token !== 'string' || !token) return err('E_NATIVE', 'identity.refresh', '响应缺少 device_token');
+        var next = {
+          deviceId: b.device_id || b.deviceId || rec.deviceId || null,
+          token: token,
+          owner: b.owner_xu || b.owner || rec.owner || null,
+          scopes: Array.isArray(b.scopes) ? b.scopes : (rec.scopes || []),
+          expiresAt: b.expires_at || b.expiresAt || null,
+          obtainedAt: Date.now(),
+        };
+        return secureRawSet(key, JSON.stringify(next)).then(function (stored) {
+          if (stored === false) return err('E_NATIVE', 'identity.refresh', '安全存储拒绝写入');
+          var meta = identityMeta(next);
+          emit('shell:identity-changed', meta);
+          return ok(meta);
+        });
+      });
+    }).catch(function (e) {
+      return err('E_OFFLINE', 'identity.refresh', (e && e.message) || '网络不可用');
+    }).then(function (r) {
+      IDENTITY_REFRESH_INFLIGHT = null;
+      return r;
+    });
+    return IDENTITY_REFRESH_INFLIGHT;
+  }
+
+  // 到 TTL 80% 主动刷新：离线不发请求，联网后由事件补一次；失败不阻塞本地操作
+  function identityMaybeRefresh() {
+    if (!identityEnabled() || !netState().online) return;
+    secureRawGet(identityStoreKey()).then(function (raw) {
+      var rec = identityRecord(raw);
+      if (!rec) return;
+      var exp = Date.parse(rec.expiresAt);
+      var obtained = Number(rec.obtainedAt);
+      if (!isFinite(exp) || !obtained || exp <= obtained) return;
+      if (Date.now() >= obtained + (exp - obtained) * 0.8) identityRefresh();
+    }).catch(function () {});
+  }
+
+  // ---------------------------------------------------------------- 诊断
+  // 只做只读快照：事件只保留 event/seq/at，不携带 data（避免 token、设备唯一码、地址等外泄）
+  function diagnostics() {
+    var q = queueRead();
+    var oldestAt = null;
+    for (var i = 0; i < q.length; i++) {
+      var at = q[i] && q[i].at;
+      if (typeof at === 'number' && (oldestAt === null || at < oldestAt)) oldestAt = at;
+    }
+    var events = recentEvents(undefined, 20).map(function (e) {
+      return { event: e.event, seq: e.seq, at: e.at };
+    });
+    return {
+      version: CORE_VERSION,
+      bridge: BRIDGE_VERSION,
+      brand: state.config && state.config.brand,
+      env: state.env,
+      platform: state.platform,
+      online: netState().online,
+      capabilities: state.capabilities,
+      plugins: pluginList(),
+      security: { secureStore: secureBackend(), identity: identityMode() },
+      queue: { count: q.length, oldestAt: oldestAt },
+      events: events,
+      at: nowMonotonic(),
+    };
+  }
+
+  // ---------------------------------------------------------------- 入口路由
+  // entry.open 只做校验、能力/在线检查、拼装路径、派发事件；不决定业务内容，也不写业务数据。
+  var ENTRY_ID_RE = /^[a-z][a-z0-9.-]{1,31}$/;
+  var ENTRY_SOURCES = ['launcher', 'deeplink', 'scan', 'nfc', 'notification', 'device'];
+
+  function entryRoutes() {
+    var cfg = state.config || {};
+    var list = cfg.entry && cfg.entry.routes;
+    return Array.isArray(list) ? list : [];
+  }
+
+  function entryAvailability(route) {
+    var req = (route && route.requires) || {};
+    if (req.capability) {
+      var v = state.capabilities[req.capability];
+      if (v === undefined || v === '─') return 'capability:' + req.capability;
+    }
+    if (req.online && !netState().online) return 'offline';
+    return null;
+  }
+
+  function entriesList() {
+    return entryRoutes().map(function (r) {
+      var reason = entryAvailability(r);
+      return {
+        id: r.id,
+        label: r.label || null,
+        path: r.path,
+        params: r.params || {},
+        requires: r.requires || {},
+        fallback: r.fallback || null,
+        available: !reason,
+        reason: reason,
+      };
+    });
+  }
+
+  function entryParamsError(route, params) {
+    var spec = route.params || {};
+    var input = params === undefined ? {} : params;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return 'params 必须是对象';
+    var keys = Object.keys(input);
+    for (var k = 0; k < keys.length; k++) {
+      if (!Object.prototype.hasOwnProperty.call(spec, keys[k])) return '未知参数：' + keys[k];
+    }
+    for (var name in spec) {
+      if (!Object.prototype.hasOwnProperty.call(spec, name)) continue;
+      var p = spec[name] || {};
+      var v = input[name];
+      if (v === undefined || v === null || v === '') {
+        if (p.required) return '缺少必填参数：' + name;
+        continue;
+      }
+      if (p.type === 'string') {
+        if (typeof v !== 'string') return '参数 ' + name + ' 必须是字符串';
+        if (typeof p.maxLength === 'number' && v.length > p.maxLength) return '参数 ' + name + ' 超长';
+      } else if (p.type === 'number') {
+        if (typeof v !== 'number' || !isFinite(v)) return '参数 ' + name + ' 必须是数字';
+      } else if (p.type === 'boolean') {
+        if (typeof v !== 'boolean') return '参数 ' + name + ' 必须是布尔值';
+      } else {
+        return '参数 ' + name + ' 类型不支持';
+      }
+      if (Array.isArray(p.enum) && p.enum.indexOf(v) < 0) return '参数 ' + name + ' 不在允许值内';
+    }
+    return null;
+  }
+
+  function entryPath(route, params) {
+    var spec = route.params || {};
+    var qs = [];
+    for (var name in spec) {
+      if (!Object.prototype.hasOwnProperty.call(spec, name)) continue;
+      if (!Object.prototype.hasOwnProperty.call(params, name)) continue;
+      var v = params[name];
+      if (v === undefined || v === null || v === '') continue;
+      qs.push(encodeURIComponent(name) + '=' + encodeURIComponent(String(v)));
+    }
+    if (!qs.length) return route.path;
+    return route.path + (route.path.indexOf('?') >= 0 ? '&' : '?') + qs.join('&');
+  }
+
+  function entryFail(code, message, route, payload) {
+    var r = err(code, 'entry.open', message);
+    r.data = { opened: false, id: payload.id, fallback: (route && route.fallback) || null, reason: message };
+    payload.opened = false;
+    payload.fallback = r.data.fallback;
+    payload.reason = message;
+    emit('shell:entry-open', payload);
+    return r;
+  }
+
+  function openEntry(a) {
+    var input = a || {};
+    var id = input.id;
+    if (typeof id !== 'string' || !ENTRY_ID_RE.test(id)) return err('E_BAD_ARGS', 'entry.open', '入口 id 不合法');
+    var source = input.source === undefined ? 'launcher' : input.source;
+    if (ENTRY_SOURCES.indexOf(source) < 0) return err('E_BAD_ARGS', 'entry.open', 'source 不合法');
+    var route = null;
+    var routes = entryRoutes();
+    for (var i = 0; i < routes.length; i++) {
+      if (routes[i].id === id) { route = routes[i]; break; }
+    }
+    if (!route) return err('E_BAD_ARGS', 'entry.open', '未知入口：' + id);
+    var payload = {
+      id: id,
+      source: source,
+      idem: input.idem || null,
+      params: input.params || {},
+      opened: false,
+      path: null,
+      fallback: route.fallback || null,
+      reason: null,
+    };
+    var perr = entryParamsError(route, input.params);
+    if (perr) return entryFail('E_BAD_ARGS', perr, route, payload);
+    var reason = entryAvailability(route);
+    if (reason) return entryFail('E_UNSUPPORTED', reason, route, payload);
+    var path = entryPath(route, input.params || {});
+    payload.opened = true;
+    payload.path = path;
+    emit('shell:entry-open', payload);
+    return ok({
+      opened: true,
+      id: id,
+      path: path,
+      fallback: route.fallback || null,
+      reason: null,
+      source: source,
+      idem: input.idem || null,
+    });
+  }
+
   // ---------------------------------------------------------------- 分发
   var METHODS = {
     'core.handshake': function () { return ok(handshakePayload()); },
@@ -726,9 +1385,18 @@
     'core.net': function () { return ok(netState()); },
     'core.end': function () { return currentEnd(); },
     'core.switchEnd': function (a) { return switchEnd(a && a.id); },
+    'entry.open': openEntry,
     'offline.enqueue': function (a) { return enqueue(a); },
     'offline.flush': function () { return flush(); },
     'offline.list': function () { return ok(queueRead()); },
+    'iot.devices': iotDevices,
+    'iot.read': iotRead,
+    'iot.write': iotWrite,
+    'secure.get': secureGet,
+    'secure.set': secureSet,
+    'secure.remove': secureRemove,
+    'identity.current': function () { return identityCurrent(); },
+    'identity.refresh': function () { return identityRefresh(); },
     'edge.configure': function (a) { return edgeConfigure(a); },
     'edge.health': function () { return edgeHealth(); },
     'edge.lease': function (a) { return edgeLease(a); },
@@ -752,9 +1420,8 @@
     if (blocked) return Promise.resolve(err('E_UNSUPPORTED', method, '能力未启用：' + blocked));
     var p = PLUGIN_REGISTRY.methods[method];
     if (p) {
-      var ns = String(method).split('.')[0];
-      if (allowCaps !== null && allowCaps.indexOf(ns) < 0) {
-        return Promise.resolve(err('E_UNSUPPORTED', method, '能力未启用：' + ns));
+      if (!capAllowed(p.cap || String(method).split('.')[0])) {
+        return Promise.resolve(err('E_UNSUPPORTED', method, '能力未启用：' + (p.cap || String(method).split('.')[0])));
       }
       if (!p.plugin.active) return Promise.resolve(err('E_UNSUPPORTED', method));
       try {
@@ -832,6 +1499,7 @@
     window.addEventListener('online', function () {
       emit('shell:network', netState());
       flush();
+      identityMaybeRefresh();
     });
     window.addEventListener('offline', function () { emit('shell:network', netState()); });
     document.addEventListener('visibilitychange', function () {
@@ -921,7 +1589,42 @@
     }
     state.platform = state.env === 'capacitor' ? window.Capacitor.getPlatform() : state.env;
     allowCaps = config && config.caps && Array.isArray(config.caps.allow) ? config.caps.allow : null;
-    state.capabilities = cutCapabilities(Object.assign(buildCapabilities(state.env, P), desktopCapabilities(), pluginCapabilities()));
+    for (var ai = 0; ai < IOT_ADAPTERS.length; ai++) {
+      var ad = IOT_ADAPTERS[ai];
+      var ownerActive = true;
+      if (ad.pluginId) {
+        ownerActive = false;
+        for (var pj = 0; pj < PLUGIN_REGISTRY.list.length; pj++) {
+          if (PLUGIN_REGISTRY.list[pj].id === ad.pluginId) { ownerActive = PLUGIN_REGISTRY.list[pj].active; break; }
+        }
+      }
+      ad.active = ownerActive && (!ad.detect || !!ad.detect(state.env));
+    }
+    if (SECURE_ADAPTER) {
+      var secureOwnerActive = true;
+      if (SECURE_ADAPTER.pluginId) {
+        secureOwnerActive = false;
+        for (var sk = 0; sk < PLUGIN_REGISTRY.list.length; sk++) {
+          if (PLUGIN_REGISTRY.list[sk].id === SECURE_ADAPTER.pluginId) { secureOwnerActive = PLUGIN_REGISTRY.list[sk].active; break; }
+        }
+      }
+      SECURE_ADAPTER.active = secureOwnerActive && (!SECURE_ADAPTER.detect || !!SECURE_ADAPTER.detect(state.env));
+    }
+    var mergedCaps = Object.assign(buildCapabilities(state.env, P), desktopCapabilities(), pluginCapabilities());
+    // 原生安全存储后端就绪时提升为 ✓；否则明确为内存降级 ◐
+    mergedCaps.secureStore = SECURE_ADAPTER && SECURE_ADAPTER.active ? '✓' : '◐';
+    // 设备身份：配置 security.identity(mode=device) 后为 ◐（依赖云端刷新与安全存储）
+    mergedCaps.identity = config.security && config.security.identity && config.security.identity.mode === 'device' ? '◐' : '─';
+    // 插件声明了 iot.* 但适配器未激活（detect=false）时，子能力必须回落 ─
+    for (var tk in mergedCaps) {
+      if (tk.indexOf('iot.') !== 0) continue;
+      var hit = IOT_ADAPTERS.some(function (a) { return a.active && a.capability === tk; });
+      if (!hit) mergedCaps[tk] = '─';
+    }
+    for (var ck in mergedCaps) {
+      if (ck.indexOf('iot.') === 0 && mergedCaps[ck] !== '─') { mergedCaps.iot = '✓'; break; }
+    }
+    state.capabilities = cutCapabilities(mergedCaps);
 
     var Shell = {
       __core: true,
@@ -938,6 +1641,8 @@
       theme: state.theme,
       ends: config.ends,
       plugins: pluginList(),
+      entries: entriesList,
+      diagnostics: diagnostics,
       events: {
         recent: recentEvents,
       },
@@ -994,6 +1699,16 @@
     bindWeb();
     armH5Sync();
 
+    // IoT 适配器只做被动订阅：事件经 shell:iot-data 上报，离线时进入品牌作用域队列
+    IOT_ADAPTERS.forEach(function (ad) {
+      if (!ad.active || !ad.subscribe) return;
+      try {
+        ad.subscribe(function (raw) { iotPublish(ad, raw); });
+      } catch (e) {
+        emit('shell:iot-error', { transport: ad.transport, code: 'E_NATIVE', message: (e && e.message) || '' });
+      }
+    });
+
     // 握手：延迟一拍，保证 H5 侧脚本先挂好监听
     setTimeout(function () {
       Shell.ready = true;
@@ -1004,13 +1719,21 @@
       if (restored.length) {
         emit('shell:queue-restored', { count: restored.length, oldestAt: restored[0].at || null });
       }
+      identityMaybeRefresh();
     }, 0);
 
     console.log('[shell-core] v' + CORE_VERSION + ' ready (' + state.env + ')');
     return Shell;
   }
 
-  window.ShellCore = { version: CORE_VERSION, create: create, detect: detect, registerPlugin: registerPlugin };
+  window.ShellCore = {
+    version: CORE_VERSION,
+    create: create,
+    detect: detect,
+    registerPlugin: registerPlugin,
+    registerIotAdapter: registerIotAdapter,
+    registerSecureStore: registerSecureStore,
+  };
 
   // 配置由 build.mjs 追加在文件末尾：ShellCore.create(<config>);
 })();

@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const SHELL_VERSION = '0.6.0';
+export const SHELL_VERSION = '0.7.0';
 export const BRIDGE_VERSION = '3';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -50,6 +50,7 @@ export function composeShellFile(cfg, opts = {}) {
     endKey: cfg.endKey,
     ends: cfg.ends,
     theme: cfg.theme,
+    entry: cfg.entry,
     caps: cfg.caps,
   };
   // 插件运行时在 create 之前注册：id 只来自配置，能力声明来自插件包

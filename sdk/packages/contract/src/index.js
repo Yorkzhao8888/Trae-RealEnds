@@ -5,7 +5,7 @@
  * （@uendos/conformance）都以本文件为准；改契约先改这里，再改实现。
  */
 
-export const CONTRACT_VERSION = '0.6.0';
+export const CONTRACT_VERSION = '0.7.0';
 export const SCHEMA_VERSION = 1;
 
 /** 能力矩阵：键名固定，值由运行时按环境计算（✓ / ◐ / ─ / web） */
@@ -27,6 +27,12 @@ export const CAPABILITIES = [
   'biometric',
   'offlineQueue',
   'subscribeMsg',
+  // 安全存储：原生 Keychain/Keystore ✓；内存降级 ◐；禁止凭证落 localStorage
+  'secureStore',
+  // 设备身份：默认 none；配置 security.identity 后可用，令牌只存 secureStore
+  'identity',
+  // IoT 总开关；iot.ble / iot.serial / iot.mqtt / iot.nfc 由适配器插件声明
+  'iot',
   'edge.storeRoot',
 ];
 
@@ -58,6 +64,56 @@ export const OPTIONAL_METHODS = [
   'edge.lease',
   'edge.commit',
   'edge.snapshot',
+  'iot.devices',
+  'iot.read',
+  'iot.write',
+  'entry.open',
+  'secure.get',
+  'secure.set',
+  'secure.remove',
+  'identity.current',
+  'identity.refresh',
+];
+
+/** 安全存储后端：memory 为 Web/小程序降级，其余由构建期原生适配器提供 */
+export const SECURE_BACKENDS = ['keychain', 'keystore', 'native', 'memory'];
+export const SECURE_MAX_VALUE = 8192;
+export const SECURE_KEY_PREFIX = '<brand>:<purpose>';
+
+/** 设备身份（v0.8 M2）：默认 none；device 模式令牌只存 secureStore，不暴露给 H5 */
+export const IDENTITY_MODES = ['device', 'none'];
+export const IDENTITY_KEYS = ['mode', 'endpoint', 'storeKey'];
+export const IDENTITY_STORE_PURPOSE = 'identity.device';
+export const IDENTITY_SOURCE = 'device';
+
+/** 插件与产物完整性（v0.8 M3）：签名文件、信任链与发布清单签名态 */
+export const PLUGIN_SIG_ALG = 'ed25519';
+export const PLUGIN_SIG_FILE = 'uendos.plugin.sig';
+export const TRUSTED_FILE = 'uendos.trusted.json';
+export const PLUGIN_SIG_VERSION = 1;
+export const RELEASE_SIGNATURE_STATES = ['signed', 'unsigned', 'dev'];
+
+/** 更新通道（v0.8 M4）：stable / beta 各自独立指针与灰度，互不影响 */
+export const UPDATE_CHANNELS = ['stable', 'beta'];
+export const UPDATE_CHANNEL_DEFAULT = 'stable';
+
+/** 预留的 IoT 适配器能力 ID：由构建期插件声明，核心只提供 iot 总开关 */
+export const IOT_TRANSPORT_CAPABILITIES = ['iot.ble', 'iot.serial', 'iot.mqtt', 'iot.nfc'];
+
+/** IoT 事件信封 v1：所有 shell:iot-* 事件的 data 都必须满足该形状 */
+export const IOT_EVENT_VERSION = 1;
+export const IOT_EVENT_KEYS = [
+  'v',
+  'deviceId',
+  'kind',
+  'metric',
+  'value',
+  'unit',
+  'at',
+  'seq',
+  'idem',
+  'quality',
+  'source',
 ];
 
 /** 契约事件：全部带 { event, seq, at, data } */
@@ -72,6 +128,12 @@ export const EVENTS = [
   'shell:queue-replayed',
   'shell:queue-failed',
   'shell:queue-drained',
+  'shell:iot-device',
+  'shell:iot-data',
+  'shell:iot-ack',
+  'shell:iot-error',
+  'shell:identity-changed',
+  'shell:identity-expired',
 ];
 
 /** 稳定错误码：H5 只能按 code 分支，不得依赖 message 文案 */
@@ -147,12 +209,18 @@ export function resolveTheme(theme, accent) {
  * order 决定展示顺序（未列出的端按配置顺序追加）；groups 只做分组展示，
  * 未分组的端排在分组之后。
  */
-export const ENTRY_KEYS = ['title', 'subtitle', 'rememberLast', 'order', 'groups'];
+export const ENTRY_KEYS = ['title', 'subtitle', 'rememberLast', 'order', 'groups', 'routes'];
 export const ENTRY_DEFAULTS = {
   title: '选择你的身份',
   subtitle: '选择后进入对应工作台，可随时返回本页切换。',
   rememberLast: true,
 };
+
+/** 入口路由：id 稳定、path 站内相对、params 可校验、requires 可降级 */
+export const ENTRY_ROUTE_KEYS = ['id', 'label', 'path', 'params', 'requires', 'fallback'];
+export const ENTRY_PARAM_KEYS = ['type', 'required', 'enum', 'maxLength'];
+export const ENTRY_PARAM_TYPES = ['string', 'number', 'boolean'];
+export const ENTRY_SOURCES = ['launcher', 'deeplink', 'scan', 'nfc', 'notification', 'device'];
 
 export function resolveEntry(cfg) {
   const ids = Object.keys(cfg.ends || {});
@@ -176,12 +244,16 @@ export function resolveEntry(cfg) {
 
 const RE_URL = /^(https?:\/\/[^\s]+)$/;
 const RE_BRAND = /^[a-z][a-z0-9-]{1,15}$/;
+const RE_ENTRY_ID = /^[a-z][a-z0-9.-]{1,31}$/;
+const RE_ROUTE_PATH = /^\/[^\s]*$/;
+const RE_PARAM_NAME = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
 const RE_END_ID = /^[a-z]{2,4}$/;
 const RE_ACCENT = /^#[0-9A-Fa-f]{6}$/;
 const RE_PKG = /^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/;
 const RE_SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/;
-const RE_CAP = /^[a-z][a-z0-9]*$/;
+const RE_CAP = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)*$/;
 const RE_PLUGIN_METHOD = /^[a-z][a-z0-9]*(\.[a-z][A-Za-z0-9]*)+$/;
+const RE_SECURE_KEY = /^[a-z][a-z0-9-]*:[A-Za-z][A-Za-z0-9._-]{0,63}$/;
 
 /** 插件不得占用的内置命名空间 */
 export const PLUGIN_RESERVED_NS = ['core', 'edge', 'offline', 'desktop', 'shell'];
@@ -230,7 +302,7 @@ export function validatePluginManifest(m, opts = {}) {
     for (const cap of m.capabilities) {
       if (typeof cap !== 'string' || !RE_CAP.test(cap)) errors.push(`插件能力名不合法：${cap}`);
       else if (CAPABILITIES.includes(cap)) errors.push(`插件能力与内置能力重名：${cap}`);
-      else if (PLUGIN_RESERVED_NS.includes(cap)) errors.push(`插件能力不得占用内置命名空间：${cap}`);
+      else if (PLUGIN_RESERVED_NS.includes(cap.split('.')[0])) errors.push(`插件能力不得占用内置命名空间：${cap}`);
       else if (seen.has(cap)) errors.push(`插件能力重复：${cap}`);
       else seen.add(cap);
     }
@@ -247,7 +319,13 @@ export function validatePluginManifest(m, opts = {}) {
       }
       const ns = method.split('.')[0];
       if (PLUGIN_RESERVED_NS.includes(ns)) errors.push(`插件方法不得占用内置命名空间：${method}`);
-      else if (!(m.capabilities || []).includes(ns)) errors.push(`插件方法 ${method} 不在声明的能力命名空间内`);
+      else {
+        // 能力可带点（如 iot.ble）：取最长前缀作为方法归属，避免多点能力被误判
+        const owner = (m.capabilities || [])
+          .filter((cap) => method.startsWith(cap + '.'))
+          .sort((a, b) => b.length - a.length)[0];
+        if (!owner) errors.push(`插件方法 ${method} 不在声明的能力命名空间内`);
+      }
       if (seen.has(method)) errors.push(`插件方法重复：${method}`);
       else seen.add(method);
     }
@@ -408,6 +486,134 @@ export function validateConfig(cfg, opts = {}) {
           }
         }
       }
+      if (cfg.entry.routes !== undefined) {
+        if (!Array.isArray(cfg.entry.routes)) errors.push('entry.routes 必须是数组');
+        else {
+          const seenRoutes = new Set();
+          const knownCaps = new Set([...CAPABILITIES, ...(Array.isArray(opts.capabilities) ? opts.capabilities : [])]);
+          for (const r of cfg.entry.routes) {
+            if (!isObj(r)) { errors.push('entry.routes 每项必须是对象'); continue; }
+            for (const k of Object.keys(r)) {
+              if (!ENTRY_ROUTE_KEYS.includes(k)) errors.push(`entry.routes 不支持的键：${k}`);
+            }
+            if (typeof r.id !== 'string' || !RE_ENTRY_ID.test(r.id)) {
+              errors.push(`入口 id 必须是小写字母开头、2–32 位的 a-z/0-9/./-`);
+            } else if (seenRoutes.has(r.id)) {
+              errors.push(`入口 id 重复：${r.id}`);
+            } else {
+              seenRoutes.add(r.id);
+            }
+            if (r.label !== undefined && (typeof r.label !== 'string' || !r.label.trim())) {
+              errors.push(`入口 ${r.id || '?'} 的 label 不能为空`);
+            }
+            if (typeof r.path !== 'string' || !RE_ROUTE_PATH.test(r.path)) {
+              errors.push(`入口 ${r.id || '?'} 的 path 必须是站内相对路径（以 / 开头，不含空白）`);
+            }
+            if (r.fallback !== undefined && (typeof r.fallback !== 'string' || !RE_ROUTE_PATH.test(r.fallback))) {
+              errors.push(`入口 ${r.id || '?'} 的 fallback 必须是站内相对路径`);
+            }
+            if (r.params !== undefined) {
+              if (!isObj(r.params)) {
+                errors.push(`入口 ${r.id || '?'} 的 params 必须是对象`);
+              } else {
+                for (const [name, p] of Object.entries(r.params)) {
+                  if (!RE_PARAM_NAME.test(name)) { errors.push(`入口参数名不合法：${name}`); continue; }
+                  if (!isObj(p)) { errors.push(`入口参数 ${name} 必须是对象`); continue; }
+                  for (const k of Object.keys(p)) {
+                    if (!ENTRY_PARAM_KEYS.includes(k)) errors.push(`入口参数 ${name} 不支持的键：${k}`);
+                  }
+                  if (!ENTRY_PARAM_TYPES.includes(p.type)) {
+                    errors.push(`入口参数 ${name} 的 type 只能是 ${ENTRY_PARAM_TYPES.join(' / ')}`);
+                  }
+                  if (p.required !== undefined && typeof p.required !== 'boolean') {
+                    errors.push(`入口参数 ${name} 的 required 必须是布尔值`);
+                  }
+                  if (p.maxLength !== undefined) {
+                    if (!Number.isInteger(p.maxLength) || p.maxLength < 1 || p.maxLength > 1024) {
+                      errors.push(`入口参数 ${name} 的 maxLength 必须是 1–1024 的整数`);
+                    } else if (p.type !== 'string') {
+                      errors.push(`入口参数 ${name} 的 maxLength 仅适用于 string`);
+                    }
+                  }
+                  if (p.enum !== undefined) {
+                    if (!Array.isArray(p.enum) || !p.enum.length) {
+                      errors.push(`入口参数 ${name} 的 enum 必须是非空数组`);
+                    } else if (p.enum.some((v) => typeof v !== p.type)) {
+                      errors.push(`入口参数 ${name} 的 enum 值必须与 type=${p.type} 一致`);
+                    }
+                  }
+                }
+              }
+            }
+            if (r.requires !== undefined) {
+              if (!isObj(r.requires)) {
+                errors.push(`入口 ${r.id || '?'} 的 requires 必须是对象`);
+              } else {
+                for (const k of Object.keys(r.requires)) {
+                  if (!['capability', 'online'].includes(k)) errors.push(`入口 requires 不支持的键：${k}`);
+                }
+                if (r.requires.capability !== undefined) {
+                  if (typeof r.requires.capability !== 'string' || !knownCaps.has(r.requires.capability)) {
+                    errors.push(`入口 ${r.id || '?'} 依赖未知能力：${r.requires.capability}`);
+                  }
+                }
+                if (r.requires.online !== undefined && typeof r.requires.online !== 'boolean') {
+                  errors.push(`入口 ${r.id || '?'} 的 requires.online 必须是布尔值`);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (cfg.security !== undefined) {
+    if (!isObj(cfg.security)) errors.push('security 必须是对象');
+    else {
+      for (const k of Object.keys(cfg.security)) {
+        if (k !== 'identity' && k !== 'plugins') errors.push(`security 不支持的键：${k}`);
+      }
+      if (cfg.security.plugins !== undefined) {
+        if (!isObj(cfg.security.plugins)) errors.push('security.plugins 必须是对象');
+        else {
+          for (const k of Object.keys(cfg.security.plugins)) {
+            if (k !== 'requireSigned') errors.push(`security.plugins 不支持的键：${k}`);
+          }
+          if (cfg.security.plugins.requireSigned !== undefined
+            && typeof cfg.security.plugins.requireSigned !== 'boolean') {
+            errors.push('security.plugins.requireSigned 必须是布尔值');
+          }
+        }
+      }
+      const id = cfg.security.identity;
+      if (id !== undefined) {
+        if (!isObj(id)) errors.push('security.identity 必须是对象');
+        else {
+          for (const k of Object.keys(id)) {
+            if (!IDENTITY_KEYS.includes(k)) errors.push(`security.identity 不支持的键：${k}`);
+          }
+          const mode = id.mode === undefined ? 'none' : id.mode;
+          if (!IDENTITY_MODES.includes(mode)) errors.push('security.identity.mode 只能是 device 或 none');
+          if (mode === 'device') {
+            if (typeof id.endpoint !== 'string' || !RE_URL.test(id.endpoint)) {
+              errors.push('security.identity.endpoint 必须是 http(s) 绝对地址');
+            } else if (!allowHttp && !id.endpoint.startsWith('https://')) {
+              errors.push('security.identity.endpoint 必须是 https（开发期可加 --allow-http）');
+            }
+          } else if (id.endpoint !== undefined) {
+            errors.push('security.identity.endpoint 仅在 mode=device 时使用');
+          }
+          if (id.storeKey !== undefined) {
+            const expected = `${cfg.prefix || cfg.brand}:`;
+            if (typeof id.storeKey !== 'string' || !RE_SECURE_KEY.test(id.storeKey)) {
+              errors.push('security.identity.storeKey 必须是 <prefix>:<purpose> 形式');
+            } else if (!id.storeKey.startsWith(expected)) {
+              errors.push(`security.identity.storeKey 必须以 ${expected} 开头`);
+            }
+          }
+        }
+      }
     }
   }
 
@@ -477,6 +683,8 @@ export function runtimeConfig(cfg) {
     endKey: cfg.endKey,
     ends: cfg.ends,
     theme: cfg.theme,
+    entry: cfg.entry,
+    security: cfg.security,
     caps: cfg.caps,
   };
 }

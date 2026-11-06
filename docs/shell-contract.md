@@ -1,11 +1,34 @@
-# 真实端壳契约 v0.6.0
+# 真实端壳契约 v0.7.0
 
 > 适用范围：`Trae-RealEnds` 内全部壳工程（App / 小程序 / PC / 浏览器兜底）。
 > 本文件是**唯一真相**：壳、H5、发行部署都以本文对齐。改契约先改本文，再改实现。
 
 ---
 
-## 0. 角色与红线
+## 0. 定位、角色与红线
+
+### 0.1 定位：两层一面 + 一条贯穿
+
+> 壳是位于物理世界与数字世界之间的边缘运行时：以设备、网络与现场约束为输入，承担感知接入、指令执行、离线缓冲与系统整合；以「两层一面、一条贯穿」组织职责，只决定「怎么送、送多少、何时送」，不裁决业务。
+
+「边缘」在这里指**位置与能力边界**，不是裁决权。壳离现场最近，最适合做适配、缓冲、降级与执行；但离现场近，不等于可以改写业务真相。跨店库存、结算、风控、权限矩阵归云根，店内真相副本归店根。
+
+| 面 | 职责 | 不承担 |
+|---|---|---|
+| 硬体接口面（层） | 设备能力探测与适配：传感器、打印、称重、扫码、NFC/蓝牙、网络状态；能力缺失时给出降级路径 | 硬件本身、驱动、固件与制造 |
+| 软体运行时面（层） | 统一桥 `window.Shell`、方法分发、事件、缓存、离线队列、幂等重放、插件运行时 | 业务规则、优惠判定、订单状态、金额 |
+| 系统整合面（横切） | 身份与会话、发布与升级、运维与可观测、隐私与合规、商店/MDM 交付 | 把整合能力变成业务裁决 |
+| 连接/数据贯穿 | 弱网与断网、多路径传输、store-and-forward、本地读模型与对账、时钟与网络上下文 | 用本地缓存替代云端真相 |
+
+**对接是双向的**：感知（物理 → 数字：采集、上报、对账）与执行（数字 → 物理：打印、开柜、亮屏、震动、播报）。只做上行，壳就退化成上传组件。
+
+判断一项能力该不该进壳，先过三个问题：
+
+1. 断网时，壳还能独立完成它吗？
+2. 换硬件或换端时，改的是壳还是业务？
+3. 出争议时，裁决发生在边缘，还是在云根/店根？
+
+### 0.2 角色
 
 | 角色 | 持有 | 不持有 |
 |---|---|---|
@@ -13,8 +36,64 @@
 | 店根（PC 壳 / 门店网关） | 店内真相副本：本店库存、工位/桌台、离线额度 | 跨店结算 |
 | 端壳（App / 小程序 / PC 客户端 / 浏览器） | 会话、缓存、离线队列、设备画像、地理与网络上下文 | 任何业务裁决 |
 
+### 0.3 红线
+
 **红线**：壳只决定「怎么送、送多少、何时送」；「送什么、算得对不对」由云根/店根决定。
 壳内不得本地判定优惠、改订单状态、改金额。
+
+### 0.4 IoT 接入与入口化
+
+> 壳接入并标准化物理世界的 IoT 信号，经店根/云根裁决后，把结论转化为可拉起、可鉴权、可降级的用户操作入口；用户操作再由壳下发为设备执行与回执。壳负责「送达与执行」，不负责「裁决与编排内容」。
+
+```mermaid
+flowchart LR
+  dev["物理世界<br/>IoT 设备 / 传感器 / 执行器"] -->|感知信号| hw
+  subgraph edge["壳 · 边缘运行时"]
+    direction TB
+    hw["硬体接口<br/>接入 / 标准化 / 执行"]
+    sw["软体运行时<br/>缓存 / 离线队列 / 入口拉起"]
+    hw -->|标准化事件| sw
+    sw -->|指令下发| hw
+  end
+  sw -->|上行事件| store["店根"]
+  store -->|跨店 / 全局| cloud["云根"]
+  store -->|裁决 / 编排| entry["H5 操作入口"]
+  cloud -->|裁决 / 编排| entry
+  entry --> user["用户操作"]
+  user -->|操作指令| sw
+  hw -->|执行 + 回执| dev
+```
+
+| 环节 | 负责方 | 产物 | 壳不承担 |
+|---|---|---|---|
+| IoT 接入 | 硬体接口面 | 标准化事件：设备 ID、类型、值、时钟、去重键 | 解析业务含义、判定结果 |
+| 裁决 | 店根 / 云根 | 可执行结论 | 本地判定优惠、库存、金额 |
+| 入口编排 | 业务 H5 + 店根/云根 | 深链、卡片、待办、设备面板 | 决定给用户看什么 |
+| 执行 | 硬体接口面 | 指令 + 回执 | 伪造执行成功 |
+
+**IoT 接入要求**
+
+- 协议适配只走构建期插件（MQTT / BLE / 串口 / 扫码 / 称重等），禁止运行时远程加载；探测不到能力时降级并如实上报。
+- 事件必须带设备身份、时钟与幂等键；进入品牌作用域离线队列，重连后按 `shell:queue-restored` 对账。
+- 设备身份与令牌由云端校验（见 [cajob-iot-spec](../cajob-iot-spec/)）；壳不落凭证、不替代鉴权。
+- `caps.allow` 只做构建期裁剪，不是安全边界。
+
+**入口形态**
+
+| 入口 | 触发 | 必带参数 | 降级 |
+|---|---|---|---|
+| 近场触发 | 扫码 / NFC / BLE / 地理围栏 | `entryId`、设备或点位、上下文 | 手输编码 / 搜索 |
+| 工作台 | launcher、卡片、待办、通知 | `entryId`、会话、幂等键 | 静态入口页 |
+| 设备面板 | 状态 / 告警 | 设备 ID、快照版本 | 只读状态 + 重试 |
+| 离线入口 | 断网 / 弱网 | 本地可用性、排队数 | 先排队后提交 |
+
+**执行闭环**
+
+指令必须带幂等键并返回回执；失败可重试、可对账。壳不得把「已发送」标成「已成功」，执行结果回到店根/云根形成闭环。
+
+红线不变：裁决在店根/云根，入口内容由业务 H5 编排；壳只负责接入、缓冲、拉起与执行。
+
+> 本节是定位口径；具体设备协议与入口清单按端另行定义。
 
 ---
 
@@ -22,7 +101,7 @@
 
 | 字段 | 当前值 | 说明 |
 |---|---|---|
-| `contractVersion` | `0.6.0` | 本文版本，语义化 |
+| `contractVersion` | `0.7.0` | 本文版本，语义化 |
 | `shellVersion` | 各壳自报 | 壳内核版本 |
 | `appVersion` | 各壳自报 | 商店发版版本 |
 
@@ -76,6 +155,7 @@
 | `obs.telemetry` | 端上可观测上报 | 无 |
 | `policy.fetch` | 拉取云端边缘策略 | 无 |
 | `sys.biometric` | 生物识别 | 生物识别 |
+| `identity` | 设备身份与令牌轮换（令牌只存 `secureStore`） | 无 |
 
 ### 2.3 平台支持矩阵
 
@@ -99,6 +179,7 @@
 | `net.offlineQueue` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `sec.attest` | ✓ | ◐ | ✗ | ✓ | ◐ | ✗ |
 | `obs.telemetry` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `identity` | ◐ | ◐ | ◐ | ◐ | ◐ | ◐ |
 
 小程序 `core.vibrate` 走 `wx.vibrateShort`；`push` 在小程序为 ✗，改用订阅消息（`core.subscribe`，另列）。
 
@@ -111,7 +192,7 @@
 ```js
 window.dispatchEvent(new CustomEvent('shell:ready', {
   detail: {
-    contractVersion: '0.6.0',
+    contractVersion: '0.7.0',
     shellVersion: '0.1.0',
     appVersion: '0.1.0',
     brand: 'ziway',
@@ -178,6 +259,8 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 | `shell:queue-flush` | `{confirmed, conflicts, rolledBack}` | 队列回放结果 |
 | `shell:policy-update` | `{version, patch}` | 边缘策略更新 |
 | `shell:error` | `{code, method, detail}` | 壳内部错误 |
+| `shell:identity-changed` | `{deviceId, owner, scopes, expiresAt, source}` | 设备令牌刷新成功，不含令牌 |
+| `shell:identity-expired` | `{code, deviceId}` | 令牌被吊销/过期，安全存储已清空 |
 
 ---
 
@@ -472,3 +555,186 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 4. **事件回看**：`Shell.events.recent([event], [limit=20])` 返回内存环形缓冲中的最近事件（上限 50 条），按时间正序；`event` 可按事件名过滤，`limit` 超过 50 时按 50 截断。只读、进程内有效、不写 `localStorage`，用于调试与断线对账，**不替代 `on()`**，也不构成投递保证。
 5. **兼容性**：既有事件名、`seq` / `at` / `data` 载荷不变；`BRIDGE_VERSION` 仍为 `3`。H5 未使用新能力时零改动。
 6. **校验**：`conformance` 内置断言由 39 增至 44（事件 +2、离线队列 +3，含作用域信封、旧数组迁移与重启恢复）；四品牌桥 `build.mjs --check` 一致。
+
+---
+
+## 25. v0.7 M1 变更（IoT 接入与入口路由契约）
+
+桥版本保持 `3`，契约版本仍为 `0.6.0`（随 v0.7 发版升至 `0.7.0`）；本阶段只落契约与类型，运行时在 M2 / M3 实现。
+
+1. **能力位**：新增内置 `iot` 总开关，默认 `─`；`iot.ble` / `iot.serial` / `iot.mqtt` / `iot.nfc` 为**预留的适配器能力 ID**，由构建期插件声明，不进入内置矩阵（否则插件注册会被重名规则拒绝）。`caps.allow` 仍可裁剪 `iot`。
+2. **IoT 方法**：`iot.devices` / `iot.read` / `iot.write` 进入可选方法清单；能力缺失或未启用时返回 `E_UNSUPPORTED`。`iot.write` 只返回 `{ accepted, ackId }`，执行结果由 `shell:iot-ack` 回传，不得把「已受理」当「已成功」。
+3. **IoT 事件**：`shell:iot-device` / `shell:iot-data` / `shell:iot-ack` / `shell:iot-error`；`data` 统一为信封 v1：`{ v, deviceId, kind, metric, value, unit, at, seq, idem, quality, source }`，`v` 当前为 `1`。
+4. **入口路由**：`entry.routes` 与既有 `entry` 并存，字段 `{ id, label?, path, params?, requires?, fallback? }`。`id` 为 2–32 位小写标识；`path` / `fallback` 必须是站内相对路径（以 `/` 开头）；`params` 支持 `type`（`string|number|boolean`）、`required`、`enum`、`maxLength`；`requires` 支持 `capability` 与 `online`。运行时的 `entries()` / `entry.open` 在 M3 落地，M1 只做配置校验与类型。
+5. **类型**：新增 `@uendos/types`（仅 `index.d.ts`），覆盖 `window.Shell`、IoT 信封、入口路由与入口打开参数。
+6. **一致性**：M1 不新增断言；M2 补 IoT 全链路，M3 补入口三路径，M5 统一到约 60 项。
+
+---
+
+## 26. v0.7 M2 变更（IoT 运行时）
+
+桥版本保持 `3`，契约版本仍为 `0.6.0`；本阶段把 §25 的 IoT 契约落为可调用运行时。
+
+1. **构建期注册**：适配器由插件 runtime 调用 `ShellCore.registerIotAdapter(spec)` 注册，随 `uendos sync` 嵌入品牌桥；禁止运行时远程加载。`id` 与 `transport` 均需唯一，`transport` 只能是 `ble` / `serial` / `mqtt` / `nfc`。插件注册失败时，其适配器一并回滚。
+2. **激活**：适配器随所属插件 `active`；`detect(env)` 返回 false 时同样不激活，能力值记 `─`，方法返回 `E_UNSUPPORTED`。
+3. **方法**：
+   - `iot.devices`：聚合所有激活适配器，按 `transport + id` 去重，返回 `{ devices: [{ id, kind, transport, status, capabilities }] }`。
+   - `iot.read`：返回 `{ value, unit, at, quality }`；设备或指标不可用返回 `E_UNSUPPORTED`，缺 `deviceId` 返回 `E_BAD_ARGS`。
+   - `iot.write`：`deviceId` / `action` / `idem` 必填，缺 `idem` 返回 `E_BAD_ARGS`；成功只返回 `{ accepted: true, ackId }`，**不代表执行成功**。
+4. **执行回执**：适配器通过 `ack(result)` 或同步返回 `{ ok: boolean }` 回传结果，壳派发 `shell:iot-ack`，载荷 `{ ackId, deviceId, action, idem, ok, code, message, data }`。同一 `ackId` 只派发一次。
+5. **上行事件**：适配器 `subscribe(publish)` 推送 → `shell:iot-data`，信封 v1 由壳补全 `v` / `at` / `seq` / `idem` / `quality` / `source`；`deviceId` 或 `metric` 缺失的事件丢弃。适配器配置 `ingestUrl` 且当前离线时，事件自动进入品牌作用域离线队列补传。
+6. **能力聚合**：任一 `iot.*` 子能力激活时，`iot` 总开关自动置 `✓`；`caps.allow` 不含 `iot` 时，所有 `iot.*` 子能力一并置 `─`，相关方法返回 `E_UNSUPPORTED`。
+7. **插件能力多点 ID**：能力 ID 支持 `iot.ble` 这类多点形式；方法归属取最长声明前缀（`iot.ble.probe` 归属 `iot.ble`），仍不得占用 `core/edge/offline/desktop/shell`。
+8. **脚手架**：`uendos plugin init <pkg> --kind iot --transport <t>` 生成可安装适配器包（`capabilities: ["iot.<t>"]`、`methods: ["iot.<t>.probe"]`、runtime 调用 `registerIotAdapter`）。
+9. **一致性**：无适配器时内置断言 48 项（含 IoT 降级与诊断）；有适配器时 50 项（设备结构、写幂等与 `accepted + ackId`），再叠加插件断言。
+
+---
+
+## 27. v0.7 M3 变更（入口运行时）
+
+桥版本保持 `3`，契约版本仍为 `0.6.0`。
+
+1. **`Shell.entries()`**：返回 `entry.routes` 的运行时视图 `[{ id, label, path, params, requires, fallback, available, reason }]`；`available=false` 时 `reason` 为 `capability:<id>` 或 `offline`。
+2. **`entry.open({ id, params, source, idem })`**：
+   - 校验 `id`（小写字母开头、2–32 位）与 `source`（`launcher|deeplink|scan|nfc|notification|device`，默认 `launcher`）；
+   - 校验 `params`：未知参数、缺必填、类型不符、`enum`/`maxLength` 超限一律 `E_BAD_ARGS`，命中 `fallback`；
+   - 校验 `requires`：能力为 `─` 或缺失、要求在线但离线时返回 `E_UNSUPPORTED`，命中 `fallback`；
+   - 通过后按声明顺序拼装 `path`（保留已有查询串），只返回 `{ opened, id, path, fallback, reason, source, idem }`；
+   - 派发 `shell:entry-open`，载荷含 `{ id, source, idem, params, opened, path, fallback, reason }`。
+3. **边界**：`entry.open` 只做校验、可达性判断、路径拼装与事件派发；不导航、不写业务数据、不判优惠/库存/金额。是否跳转、跳到哪里由 H5 决定。
+4. **未知入口**：返回 `E_BAD_ARGS`，不派发事件（无 `fallback` 可依）。
+5. **深链衔接**：`shell:deeplink` 仍只上报 URL；H5 解析出 `id` / `params` 后调用 `entry.open`，复用同一套参数校验与降级逻辑。
+6. **运行时配置**：`entry` 进入 `runtimeConfig` 与品牌桥配置片段，旧 `entry`（title/order/groups）行为不变。
+7. **一致性**：配置了 `entry.routes` 时新增 5 项断言（列表、成功、缺参、未知入口、能力不足降级）；内置断言为 48（基础）、53（含入口路由）、50（含 IoT 适配器），两者同时启用为 55。
+
+---
+
+## 28. v0.7 M4 变更（诊断）
+
+桥版本保持 `3`，契约版本仍为 `0.6.0`。
+
+1. **`Shell.diagnostics()`**：同步返回只读快照 `{ version, bridge, brand, env, platform, online, capabilities, plugins, queue: { count, oldestAt }, events, at }`。
+2. **脱敏**：`events` 只保留 `{ event, seq, at }`，不携带 `data`；队列只暴露数量与最老时间，不含请求体、URL、令牌。诊断结果不得包含 token、密码、手机号、地址、设备唯一码原文。
+3. **只读**：诊断不触发队列重放、不写缓存、不改任何业务状态；连续调用结果可预期。
+4. **CLI 诊断包**：`uendos doctor --json` 输出结构化 JSON（`ok`、版本、配置摘要、插件清单、能力集、逐项检查），字段与 `Shell.diagnostics()` 对齐；URL 去查询串，令牌/手机号打码。非 0 退出码仍表示有检查未通过。
+5. **落盘复现**：诊断包可 `> diag.json` 保存；不内置自动上传，避免把设备信息送出。
+6. **一致性**：内置断言增至 48 项（新增快照字段与脱敏 2 项）；配置 `entry.routes` 时 53，含 IoT 适配器时 50，两项同时启用为 55。
+
+---
+
+## 29. v0.7 M5 发版
+
+桥版本保持 `3`，契约 / 内核 / SDK 统一 `0.7.0`；无破坏性 wire 变更。
+
+1. **能力**：内置矩阵 19 项（新增 `iot` 总开关）；`iot.ble` / `iot.serial` / `iot.mqtt` / `iot.nfc` 由构建期适配器声明，不进入内置矩阵。
+2. **方法**：`iot.devices` / `iot.read` / `iot.write`、`entry.open`；新增 `Shell.entries()` 与 `Shell.diagnostics()`。
+3. **事件**：`shell:iot-device` / `shell:iot-data` / `shell:iot-ack` / `shell:iot-error`、`shell:entry-open`；IoT 信封 v1。
+4. **入口**：`entry.routes` 统一参数校验、能力/在线检查与 `fallback`；旧 `entry` 选择页与深链行为不变。
+5. **诊断**：`Shell.diagnostics()` 默认脱敏；`uendos doctor --json` 输出结构化诊断包。
+6. **一致性**：conformance 内置 48 项（入口路由 53 / IoT 适配器 50 / 两者同时 55）；`npm test` 37/37；四品牌桥重建通过 `build.mjs --check`。
+7. **升级**：`uendos upgrade` 将 `contractVersion` 升至 `0.7.0`；`BRIDGE_VERSION` 不变，旧 H5 事件监听与旧配置继续有效。
+8. **交付**：`BTOS-UendOS-SDK-0.7.0.zip`（257,532 B，SHA-256 `4625f5d4…d15ff1`）/ `.tar.gz`（217,538 B，SHA-256 `30ac2e20…e15d800`），解压实测 `npm ci && npm test` 37/37、`init → doctor --offline → conformance 48/48 → sync --check` 全过。
+
+---
+
+## 30. v0.8 M1 安全存储
+
+桥版本保持 `3`；契约源码仍为 `0.7.0`（M5 统一升 `0.8.0`），本里程碑只增不破。
+
+1. **能力**：内置矩阵 19 → 20 项，新增 `secureStore`。无原生后端时值为 `◐`（内存降级）；注册并激活 Keychain/Keystore 后端后为 `✓`；`caps.allow` 关闭时回落 `─`。
+2. **方法**：`secure.get` / `secure.set` / `secure.remove`，全部只接受字符串值。
+   - `set` 返回 `{ stored: true, backend }`；`get` 返回 `{ value: string | null, backend }`；`remove` 返回 `{ removed, backend }`。
+   - `backend` 取值 `keychain` / `keystore` / `native` / `memory`。
+3. **键规则**：必须以 `<prefix>:` 开头（`prefix` 缺省等于 `brand`），purpose 为字母开头、≤ 64 位；单值 ≤ 8 KB；不提供枚举。
+4. **禁止**：设备令牌、刷新令牌、会话密钥不得写入 `localStorage` / `sessionStorage`；内存降级仅进程内有效，重启后要求重新授权，能力位如实上报 `◐`。
+5. **原生后端**：构建期调用 `ShellCore.registerSecureStore({ backend, detect?, get, set, remove })`，需在 `create` 初始化完成前注册（原生壳在启动脚本中嵌入，或由插件 factory 注册）；注册失败或插件回滚时自动回落内存。
+6. **诊断**：`Shell.diagnostics()` 只报 `security.secureStore` 后端类型，不报键名、数量与值。
+7. **一致性**：内置断言 48 → 52（安全存储 4 项：内存往返、键/值校验、不写 localStorage、诊断脱敏）。
+8. **边界**：`secureStore` 是凭证保管，不是身份校验；令牌有效性仍由云根/店根判定。
+
+---
+
+## 31. v0.8 M2 设备身份
+
+桥版本保持 `3`；契约源码仍为 `0.7.0`（M5 统一升 `0.8.0`），本里程碑只增不破。
+
+1. **能力**：内置矩阵 20 → 21 项，新增 `identity`。默认 `─`；配置 `security.identity.mode=device` 后为 `◐`；`caps.allow` 关闭 `secureStore` 时一并回落 `─`。
+2. **配置**：`security.identity = { mode: 'device' | 'none', endpoint, storeKey }`，默认 `none`。
+   - `mode=device` 时 `endpoint` 必填且默认必须 https（`--allow-http` 仅联调用）；`mode=none` 时不允许携带 `endpoint`。
+   - `storeKey` 可选，必须为 `<prefix>:<purpose>`；缺省 `<prefix>:identity.device`。
+3. **方法**：`identity.current` 返回 `{ identity: { deviceId, owner, scopes, expiresAt, source } | null, backend }`；`identity.refresh` 成功后返回同一元数据。两者都不返回、不记录令牌。
+4. **令牌边界**：`device_token` 只存安全存储（见 §30），以 JSON 记录 `{ deviceId, token, owner, scopes, expiresAt, obtainedAt }`；令牌不得进入 H5、事件 payload、`shell:ready`、诊断包或日志。
+5. **刷新**：`POST endpoint`，`Authorization: Bearer <当前令牌>`，body `{ device_id }`，接受 cajob 的 `device_token` / `device_id` / `owner_xu` / `expires_at` 字段；成功后原子写回并派发 `shell:identity-changed`。
+   - 并发刷新复用同一 in-flight 请求；离线直接返回 `E_OFFLINE`，不发请求。
+   - 401/403/410：清空安全存储并派发 `shell:identity-expired`，返回 `E_DENIED`。
+   - 响应缺 `device_token` 或其他非 2xx：`E_NATIVE`，保留旧令牌。
+6. **主动刷新**：到 TTL 80% 由壳在启动与联网恢复时补一次；失败静默，不阻塞本地操作。
+7. **诊断**：`Shell.diagnostics().security` 增加 `identity: 'device' | 'none'`，仍不报令牌、设备唯一码与键名。
+8. **一致性**：conformance 内置 52 → 55（设备身份 3 项：能力位一致、元数据脱敏、刷新/吊销闭环）；未配置时覆盖「不可用且不报错」。
+9. **边界**：设备身份只回答「这台设备是谁」；用户登录、OAuth 与权限矩阵仍归云根，壳不实现用户身份。
+
+---
+
+## 32. v0.8 M3 插件与产物完整性
+
+桥版本保持 `3`；契约源码仍为 `0.7.0`（M5 统一升 `0.8.0`），本里程碑只增不破。
+
+1. **签名文件**：插件包根目录 `uendos.plugin.sig`，JSON 结构
+   `{ v: 1, alg: 'ed25519', keyId, id, version, manifest, runtime, sig, signedAt }`。
+   `manifest` / `runtime` 为 `sha256-<hex>` 形式的哈希；`sig` 为 Ed25519 签名（base64），`keyId` 对应信任链条目。
+2. **签名载荷**：按行拼接 `v`、`id`、`version`、`manifest` 哈希、`runtime` 哈希（`\n` 分隔）后签名。
+   换版本、改 `uendos.plugin.json` 声明、改 `runtime.js` 代码都会使签名失效，必须重签。
+3. **信任链**：`uendos.trusted.json` 放在工程目录（或任意祖先目录，CLI 逐级向上查找），结构
+   `{ version: 1, keys: [{ id, alg: 'ed25519', publicKey: '<SPKI PEM>' }] }`。
+   仓库只存公钥；私钥由 `plugin keygen` 生成在 `.uendos-keys/<keyId>.private.pem`（权限 `600`），**禁止入库**。
+4. **默认策略**：`security.plugins.requireSigned` 默认 `true`；配置仅允许该布尔字段。
+   - 未签名插件在 `plugin add` / `plugin update` / `sync` / `pack` 前被拒绝；
+   - 开发期用 `--allow-unsigned`，或配置 `security.plugins.requireSigned=false` 放行；
+   - `--allow-unsigned` 只放行「缺签名」；签名结构非法、哈希不匹配、公钥缺失、验签失败一律拒绝。
+5. **插件锁**：`uendos.plugins.lock` 的每条记录新增 `manifest`（manifest 哈希）与 `signer`（签名 `keyId`，未签名为 `null`）；
+   `sync --check` / `doctor` 同时比对版本、运行时哈希、manifest 哈希与 signer，任一漂移即失败。
+6. **命令**：
+   - `plugin keygen --id <keyId> [--out <目录>] [--force]`：生成 Ed25519 密钥对，公钥写入 `uendos.trusted.json`；重复 `keyId` 需 `--force` 轮换。
+   - `plugin sign <包名> --key <私钥 PEM> --id <keyId>`：要求信任链已有该公钥，写 `uendos.plugin.sig`；只覆盖当前内容。
+   - `plugin verify [<包名>]`：离线验签，输出「验签通过 / 未签名 / 验签失败」；签名无效时退出码非 0。
+   - `plugin list` 每行标注 `签名 ✓ <signer>` / `签名 ! 未签名` / `签名 ✗`，并同时比对锁内 manifest 哈希。
+7. **发布清单**：`publish` 与 `pack` 产出的 `release/MANIFEST.json` 增加
+   - `signature`：`signed` | `unsigned` | `dev`（App 出包：有签名 `signed`、未签名 `unsigned`、Debug `dev`；PC/iOS 未签名 `unsigned`，其余 `dev`）；
+   - `bridgeVersion` 与 `contractVersion`：出包时的桥 / 契约版本；
+   - `plugins[]`：`[{ id, version, signature, signer }]`；
+   - 每个 `targets.<t>` 同样带 `signature`。
+8. **`doctor --integrity`**：在 `--release-check` 基础上额外校验
+   - `signature` 必须是三态之一；
+   - `bridgeVersion` / `contractVersion` 与当前运行时一致；
+   - 清单标记 `signed` 时，当前插件审计也必须为 `signed`；标记 `unsigned` 时不得与实际 `signed` 冲突。
+9. **`publish --verify`**：在大小 / SHA-256 一致之外，校验签名态合法、`bridgeVersion` 与 `contractVersion` 匹配；
+   标记 `signed` 时重新执行 `requireSigned=true` 的插件审计，任一不通过即拒绝发布。
+10. **一致性与边界**：conformance 保持 55 项（完整性不在运行时断言），CLI 测试 42/42（新增签名 / 篡改拦截用例）。
+    运行时不做远程完整性校验，完整性只在构建期、出包前与发布前闭环；`requireSigned` 仍不是权限边界。
+
+## 33. v0.8 M4 更新通道与软回滚
+
+桥版本保持 `3`；契约源码仍为 `0.7.0`（M5 统一升 `0.8.0`），本里程碑只增不破。契约常量新增
+`UPDATE_CHANNELS = ['stable', 'beta']` 与 `UPDATE_CHANNEL_DEFAULT = 'stable'`。
+
+1. **通道指针**：`pack --target pc --channel stable|beta` 写独立 generic 指针——stable 为
+   `latest.yml` / `latest-mac.yml` / `latest-linux.yml`，beta 为对应 `-beta` 后缀
+   （如 `latest-beta.yml`、`latest-linux-beta.yml`）。两通道互不覆盖；同版本重复出包跳过写入，
+   换版本则改写指针并保留上一版本。
+2. **通道注册表**：`release/channels.json`（`version: 1`）按通道存 `current` 与 `previous`，
+   每条记录为 `{ version, bridgeVersion, contractVersion, rollout, killSwitch, pointer, snapshot, at }`；
+   指针快照落在 `release/.channels/<channel>/<version>.yml`，供软回滚直接复制。
+3. **发布清单**：`release/MANIFEST.json` 顶层新增 `channel`、`rollout`（0–100，默认 `100`）、
+   `killSwitch`（默认 `false`）。App / 小程序只记清单字段，不生成 PC 指针。
+4. **灰度**：`publish --channel <c> --rollout <0-100> [--kill-switch]` 只改通道注册表与商店条目的
+   `rollout`，不覆盖指针；只调灰度时可省略 `--file` / `--item` / `--manifest`。`--channel` 默认 `stable`，
+   未知通道与越界 `rollout` 直接拒绝。
+5. **软回滚**：`publish --rollback --channel <c>`：有 `previous` 且快照存在时，用快照覆盖活动指针并把
+   `current ← previous`；否则把 `current.rollout = 0` 且 `killSwitch = true`。**不做二进制降级**，
+   已安装旧版本的客户端行为不变；更新通道只服务 PC，App / 小程序更新仍走商店 / 后台。
+6. **通道体检**：`doctor --release-check --channel <c>` 校验注册表 `current` 的
+   `bridgeVersion === BRIDGE_VERSION`（跨桥版本直接拒绝）、`contractVersion` 与当前一致、
+   指针 `version` 与注册表一致、`files[]` 的 `sha512` / `size` 与本地产物一致；开启 `killSwitch` 时显式提示。
+7. **一致性与边界**：conformance 保持 55 项（更新通道不在运行时断言），CLI 测试 43/43
+   （新增 stable/beta 隔离、灰度与回滚用例）。通道指针与注册表是发版侧账本，运行时壳不读取，
+   不参与升级决策。

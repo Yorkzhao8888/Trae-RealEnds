@@ -2,7 +2,7 @@
 
 把「H5 业务根 + 各端薄壳」沉淀成一套可复用的封装工具：开发者只写业务 H5，壳能力（App / PC / 小程序 / 浏览器）、原生桥、离线兜底、发布清单全部由 SDK 生成。
 
-**定位**：壳不做业务。SDK 只决定「怎么送、送多少、何时送」，不判定优惠、不改订单、不算金额。
+**定位**：壳是物理世界与数字世界之间的边缘运行时——硬体接口层 + 软体运行时层 + 系统整合面，连接/数据贯穿；对接是双向的（感知 + 执行）。SDK 只决定「怎么送、送多少、何时送」，不判定优惠、不改订单、不算金额。完整口径见[契约 §0](../docs/shell-contract.md#0-定位角色与红线)。
 
 ## 目录
 
@@ -12,7 +12,8 @@ sdk/
 ├── packages/
 │   ├── contract/                # @uendos/contract：能力/方法/事件/错误码 + 配置校验 + JSON Schema
 │   ├── shell/                   # @uendos/shell：运行时合成（把 shell-core 的 core.js + 品牌配置出桥）
-│   ├── conformance/             # @uendos/conformance：44 项契约断言（vm 沙箱，不依赖真机）
+│   ├── types/                   # @uendos/types：Shell / IoT / 入口 TypeScript 类型声明（无运行时）
+│   ├── conformance/             # @uendos/conformance：55 项契约断言（vm 沙箱，不依赖真机）
 │   ├── plugin-fixture/          # @uendos/plugin-fixture：插件机制 fixture（假打印机，仅测试用）
 │   └── cli/                     # uendos CLI + App/PC/小程序三套模板
 └── README.md
@@ -22,16 +23,16 @@ sdk/
 
 ## 分发包
 
-0.6.0 分发包随 GitHub Release [`uendos-sdk-v0.6.0`](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/tag/uendos-sdk-v0.6.0) 发布：
+0.7.0 分发包已生成（GitHub Release `uendos-sdk-v0.7.0` 发布后链接可用）：
 
-- [BTOS-UendOS-SDK-0.6.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.6.0/BTOS-UendOS-SDK-0.6.0.zip)（214,427 B，SHA-256 `11eba27f4efeaa811c3fca5e6874618c832ac2fbb3c9a8f2de969f21b4f92576`）
-- [BTOS-UendOS-SDK-0.6.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.6.0/BTOS-UendOS-SDK-0.6.0.tar.gz)（173,091 B，SHA-256 `dfed51dcbe329d58f1849835b596e7c2a215489dfcd37f226350415a087a2f16`）
+- [BTOS-UendOS-SDK-0.7.0.zip](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.7.0/BTOS-UendOS-SDK-0.7.0.zip)（257,532 B，SHA-256 `4625f5d41364f46ebf2176c42fd4bcb7edef4900e19ede9501a10043ddd15ff1`）
+- [BTOS-UendOS-SDK-0.7.0.tar.gz](https://github.com/Yorkzhao8888/Trae-RealEnds/releases/download/uendos-sdk-v0.7.0/BTOS-UendOS-SDK-0.7.0.tar.gz)（217,538 B，SHA-256 `30ac2e206d3f305cb4c40f731fa41fa78e652968c54d32e86cc481143e15d800`）
 
-> 0.6.0 包已在仓库 `dist/` 实测：解压后 `cd sdk && npm ci && npm test` 为 32/32，`init → doctor --offline → conformance 44/44 → sync --check` 全过。
+> 0.7.0 包已实测：解压后 `cd sdk && npm ci && npm test` 为 37/37，`init → doctor --offline → conformance 48/48 → sync --check` 全过。
 
-解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md`、`docs/uendos-customization-v0.4.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
+解压后 `cd sdk && npm install`，包含 `docs/shell-contract.md`、`docs/uendos-roadmap.md` 与 `shell-core/src/core.js`，因此 `check-core` 在包内也能通过；不含 `node_modules` 与任何凭证。
 
-> 仓库当前代码版本为 **0.6.0**（v0.6 M1-M4 已实现并随发版收口，见 [v0.6 方案](../docs/uendos-v0.6-plan.md)）。
+> 仓库当前代码版本为 **0.7.0**（v0.7 M1-M5 已实现并收口，见 [迭代路线](../docs/uendos-roadmap.md)）。
 
 首次接入请先读：[开发者接入指南（v0.3.1）](../docs/uendos-dev-onboarding-v0.3.1.md)，其中第 6 节是 launcher 与原生插件的真机验证步骤。
 
@@ -53,7 +54,7 @@ uendos init acme \
 
 cd acme
 uendos doctor                    # 配置 / 产物 / 端可达性 / 模板体检
-uendos conformance               # 44 项契约断言（配置了插件时为 44 + N）
+uendos conformance               # 55 项契约断言（配置了插件时为 55 + N）
 uendos sync --check              # CI 用：产物必须与配置一致
 ```
 
@@ -75,16 +76,19 @@ uendos sync --check              # CI 用：产物必须与配置一致
 | `uendos upgrade` | 老工程迁移：补齐/升级 `schemaVersion` / `contractVersion`，备份 `.bak`，重生成产物与插件锁 | `--check` 只报告差异、退出码 1，不写文件 |
 | `uendos diff` | 比对「配置期望 vs 现有产物」与「插件锁 vs 实装」，输出 `-`/`+` 行 | `--json` 输出机器可读结果；不一致退出码 1 |
 | `uendos sync` | 重新合成品牌桥与选择页 | `--check` 只校验不写，不一致时退出码 1 |
-| `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址；`--release-check` 校验 `release/MANIFEST.json` 与 PC `latest.yml` |
-| `uendos conformance` | 对品牌桥跑 44 项契约断言；配置了插件时合并插件断言，输出 `44 + N`；能力被裁剪时对应断言记为跳过 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
+| `uendos doctor` | 体检：配置合法 / 桥与配置一致 / 各 target 模板文件 / 插件验签 / 端 URL 可达（HEAD，405 回退 GET） | `--offline` 跳过联网；`--allow-http` 允许 http 端地址；`--allow-unsigned` 开发期放行未签名插件；`--release-check` 校验 `release/MANIFEST.json` 与 PC `latest.yml`；`--integrity` 额外校验清单签名态、桥/契约版本与插件签名一致性；`--channel stable\|beta` 改按通道注册表校验指针版本、产物 SHA-512/大小与桥/契约版本；`--json` 输出脱敏诊断包 |
+| `uendos conformance` | 对品牌桥跑 55 项契约断言；配置了插件时合并插件断言，输出 `55 + N`；能力被裁剪时对应断言记为跳过 | `--json` 输出机器可读结果；`--file` 直接指定桥文件 |
 | `uendos profile` | 查看 `lite/standard/pro` 三档默认 target 与能力集 | `--json` 输出机器可读结果 |
-| `uendos plugin list` | 列出配置中的插件：安装状态、版本、环境、能力、断言、依赖与锁状态 | `--json` 输出机器可读结果 |
-| `uendos plugin init <包名>` | 生成插件包脚手架（`uendos.plugin.json` / `runtime.js` / `conformance.mjs`），不自动改配置 | `--capability` `--env` `--dir` `--version` `--force` |
-| `uendos plugin add <包名>` | 把**已安装**的插件写入 `plugins` 并重新生成品牌桥（先预检声明合法） | `remove` 反向操作，被依赖时拒绝 |
-| `uendos plugin update [<包名>...]` | 构建期升级插件：`npm install <包名>@latest` → 重新校验 → `sync`；变更随壳包发布 | `--spec` 指定版本/tarball/内网源；不给包名则升级全部 |
+| `uendos plugin list` | 列出配置中的插件：安装状态、版本、环境、能力、断言、依赖、签名态与锁状态 | `--json` 输出机器可读结果 |
+| `uendos plugin init <包名>` | 生成插件包脚手架（`uendos.plugin.json` / `runtime.js` / `conformance.mjs`），不自动改配置；`--kind iot` 生成 IoT 适配器骨架 | `--kind` `--transport` `--capability` `--env` `--dir` `--version` `--force` |
+| `uendos plugin add <包名>` | 把**已安装**的插件写入 `plugins` 并重新生成品牌桥（先预检声明与签名） | `--allow-unsigned` 开发期放行未签名；`remove` 反向操作，被依赖时拒绝 |
+| `uendos plugin update [<包名>...]` | 构建期升级插件：`npm install <包名>@latest` → 重新校验 → `sync`；变更随壳包发布 | `--spec` 指定版本/tarball/内网源；`--allow-unsigned`；不给包名则升级全部 |
+| `uendos plugin keygen` | 生成 Ed25519 密钥对，公钥写入 `uendos.trusted.json`，私钥写 `.uendos-keys/`（600，不入库） | `--id` `--out` `--force` |
+| `uendos plugin sign <包名>` | 为已安装插件写 `uendos.plugin.sig`（覆盖 id + 版本 + manifest/runtime 双哈希） | `--key <私钥 PEM>` `--id <keyId>` |
+| `uendos plugin verify [<包名>]` | 离线验签：签名有效 / 未签名 / 内容被改动；签名无效时退出码非 0 | 不给包名则校验配置中的全部插件 |
 | `uendos assets` | 按主色与品牌字样生成 `assets/icon.png`（1024）与 `splash.png`（2732） | `--force` 覆盖已有图 |
-| `uendos pack` | 本地打包（缺 `node_modules` / `android` / `ios` 时自动安装与生成平台工程）；成功后写 `release/MANIFEST.json`（版本/产物/大小/SHA-256/签名态），PC 同时补 `latest.yml` | `--target app`（Debug APK；`--release` 走签名）、`ios`（需 macOS）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传） |
-| `uendos publish` | 计算 SHA-256/大小并回写商店清单；`--verify` 要求产物与 `release/MANIFEST.json` 完全一致 | `--file` `--item` `--manifest` `--url` 或 `--download-dir` `--version` `--status`（默认 `beta`） |
+| `uendos pack` | 本地打包（缺 `node_modules` / `android` / `ios` 时自动安装与生成平台工程）；成功后写 `release/MANIFEST.json`（版本/产物/大小/SHA-256/`signature`/`bridgeVersion`/`contractVersion`/`plugins[]`/`channel`/`rollout`/`killSwitch`），PC 同时写通道指针与 `release/channels.json` | `--target app`（Debug APK；`--release` 走签名）、`ios`（需 macOS）、`pc`（`npm run dist`）、`mp`（提示用微信开发者工具上传）；`--channel stable\|beta`（默认 `stable`，beta 写 `-beta` 后缀指针） |
+| `uendos publish` | 计算 SHA-256/大小并回写商店清单；`--verify` 要求产物、签名态、桥/契约版本与 `release/MANIFEST.json` 一致 | `--file` `--item` `--manifest` `--url` 或 `--download-dir` `--version` `--status`（默认 `beta`）；`--channel` `--rollout 0-100` `--kill-switch`（只调灰度时可省略 `--file`）；`--rollback` 退回上一版本指针 |
 
 `doctor` / `conformance` / `sync --check` 失败均以非 0 退出，可直接挂 CI。
 
@@ -100,7 +104,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
   "accent": "#4C8DFF",
   "statusBarStyle": "dark",
   "endKey": "acme.end",
-  "contractVersion": "0.6.0",
+  "contractVersion": "0.7.0",
   "profile": "standard",
   "targets": ["app", "pc"],
   "packageId": "com.acme.app",
@@ -147,6 +151,7 @@ uendos sync --check              # CI 用：产物必须与配置一致
 - `theme` 可选：`mode`（`light`/`dark`）+ `tokens`（颜色 `#RRGGBB`、`radius` 0–28、`fontScale` 0.9–1.2）；只作用于壳自有页面
 - `entry` 可选：选择页标题/副标题、`order` 顺序、`groups` 分组、`rememberLast` 是否记住上次端；只影响 launcher / 选择页
 - `plugins` 可选：已 `npm install` 的插件包名数组，去重；`profile=lite` 不允许插件
+- `security.plugins.requireSigned` 可选：默认 `true`，未签名插件会被 `sync` / `pack` 拒绝；设为 `false` 仅用于开发期
 - `caps.allow` 可选：能力白名单，只能收窄（⊆ 档位能力 ∪ 插件能力）；不配置为全量，空数组为全关
 
 ### 三档 profile
@@ -208,15 +213,15 @@ return {
 ```
 
 - 接入：`npm install @acme/uendos-plugin-printer` → `uendos plugin add @acme/uendos-plugin-printer`（写配置 + 重新 `sync`）；移除用 `plugin remove`。
-- 写新插件：`uendos plugin init @acme/uendos-plugin-printer` 生成最小可安装包（默认按短名推导能力名，可用 `--capability` 覆盖），再按上面的接入步骤安装。
-- **插件锁**：`sync` / `plugin add|remove|update` 会生成 `uendos.plugins.lock`（版本 + 运行时内容 SHA-256）；`sync --check` 与 `doctor` 据此拦截「锁了版本但代码被换」的漂移。首次在旧工程启用插件时先跑一次 `uendos sync`。
+- 写新插件：`uendos plugin init @acme/uendos-plugin-printer` 生成最小可安装包（默认按短名推导能力名，可用 `--capability` 覆盖），再按上面的接入步骤安装。IoT 适配器用 `--kind iot --transport ble|serial|mqtt|nfc`。
+- **插件锁**：`sync` / `plugin add|remove|update` 会生成 `uendos.plugins.lock`（版本 + 运行时哈希 + manifest 哈希 + `signer`）；`sync --check` 与 `doctor` 据此拦截「锁了版本但代码/声明被换」或签名者变更的漂移。首次在旧工程启用插件时先跑一次 `uendos sync`。
 - **插件依赖**：manifest 可选 `requires: ["@acme/uendos-plugin-core"]`；`sync` 按依赖拓扑排序注册（配置顺序不决定激活顺序），缺依赖或成环直接失败，被依赖的插件不允许直接 `remove`。
 - **升级走构建期热更新**：`uendos plugin update`（默认 `@latest`，`--spec` 可指定版本/内网源）→ 重新校验声明 → `sync`；插件变更随壳包发布，业务侧不会在运行时拉取插件代码。
 - **只允许构建期嵌入**，禁止运行时远程加载；包版本由 `package-lock.json` 锁定，必须提交。
-- 注册即校验：id 唯一、能力不得与内置 18 项重名、多插件不得共享能力、方法命名空间必须是插件自己的能力且不占用 `core/edge/offline/desktop/shell`、方法不得与内置或其他插件重名，任一不满足 `sync` 直接报错。
+- 注册即校验：id 唯一、能力不得与内置 21 项重名、多插件不得共享能力、方法命名空间必须是插件自己的能力且不占用 `core/edge/offline/desktop/shell`、方法不得与内置或其他插件重名，任一不满足 `sync` 直接报错。
 - 激活与回落：只有 `detect(env)` 为真才算 `active`，否则能力记 `─`、方法返回 `E_UNSUPPORTED`；插件抛错映射 `E_NATIVE`。
 - `Shell.plugins` 与握手 payload 携带 `[{ id, version, active }]`，线上可按版本排障。
-- `uendos conformance` 合并插件自带的 `conformance.mjs`（导出 `[{ name, run(Shell) }]`），输出 `44 + N`；`doctor` 打印插件清单与合并后的能力集。
+- `uendos conformance` 合并插件自带的 `conformance.mjs`（导出 `[{ name, run(Shell) }]`），输出 `55 + N`；`doctor` 打印插件清单与合并后的能力集。
 - `uendos pack` 打包前强制 `sync --check`，桥里的插件运行时必须与配置一致。
 
 完整契约见 [shell-contract §21](../docs/shell-contract.md)，设计背景见 [个性化壳方案 §3](../docs/uendos-customization-v0.4.md)。
@@ -241,6 +246,181 @@ const missed = Shell.events.recent('shell:queue-replayed', 10);
 
 完整契约见 [shell-contract §24](../docs/shell-contract.md)。
 
+### IoT 接入（v0.7 M2）
+
+```bash
+uendos plugin init @acme/uendos-plugin-ble --kind iot --transport ble
+# 生成 manifest（capabilities: ["iot.ble"]、methods: ["iot.ble.probe"]）与适配器骨架
+```
+
+适配器只在构建期由插件 runtime 调用 `ShellCore.registerIotAdapter` 注册，禁止运行时远程加载：
+
+```js
+ShellCore.registerIotAdapter({
+  id: '@acme/uendos-plugin-ble',
+  transport: 'ble',                 // ble | serial | mqtt | nfc
+  detect: () => true,               // 原生能力探测；false 时不激活、能力记 ─
+  devices: () => [{ id, kind, status, capabilities }],
+  read: (deviceId, metric) => ({ value, unit, quality }),
+  write: (deviceId, action, params, ack) => {
+    ack({ ok: true });              // 执行结果异步回传；也可同步返回 { ok: true }
+    return { accepted: true };
+  },
+  subscribe: (publish) => { /* 上行事件 → publish({ deviceId, metric, value, ... }) */ },
+  ingestUrl: 'https://cloud.example.com/iot/ingest', // 可选：离线时自动进队列补传
+});
+```
+
+- `iot.devices` 聚合所有激活适配器；`iot.read` 返回读数；`iot.write` **必须带 `idem`**，只返回 `{ accepted, ackId }`，执行结果通过 `shell:iot-ack` 回传——不得把“已受理”当“已成功”。
+- 上行统一信封 v1（`v/deviceId/kind/metric/value/unit/at/seq/idem/quality/source`），事件名 `shell:iot-data`；离线且配置了 `ingestUrl` 时自动写入品牌作用域队列。
+- 能力矩阵：适配器子能力（`iot.ble` 等）由插件声明；任一子能力激活时 `iot` 总开关自动置 `✓`。`caps.allow: ["iot"]` 可整体关掉，子能力一并置 `─`。
+- 设备令牌与鉴权归云根；壳只在必要时把短期凭证放进 `secureStore`，不落 Web 存储，也不替云端做校验。
+
+完整契约见 [shell-contract §26](../docs/shell-contract.md)。
+
+### 安全存储（v0.8 M1）
+
+```js
+const key = `${Shell.brand}:device-token`;   // 必须带 <prefix>: 前缀
+await Shell.call('secure.set', { key, value: token });
+const r = await Shell.call('secure.get', { key });   // r.data.value
+await Shell.call('secure.remove', { key });
+```
+
+- 原生后端在 `create` 初始化完成前注册（原生壳嵌入启动脚本，或由插件 factory 注册）；未注册或 `detect` 为假时回落内存，能力位与返回值都标记 `backend: 'memory'`。
+- 键前缀必须是 `<brand>:`（自定义 `prefix` 时按 `prefix`）；purpose 字母开头、≤ 64 位；单值 ≤ 8 KB。
+- **禁止**把令牌写入 `localStorage` / `sessionStorage`；内存降级重启后失效，需重新授权。
+- `Shell.diagnostics()` 只报 `security.secureStore` 后端类型，不含键名与值。
+
+```js
+ShellCore.registerSecureStore({
+  backend: 'keychain',                  // keychain | keystore | native
+  detect: (env) => env !== 'web',
+  get: (key) => nativeGet(key),
+  set: (key, value) => nativeSet(key, value),
+  remove: (key) => nativeRemove(key),
+});
+```
+
+完整契约见 [shell-contract §30](../docs/shell-contract.md)。
+
+### 设备身份（v0.8 M2）
+
+```json
+{
+  "security": {
+    "identity": {
+      "mode": "device",
+      "endpoint": "https://api.example.com/api/backend/device/refresh",
+      "storeKey": "acme:identity.device"
+    }
+  }
+}
+```
+
+```js
+const cur = await Shell.call('identity.current');
+// cur.data.identity => { deviceId, owner, scopes, expiresAt, source } | null
+const r = await Shell.call('identity.refresh');   // 原子换新令牌，令牌不出现在返回/事件/诊断
+```
+
+- 默认 `mode: "none"`，行为不变；配置 `device` 后能力位为 `◐`（未配置 `─`）。
+- 设备令牌只存安全存储（`storeKey` 缺省 `<prefix>:identity.device`），**不暴露给 H5**；`identity.current` 只返回元数据。
+- 刷新成功后派发 `shell:identity-changed`；401/403/410 清空令牌并派发 `shell:identity-expired`。
+- 到 TTL 80% 由壳在启动/联网恢复时主动刷新；离线不发请求。并发刷新复用同一请求。
+- 诊断只报 `security.identity: device | none`，不含令牌与设备唯一码。用户登录与权限仍归云根。
+
+完整契约见 [shell-contract §31](../docs/shell-contract.md)。
+
+### 插件签名与产物完整性（v0.8 M3）
+
+```bash
+# 1) 生成 Ed25519 密钥对：公钥进 uendos.trusted.json，私钥进 .uendos-keys/（600，禁止入库）
+uendos plugin keygen --id acme-release
+
+# 2) 给已安装的插件签名（覆盖 id + 版本 + manifest/runtime 双哈希）
+uendos plugin sign @acme/uendos-plugin-printer --key .uendos-keys/acme-release.private.pem --id acme-release
+
+# 3) 离线验签 / 出包前后校验
+uendos plugin verify
+uendos sync --check
+uendos pack --target app --release
+uendos doctor --offline --release-check --integrity
+uendos publish --file <包> --item <条目> --download-dir <目录> --verify
+```
+
+签名文件 `uendos.plugin.sig`（v1）：
+
+```json
+{
+  "v": 1,
+  "alg": "ed25519",
+  "keyId": "acme-release",
+  "id": "@acme/uendos-plugin-printer",
+  "version": "1.0.0",
+  "manifest": "sha256-…",
+  "runtime": "sha256-…",
+  "sig": "<base64>",
+  "signedAt": "2026-11-06T00:00:00.000Z"
+}
+```
+
+- 信任链 `uendos.trusted.json` 只放公钥（`{ version, keys: [{ id, alg, publicKey }] }`），CLI 从工程目录逐级向上查找；无信任链或 `keyId` 缺失一律验签失败。
+- 默认 `security.plugins.requireSigned=true`：未签名插件被 `plugin add` / `plugin update` / `sync` / `pack` 拒绝；开发期用 `--allow-unsigned` 或配置 `requireSigned=false` 放行。**放行只针对「未签名」**，签名损坏、内容被改、公钥缺失仍然拒绝。
+- 锁 `uendos.plugins.lock` 记录 `version` / `integrity` / `manifest` / `signer`；`sync --check` 与 `doctor` 据此拦截版本、代码、声明与签名者漂移。
+- `release/MANIFEST.json` 新增 `signature: signed | unsigned | dev`、`bridgeVersion`、`contractVersion` 与 `plugins[]`，每个 target 也带 `signature`。`doctor --integrity` 校验签名态与版本，`publish --verify` 在哈希一致之外复核签名态，标记 `signed` 时重新执行严格审计。
+- 完整性只在构建期、出包前与发布前闭环；运行时不做远程校验，也不做热更新修复。
+
+完整契约见 [shell-contract §32](../docs/shell-contract.md)。
+
+### 入口路由（v0.7 M3）
+
+```json
+{
+  "entry": {
+    "routes": [
+      { "id": "home", "label": "首页", "path": "/home", "params": { "tab": { "type": "string", "required": true, "enum": ["a", "b"] } } },
+      { "id": "device-panel", "label": "设备面板", "path": "/iot", "fallback": "/home?tab=a", "requires": { "capability": "iot" } }
+    ]
+  }
+}
+```
+
+```js
+// 列入口（含可用性）；不可用时 reason 为 capability:<id> 或 offline
+const routes = Shell.entries();
+
+// 只校验、拼路径、派发事件；不跳转、不写业务数据
+const r = await Shell.call('entry.open', { id: 'home', params: { tab: 'a' }, source: 'scan', idem: 'op-1' });
+// r.data = { opened: true, id, path: '/home?tab=a', fallback, reason: null, source, idem }
+Shell.on('shell:entry-open', (e) => { if (e.data.opened) location.assign(e.data.path); });
+```
+
+- 缺必填/未知参数/类型或 `enum` 不符 → `E_BAD_ARGS`；能力不足或离线 → `E_UNSUPPORTED`；两者都在 `data.fallback` 给出降级路径。
+- 未知入口 → `E_BAD_ARGS`，不派发事件。真实跳转由 H5 决定，壳不接管业务路由。
+- 深链：H5 监听 `shell:deeplink` 解析 URL 后调用 `entry.open`，参数仍走同一套校验。
+- 配置了 `entry.routes` 时一致性断言从 48 增至 53。
+
+完整契约见 [shell-contract §27](../docs/shell-contract.md)。
+
+### 诊断快照（v0.7 M4）
+
+```js
+const d = Shell.diagnostics();
+// { version, bridge, brand, env, platform, online, capabilities, plugins,
+//   queue: { count, oldestAt }, events: [{ event, seq, at }], at }
+```
+
+```bash
+uendos doctor --offline --json > diag.json   # 命令行侧诊断包，URL 去查询串、令牌/手机号打码
+```
+
+- 运行时快照只含 `event/seq/at`，**不携带事件 data**，避免 token、设备唯一码、地址外泄；队列只报数量与最老时间。
+- CLI 诊断包字段与 `Shell.diagnostics()` 对齐（version / bridge / capabilities / plugins），另加配置、插件清单与逐项检查结果。
+- 诊断只读，不触发重放、不写队列、不改业务状态。
+
+完整契约见 [shell-contract §28](../docs/shell-contract.md)。
+
 ## 三套模板
 
 | target | 技术栈 | 模板内已包含 |
@@ -258,7 +438,7 @@ const missed = Shell.events.recent('shell:queue-replayed', 10);
 
 `launcher` 模式的业务页由远程加载，Capacitor 原生插件是否可用取决于远程页能否拿到运行时；需要强原生能力（推送/震动/生物识别）时用 `portal`，由主端门户页负责切换。
 
-## 44 项断言覆盖什么
+## 55 项断言覆盖什么
 
 `@uendos/conformance` 用 `vm` 构造最小浏览器沙箱（window / document / navigator / localStorage / fetch / CustomEvent），对生成的桥逐项断言：
 
@@ -271,9 +451,14 @@ const missed = Shell.events.recent('shell:queue-replayed', 10);
 | 错误协议 | 5 | `E_BAD_ARGS` / `E_UNSUPPORTED` / `E_DENIED` 等错误结构统一 |
 | 离线队列 | 9 | 幂等键、顺序重放、4xx 出队、品牌作用域信封、旧数组迁移、重启恢复 |
 | 店根适配 | 6 | 未配置 `E_UNSUPPORTED`、超时、`E_STOCK` 映射、租约缓存 |
+| IoT 接入 | 2–4 | `iot` 能力位、无适配器降级、设备结构、`iot.write` 幂等与 `accepted + ackId` |
+| 入口路由 | 0 / 5 | 配置了 `entry.routes` 时断言列表、成功打开、缺参、未知入口、能力不足降级 |
+| 安全存储 | 4 | 内存降级往返、品牌前缀/类型/长度校验、不写 localStorage、诊断不含值 |
+| 设备身份 | 3 | 能力位与配置一致、元数据不含令牌、刷新原子切换与吊销清空 |
+| 诊断 | 2 | 快照字段完整、默认脱敏（事件不含 data） |
 | 契约自洽 | 2 | 导出常量与运行时能力一一对应 |
 
-断言在 `vm` 中跑，不需要 Android SDK / Xcode，CI 与本地一致。配置了 `plugins` 时，再按顺序执行各插件自带断言，总数为 `44 + N`（fixture 插件为 5 项，合计 49 项）。
+断言在 `vm` 中跑，不需要 Android SDK / Xcode，CI 与本地一致。配置了 `plugins` 时，再按顺序执行各插件自带断言，总数为 `55 + N`（fixture 插件为 5 项，合计 60 项；IoT 适配器内置断言数会增至 57；配置 `entry.routes` 时内置断言为 60；入口路由与 IoT 适配器同时启用为 62）。插件签名与产物完整性不做运行时断言，由 CLI 测试覆盖（keygen → sign → verify → 篡改拦截）。
 
 ## CI 接法
 
@@ -291,7 +476,7 @@ const missed = Shell.events.recent('shell:queue-replayed', 10);
     "$UENDOS" sync --check
 ```
 
-`npm test` 先跑运行时源一致性（`check-core`），再跑 32 项测试：契约校验 16 项、CLI 端到端 15 项（init → profile → launcher → theme → entry → add-end → doctor → 插件 → publish → plugin init → 插件依赖 → upgrade/diff → pack/publish 清单）、conformance 自测 1 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
+`npm test` 先跑运行时源一致性（`check-core`），再跑 43 项测试：契约校验 22 项、CLI 端到端 18 项（init → profile → launcher → theme → entry → add-end → doctor → 插件 → publish → plugin init → 插件依赖 → upgrade/diff → pack/publish 清单 → 插件完整性 keygen/sign/verify 与篡改拦截 → 更新通道 stable/beta、灰度与回滚）、conformance 自测 3 项；`npm run check` 可单独校验 SDK 内置 `core.js` 与 `shell-core/src/core.js` 未漂移。`doctor --offline` 不联网，CI 也不会因为端地址不可达而红。
 
 ## 打包与签名
 
@@ -315,8 +500,10 @@ uendos pack --target ios --release   # 归档 build/App.xcarchive，再用 Xcode
 
 1. `uendos publish --file <包> --item <apps.json 条目 id> --manifest <清单路径> --download-dir <目录> --verify`：先校验产物与 `release/MANIFEST.json` 的大小/SHA-256 一致，再复制安装包、算哈希、把清单条目改为 `beta`（或 `--status stable`）并更新 `generatedAt`。
 2. 稳定通道仍以 `btos-app-store/data/apps.json` 为唯一真相；SDK 不自行放开 `available`。
-3. PC 更新：`pack --target pc` 后把安装包与 `latest.yml` / `latest-mac.yml` 同版本上传到 `/download/latest/`，缺 yml 会导致 updater 静默 404；`doctor --release-check` 会核对清单哈希与 yml 版本。
-4. `release/MANIFEST.json` 是「出包实物」的账本：`targets.<app|pc>.artifacts[]` 记路径/文件名/大小/SHA-256；未签名时写 `signed: false` 并注明 `signMode`/`note`，不会伪造成已签名。
+3. PC 更新按通道分流：`pack --target pc --channel stable|beta` 写 `latest[-mac|-linux].yml` / `latest[-mac|-linux]-beta.yml`，并把指针快照存到 `release/.channels/<channel>/<version>.yml`、在 `release/channels.json` 记 `current` / `previous`；两通道互不影响。发布后上传对应通道的指针与安装包。
+4. 灰度与软回滚：`publish --channel beta --rollout 30` 只改通道注册表（不覆盖指针）；`publish --rollback --channel beta` 有上一版本快照时直接换回指针，否则把当前版本 `rollout=0` 且 `killSwitch=true`。不做二进制降级，已安装旧版本的客户端行为不变。
+5. `doctor --release-check --channel beta` 校验指针版本、`files` 的 SHA-512/大小与本地产物一致，并拒绝跨桥版本（`bridgeVersion` 必须等于当前 `BRIDGE_VERSION`）。
+6. `release/MANIFEST.json` 是「出包实物」的账本：顶层记 `signature`（`signed` / `unsigned` / `dev`）、`bridgeVersion`、`contractVersion`、`plugins[]`、`channel`、`rollout`、`killSwitch`；`targets.<app|pc>.artifacts[]` 记路径/文件名/大小/SHA-256；未签名时写 `signed: false` 并注明 `signMode`/`note`，不会伪造成已签名。发布前用 `uendos doctor --release-check --integrity` 与 `uendos publish --verify` 复核签名态与版本。
 
 ## 与现有仓的关系
 
