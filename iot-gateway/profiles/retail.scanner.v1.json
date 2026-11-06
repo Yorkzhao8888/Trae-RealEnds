@@ -1,0 +1,25 @@
+{
+  "profile": "retail.scanner.v1",
+  "kind": "scanner",
+  "description": "收银台串口扫码枪（只读：扫码 + 电量）",
+  "staleAfterMs": 30000,
+  "match": {
+    "transport": "serial",
+    "vid": "1a86",
+    "pid": "7523"
+  },
+  "metrics": {
+    "scan.code": {
+      "type": "string",
+      "unit": null,
+      "staleAfterMs": 60000,
+      "description": "最近一次扫码的条码原文"
+    },
+    "battery": {
+      "type": "number",
+      "unit": "%",
+      "staleAfterMs": 300000,
+      "description": "设备电量百分比"
+    }
+  }
+}

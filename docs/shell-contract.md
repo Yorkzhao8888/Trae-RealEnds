@@ -738,3 +738,73 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
 7. **一致性与边界**：conformance 保持 55 项（更新通道不在运行时断言），CLI 测试 43/43
    （新增 stable/beta 隔离、灰度与回滚用例）。通道指针与注册表是发版侧账本，运行时壳不读取，
    不参与升级决策。
+
+## 34. IoT G3 网关代理适配器（只读）
+
+桥版本保持 `3`；契约源码仍为 `0.7.0`。本里程碑只增不破，既有 `iot.ble` / `iot.serial` /
+`iot.mqtt` / `iot.nfc` 语义不变。
+
+1. **新传输**：`IOT_TRANSPORTS` 增加 `gateway`，对应能力 `iot.gateway`；桥与 CLI 同步登记
+   （`uendos plugin init --kind iot --transport gateway` 可生成骨架）。
+2. **适配器插件**：`@uendos/plugin-iot-gateway`（`iot-gateway/adapter`）在构建期注册
+   `registerIotAdapter({ transport: 'gateway', devices, read, subscribe })`，**不声明 `write`**，
+   因此 `iot.write` 仍返回 `E_UNSUPPORTED`，控制闭环不进入本期。
+3. **宿主配置**：地址与令牌由宿主注入 `window.__IOT_GATEWAY__ = { url, token }`，默认
+   `http://127.0.0.1:7321`；插件不内置凭证，`iot.gateway.status` 也不返回令牌。
+4. **代理映射**：`devices()` ← `GET /iot/devices`，设备 `transport` 统一归一为 `gateway`，
+   `capabilities` 取最新值指标名，店根 `stale` 映射为 `offline`（不冒充在线）；`read()` ←
+   `GET /iot/devices/:id`，返回 `{ value, unit, at, quality }`；`subscribe()` ←
+   `GET /iot/stream?since=&wait=25000` 长轮询，游标从现有最新事件 `seq` 起步，避免历史回灌。
+5. **只读一致性**：`iot.write` 的缺 `idem` 断言仍为 `E_BAD_ARGS`；有 `idem` 时允许
+   `E_UNSUPPORTED`（只读适配器）。conformance 断言数不变。
+6. **数据面契约**：店根侧 `/iot/ingest`、`/iot/heartbeat`、`/iot/devices`、
+   `/iot/devices/:id`、`/series`、`/stream` 见 `edge-store/README.md`；看板 `GET /edge/ui/iot`
+   与壳共用同一读模型。
+
+## 35. IoT G4 运维面（只读）
+
+桥版本仍为 `3`，契约源码仍为 `0.7.0`；本里程碑只增不破。
+
+1. **网关存活独立记账**：店根新增 `iot_gateway`（`id` / `last_seen` / `version` / `meta`）。
+   `POST /iot/heartbeat` 可携带 `gateway` 状态快照（版本、profile 数、积压、失败、最后错误），
+   与设备台账同事务落库；只 `ingest` 不心跳的旧网关也会登记。
+2. **运维读模型**：`GET /iot/gateways` 返回 `{ at, staleAfterMs, gateways: [{ id, lastSeen,
+   online, version, meta, devices, onlineDevices }] }`；默认 90s 未心跳判网关离线，
+   与设备 60s `stale` 分开，避免网关进程挂掉后设备继续“在线”。
+3. **看板告警**：`GET /edge/ui/iot` 顶部显示 `网关 在线/总数`；全部网关离线时提示
+   「采集网关离线，设备数据可能停更」。页面仍只读，数据接口仍需 `EDGE_TOKEN`。
+4. **profile 热加载**：`iot-gateway` 监听 `profiles/` 目录，新增 profile 自动生效；
+   坏文件不替换当前映射；移除 profile 后对应设备后续事件被拦下，并记录在
+   `lastProfileReload.unmapped`。心跳中的 `profiles` 计数随热加载变化。
+5. **Wave2 只读 profile**：`retail.gate.v1`（`lock.state` / `battery` / `tamper`）与
+   `retail.badge.v1`（`scan.badge` / `reader.state` / `battery`）仅采集，不含控制动作；
+   `iot.write` 语义不变。
+
+## 36. IoT MQTT 只读接入
+
+1. **路线裁决**：采用零依赖最小 MQTT 3.1.1 订阅端，不引入第三方库；不并行实现“厂商
+   broker 推 HTTP”，避免两套采集链路。
+2. **协议范围**：只做订阅侧 CONNECT / SUBSCRIBE / PUBLISH（QoS 0-1）/ PINGREQ /
+   DISCONNECT；支持 TCP/TLS、断线重连与重订阅；QoS 2 拒绝。传感器丢一个采样由下一次
+   采样补齐，不实现 QoS 2。
+3. **只读约束**：worker 不 publish、不执行控制；`iot.write` 仍 `E_UNSUPPORTED`。
+4. **映射与时效**：`IOT_MQTT_CONFIG` 声明 `devices` 与 `topics`（`topic` / `deviceId` /
+   `metric` 或 `metrics` / `field` / `units`）；retained 消息标记 `quality: degraded`，
+   载荷自带 `at`/`ts` 时按店根 `staleAfterMs` 判定超期，不拿旧缓存冒充实时。
+5. **配置切换**：`IOT_MQTT_CONFIG` 非空时网关改用 MQTT 源并跳过 fixture；新增设备只改配置，
+   不改网关代码。
+
+## 37. IoT 厂商云 HTTP 轮询（Wave3）
+
+1. **定位**：厂商云有开放读接口、但不提供本地协议时，用 HTTP 轮询接入；仍为零依赖，
+   只做只读查询，不调用控制 endpoint，`iot.write` 语义不变。
+2. **配置**：`IOT_VENDOR_CONFIG` 声明 `pollMs` / `timeoutMs` / `devices` / `sources`；
+   `devices[].vendorId` 对应厂商设备 id，显式 `profile` 决定指标类型。
+3. **请求**：支持 `GET` / `POST`（只读查询体）；`tokenEnv` 从环境变量取 Bearer，
+   `headers` 支持 `${ENV_VAR}` 展开，不把凭证写进配置。
+4. **映射**：`itemsPath` / `deviceField` / `atField` / `metrics`（本地指标 → 字段路径）；
+   省略 `metrics` 时直接读条目的 `metrics` 对象。时间支持毫秒、秒与 ISO 字符串。
+5. **失败隔离**：多个 source 逐个拉取，单个失败只记 `lastError` 并继续其他源；恢复后
+   自动继续。设备停更仍由店根 `staleAfterMs` 判超期，不依赖厂商自报在线。
+6. **优先级**：`IOT_MQTT_CONFIG` > `IOT_VENDOR_CONFIG` > fixture；同一网关只启用一个源，
+   避免重复上报。

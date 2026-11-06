@@ -11,6 +11,51 @@ CREATE TABLE IF NOT EXISTS idem (key TEXT PRIMARY KEY, result TEXT NOT NULL, at 
 CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, payload TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS conflicts (id INTEGER PRIMARY KEY AUTOINCREMENT, seq INTEGER NOT NULL, type TEXT NOT NULL, payload TEXT NOT NULL, reason TEXT NOT NULL, status TEXT NOT NULL, at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS catalog (sku TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', price INTEGER NOT NULL DEFAULT 0, status TEXT NOT NULL DEFAULT 'on', updated_at INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS iot_gateway (
+  id TEXT PRIMARY KEY,
+  last_seen INTEGER NOT NULL,
+  version TEXT NOT NULL DEFAULT '',
+  meta TEXT NOT NULL DEFAULT '{}'
+);
+CREATE TABLE IF NOT EXISTS iot_device (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL DEFAULT 'device',
+  transport TEXT NOT NULL DEFAULT 'unknown',
+  name TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'online',
+  capabilities TEXT NOT NULL DEFAULT '[]',
+  profile TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  stale_after_ms INTEGER NOT NULL DEFAULT 60000,
+  meta TEXT NOT NULL DEFAULT '{}',
+  first_seen INTEGER NOT NULL,
+  last_seen INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS iot_metric_latest (
+  device_id TEXT NOT NULL,
+  metric TEXT NOT NULL,
+  value TEXT NOT NULL,
+  unit TEXT,
+  at INTEGER NOT NULL,
+  quality TEXT NOT NULL DEFAULT 'unknown',
+  seq INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (device_id, metric)
+);
+CREATE TABLE IF NOT EXISTS iot_event (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  device_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  metric TEXT,
+  value TEXT,
+  unit TEXT,
+  at INTEGER NOT NULL,
+  received_at INTEGER NOT NULL,
+  quality TEXT NOT NULL,
+  source TEXT NOT NULL,
+  idem TEXT NOT NULL UNIQUE
+);
+CREATE INDEX IF NOT EXISTS idx_iot_event_device_metric_at ON iot_event(device_id, metric, at);
+CREATE INDEX IF NOT EXISTS idx_iot_event_at ON iot_event(at);
 `;
 
 export function openDb(path = ':memory:') {

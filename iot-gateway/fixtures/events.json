@@ -1,0 +1,6 @@
+[
+  { "deviceId": "scanner-01", "kind": "telemetry", "metric": "scan.code", "value": "6901234567890", "quality": "good", "source": "serial" },
+  { "deviceId": "scanner-01", "kind": "telemetry", "metric": "battery", "value": 82, "unit": "%", "quality": "good", "source": "serial" },
+  { "deviceId": "sensor-01", "kind": "telemetry", "metric": "temperature", "value": 24.6, "quality": "good", "source": "mqtt" },
+  { "deviceId": "sensor-01", "kind": "telemetry", "metric": "humidity", "value": 58, "quality": "good", "source": "mqtt" }
+]

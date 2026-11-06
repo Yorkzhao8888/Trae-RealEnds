@@ -1594,7 +1594,7 @@ function cmdPluginInit(name, flags, dir) {
   const short = pluginShortName(name);
   const kind = flags.kind ? String(flags.kind) : 'method';
   if (!['method', 'iot'].includes(kind)) fail(`--kind 只能是 method 或 iot（当前：${kind}）`);
-  const IOT_TRANSPORTS = ['ble', 'serial', 'mqtt', 'nfc'];
+  const IOT_TRANSPORTS = ['ble', 'serial', 'mqtt', 'nfc', 'gateway'];
   let transport = null;
   if (kind === 'iot') {
     transport = flags.transport ? String(flags.transport) : (IOT_TRANSPORTS.includes(short) ? short : 'ble');

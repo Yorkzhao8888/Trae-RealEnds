@@ -213,7 +213,7 @@ return {
 ```
 
 - 接入：`npm install @acme/uendos-plugin-printer` → `uendos plugin add @acme/uendos-plugin-printer`（写配置 + 重新 `sync`）；移除用 `plugin remove`。
-- 写新插件：`uendos plugin init @acme/uendos-plugin-printer` 生成最小可安装包（默认按短名推导能力名，可用 `--capability` 覆盖），再按上面的接入步骤安装。IoT 适配器用 `--kind iot --transport ble|serial|mqtt|nfc`。
+- 写新插件：`uendos plugin init @acme/uendos-plugin-printer` 生成最小可安装包（默认按短名推导能力名，可用 `--capability` 覆盖），再按上面的接入步骤安装。IoT 适配器用 `--kind iot --transport ble|serial|mqtt|nfc|gateway`。
 - **插件锁**：`sync` / `plugin add|remove|update` 会生成 `uendos.plugins.lock`（版本 + 运行时哈希 + manifest 哈希 + `signer`）；`sync --check` 与 `doctor` 据此拦截「锁了版本但代码/声明被换」或签名者变更的漂移。首次在旧工程启用插件时先跑一次 `uendos sync`。
 - **插件依赖**：manifest 可选 `requires: ["@acme/uendos-plugin-core"]`；`sync` 按依赖拓扑排序注册（配置顺序不决定激活顺序），缺依赖或成环直接失败，被依赖的插件不允许直接 `remove`。
 - **升级走构建期热更新**：`uendos plugin update`（默认 `@latest`，`--spec` 可指定版本/内网源）→ 重新校验声明 → `sync`；插件变更随壳包发布，业务侧不会在运行时拉取插件代码。
@@ -258,7 +258,7 @@ uendos plugin init @acme/uendos-plugin-ble --kind iot --transport ble
 ```js
 ShellCore.registerIotAdapter({
   id: '@acme/uendos-plugin-ble',
-  transport: 'ble',                 // ble | serial | mqtt | nfc
+  transport: 'ble',                 // ble | serial | mqtt | nfc | gateway
   detect: () => true,               // 原生能力探测；false 时不激活、能力记 ─
   devices: () => [{ id, kind, status, capabilities }],
   read: (deviceId, metric) => ({ value, unit, quality }),
@@ -277,6 +277,29 @@ ShellCore.registerIotAdapter({
 - 设备令牌与鉴权归云根；壳只在必要时把短期凭证放进 `secureStore`，不落 Web 存储，也不替云端做校验。
 
 完整契约见 [shell-contract §26](../docs/shell-contract.md)。
+
+#### 网关代理（G3，只读）
+
+串口/BLE/MQTT 由店外的 `iot-gateway` 采集并归一落库时，壳不直连设备，改用构建期适配器
+`@uendos/plugin-iot-gateway`（源码在 `iot-gateway/adapter`）：
+
+```bash
+npm i ../iot-gateway/adapter
+# uendos.config.json 的 plugins 加入 "@uendos/plugin-iot-gateway"
+```
+
+宿主启动时注入地址与令牌（插件不内置凭证）：
+
+```js
+window.__IOT_GATEWAY__ = { url: 'http://127.0.0.1:7321', token: '<EDGE_TOKEN>' };
+```
+
+- 设备 `transport` 统一为 `gateway`，列表来自 `/iot/devices`，`capabilities` 为最新值指标名。
+- `iot.read` 读店根最新值；事件经 `/iot/stream` 长轮询回灌 `shell:iot-data`，游标从当前最新 `seq` 起步。
+- 适配器**不声明 `write`**，`iot.write` 返回 `E_UNSUPPORTED`；开锁/打印等控制闭环不在本期。
+- conformance 的 `iot.write` 断言接受只读适配器的 `E_UNSUPPORTED`，断言总数不变。
+
+完整契约见 [shell-contract §34](../docs/shell-contract.md#34-iot-g3-网关代理适配器只读)。
 
 ### 安全存储（v0.8 M1）
 

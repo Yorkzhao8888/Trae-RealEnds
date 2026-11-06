@@ -32,6 +32,7 @@ export type CapabilityName =
   | 'iot.serial'
   | 'iot.mqtt'
   | 'iot.nfc'
+  | 'iot.gateway'
   | 'edge.storeRoot'
   | (string & {});
 
@@ -82,7 +83,7 @@ export interface ShellPluginInfo {
 
 export type IotQuality = 'good' | 'degraded' | 'stale' | 'unknown';
 export type IotValue = string | number | boolean;
-export type IotTransport = 'ble' | 'serial' | 'mqtt' | 'nfc' | (string & {});
+export type IotTransport = 'ble' | 'serial' | 'mqtt' | 'nfc' | 'gateway' | (string & {});
 
 /** 所有 shell:iot-* 事件的 data 形状（信封 v1） */
 export interface IotEvent {
@@ -138,7 +139,7 @@ export interface IotAck {
 /** 构建期适配器：由插件 runtime 调用 ShellCore.registerIotAdapter 注册 */
 export interface IotAdapter {
   id: string;
-  transport: 'ble' | 'serial' | 'mqtt' | 'nfc';
+  transport: 'ble' | 'serial' | 'mqtt' | 'nfc' | 'gateway';
   detect?: (env: ShellEnv) => boolean;
   devices?: () => IotDevice[] | Promise<IotDevice[]>;
   read?: (deviceId: string, metric: string | null) => IotReadResult | null | Promise<IotReadResult | null>;

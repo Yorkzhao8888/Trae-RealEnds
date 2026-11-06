@@ -1,0 +1,31 @@
+{
+  "pollMs": 30000,
+  "timeoutMs": 10000,
+  "devices": [
+    {
+      "id": "gate-01",
+      "vendorId": "VG-001",
+      "kind": "gate",
+      "transport": "http",
+      "name": "后门门禁（厂商云）",
+      "profile": "retail.gate.v1",
+      "capabilities": ["lock.state", "battery"],
+      "staleAfterMs": 120000,
+      "meta": { "model": "SL-GATE", "vendor": "example-vendor" }
+    }
+  ],
+  "sources": [
+    {
+      "url": "https://vendor.example.com/api/v1/devices",
+      "method": "GET",
+      "tokenEnv": "VENDOR_TOKEN",
+      "itemsPath": "data",
+      "deviceField": "id",
+      "atField": "updatedAt",
+      "metrics": {
+        "lock.state": "state",
+        "battery": "battery"
+      }
+    }
+  ]
+}

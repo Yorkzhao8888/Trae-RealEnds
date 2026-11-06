@@ -1,0 +1,32 @@
+{
+  "host": "127.0.0.1",
+  "port": 1883,
+  "tls": false,
+  "clientId": "uendos-iot-gw",
+  "keepalive": 60,
+  "devices": [
+    {
+      "id": "sensor-01",
+      "kind": "sensor",
+      "transport": "mqtt",
+      "name": "后厨温湿度",
+      "profile": "retail.sensor.v1",
+      "staleAfterMs": 60000,
+      "meta": { "model": "SHT-30" }
+    }
+  ],
+  "topics": [
+    {
+      "topic": "store/sensor-01/temperature",
+      "deviceId": "sensor-01",
+      "metric": "temperature",
+      "field": "value"
+    },
+    {
+      "topic": "store/sensor-01/humidity",
+      "deviceId": "sensor-01",
+      "metric": "humidity",
+      "field": "value"
+    }
+  ]
+}

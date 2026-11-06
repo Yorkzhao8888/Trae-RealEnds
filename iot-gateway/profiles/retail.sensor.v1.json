@@ -1,0 +1,22 @@
+{
+  "profile": "retail.sensor.v1",
+  "kind": "sensor",
+  "description": "后厨温湿度传感器（只读）",
+  "staleAfterMs": 60000,
+  "match": {
+    "transport": "mqtt",
+    "model": "SHT-30"
+  },
+  "metrics": {
+    "temperature": {
+      "type": "number",
+      "unit": "°C",
+      "staleAfterMs": 60000
+    },
+    "humidity": {
+      "type": "number",
+      "unit": "%",
+      "staleAfterMs": 60000
+    }
+  }
+}

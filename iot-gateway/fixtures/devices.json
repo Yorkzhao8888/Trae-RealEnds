@@ -1,0 +1,24 @@
+[
+  {
+    "id": "scanner-01",
+    "kind": "scanner",
+    "transport": "serial",
+    "name": "收银台扫码枪",
+    "status": "online",
+    "capabilities": ["scan.code", "battery"],
+    "profile": "retail.scanner.v1",
+    "staleAfterMs": 30000,
+    "meta": { "vid": "1a86", "pid": "7523", "model": "GM65" }
+  },
+  {
+    "id": "sensor-01",
+    "kind": "sensor",
+    "transport": "mqtt",
+    "name": "后厨温湿度",
+    "status": "online",
+    "capabilities": ["temperature", "humidity"],
+    "profile": "retail.sensor.v1",
+    "staleAfterMs": 60000,
+    "meta": { "model": "SHT-30" }
+  }
+]

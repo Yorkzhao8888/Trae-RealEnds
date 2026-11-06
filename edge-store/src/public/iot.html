@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>店根 · IoT 看板</title>
+<style>
+  :root {
+    --bg: #0E1218; --panel: #151A23; --line: #26303D;
+    --text: #E6EDF3; --muted: #8B97A8;
+    --amber: #F0A020; --blue: #1F6FEB; --green: #2EA043; --red: #E5534B;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  code { background: rgba(255,255,255,.05); padding: 1px 5px; border-radius: 4px; color: var(--muted); }
+  header {
+    display: flex; align-items: center; gap: 10px; padding: 12px 20px;
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5;
+    flex-wrap: wrap;
+  }
+  h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  .ro { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+  .spacer { flex: 1; }
+  .nav { color: var(--muted); text-decoration: none; font-size: 12px; border-bottom: 1px dashed transparent; }
+  .nav:hover { color: var(--text); border-bottom-color: var(--line); }
+  .token { display: flex; gap: 6px; align-items: center; }
+  input[type=password] {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; font: inherit; width: 180px; outline: none;
+  }
+  input:focus { border-color: var(--blue); }
+  button {
+    font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); padding: 6px 12px;
+  }
+  button:hover { border-color: var(--blue); }
+  .stats { display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px 0; }
+  .pill {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 999px;
+    padding: 4px 11px; font-size: 12px; color: var(--muted);
+  }
+  .pill b { color: var(--text); font-weight: 600; margin-left: 4px; }
+  .pill.ok { border-color: rgba(46,160,67,.45); color: var(--green); }
+  .pill.warn { border-color: rgba(240,160,32,.5); color: var(--amber); }
+  .pill.bad { border-color: rgba(229,83,75,.5); color: var(--red); }
+  .hint { color: var(--muted); font-size: 12px; padding: 8px 20px 0; }
+  .gateways { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 20px 0; }
+  .gw {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+    padding: 5px 10px; font-size: 11px; color: var(--muted);
+  }
+  .gw b { color: var(--text); font-weight: 600; }
+  .gw .status { font-size: 10px; }
+  .gw .warn { color: var(--red); }
+  .banner {
+    display: none; margin: 10px 20px 0; padding: 8px 12px; border-radius: 8px;
+    border: 1px solid rgba(229,83,75,.5); color: var(--red); font-size: 12px;
+  }
+  main { display: grid; grid-template-columns: minmax(280px, .9fr) minmax(360px, 1.4fr); gap: 14px; padding: 14px 20px 24px; align-items: start; }
+  .panel { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; overflow: hidden; }
+  .panel-head {
+    display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted);
+  }
+  .device-list { max-height: 62vh; overflow: auto; }
+  .device {
+    display: block; width: 100%; text-align: left; background: transparent; border: 0;
+    border-bottom: 1px solid var(--line); color: var(--text); cursor: pointer;
+    padding: 12px 14px; font: inherit;
+  }
+  .device:hover { background: rgba(31,111,235,.08); }
+  .device.active { background: rgba(31,111,235,.13); box-shadow: inset 3px 0 0 var(--blue); }
+  .device .top { display: flex; align-items: center; gap: 8px; }
+  .device .name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .device .id {
+    color: var(--muted); font-size: 12px; margin-top: 3px; font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .device .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .chip { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+  .chip b { color: var(--text); font-weight: 600; }
+  .status { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; flex-shrink: 0; }
+  .status.online { color: var(--green); }
+  .status.stale { color: var(--amber); }
+  .status.offline { color: var(--red); }
+  .detail-body { padding: 14px; }
+  .d-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0; font-size: 17px; font-weight: 600; }
+  .d-sub { color: var(--muted); font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; word-break: break-word; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; margin-top: 14px; }
+  .metric { border: 1px solid var(--line); background: var(--bg); border-radius: 9px; padding: 10px; min-width: 0; }
+  .metric.stale { border-color: rgba(240,160,32,.5); }
+  .metric .k { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .metric .v { font-size: 22px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; word-break: break-word; }
+  .metric .v small { font-size: 11px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+  .quality { font-size: 10px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); flex-shrink: 0; }
+  .quality.good { color: var(--green); border-color: rgba(46,160,67,.4); }
+  .quality.stale, .quality.degraded { color: var(--amber); border-color: rgba(240,160,32,.5); }
+  .chart-card { border: 1px solid var(--line); border-radius: 10px; margin-top: 14px; padding: 10px 12px 8px; }
+  .chart-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  select { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font: inherit; }
+  #chart { margin-top: 4px; }
+  #chart svg { width: 100%; height: auto; display: block; }
+  .empty { border: 1px dashed var(--line); border-radius: 10px; padding: 28px; text-align: center; color: var(--muted); }
+  .empty.small { padding: 14px; font-size: 12px; border-radius: 8px; margin-top: 6px; }
+  .events { margin-top: 14px; }
+  .events h3 { font-size: 12px; color: var(--muted); margin: 0 0 4px; font-weight: 500; }
+  .evt {
+    display: grid; grid-template-columns: 72px 1fr auto; gap: 10px; align-items: baseline;
+    padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 12px;
+  }
+  .evt:last-child { border-bottom: 0; }
+  .evt .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .evt .m { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .evt .v { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; word-break: break-word; }
+  @media (max-width: 900px) {
+    main { grid-template-columns: 1fr; }
+    .device-list { max-height: none; }
+    input[type=password] { width: 140px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>店根 · IoT 看板</h1>
+  <span class="ro">只读</span>
+  <span class="spacer"></span>
+  <a class="nav" href="/edge/ui/conflicts">冲突复核 →</a>
+  <div class="token">
+    <input id="token" type="password" placeholder="EDGE_TOKEN" autocomplete="off" />
+    <button id="save">保存</button>
+    <button id="refresh">刷新</button>
+  </div>
+</header>
+
+<div class="stats" id="stats">
+  <span class="pill">设备<b id="s-total">—</b></span>
+  <span class="pill ok">在线<b id="s-online">—</b></span>
+  <span class="pill warn">超期<b id="s-stale">—</b></span>
+  <span class="pill bad">离线<b id="s-offline">—</b></span>
+  <span class="pill" id="gw-pill">网关<b id="s-gw">—</b></span>
+  <span class="pill">刷新<b id="s-updated">—</b></span>
+</div>
+<div class="hint">只展示采集值，不提供开锁、打印、下发等控制操作。事件通过长轮询实时更新，另有 5 秒定时刷新覆盖心跳状态。</div>
+<div class="gateways" id="gateways"></div>
+<div class="banner" id="banner"></div>
+
+<main>
+  <section class="panel">
+    <div class="panel-head"><span>设备</span><span id="dev-count">—</span></div>
+    <div class="device-list" id="devices"><div class="empty" style="margin:12px">加载中…</div></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><span>设备详情</span><span>最近事件 / 时序</span></div>
+    <div class="detail-body" id="detail"><div class="empty">选择左侧设备查看详情</div></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const tokenEl = $('#token');
+  tokenEl.value = localStorage.getItem('edge:token') || '';
+  let token = tokenEl.value.trim();
+
+  const state = {
+    devices: [], gateways: [], selectedId: null, detail: null, metric: null, series: null,
+    cursor: 0, refreshing: false, streamEpoch: 0, abort: null,
+  };
+
+  const STATUS = { online: '在线', stale: '超期', offline: '离线' };
+  const QUALITY = { good: '正常', stale: '超期', degraded: '降级', unknown: '未知' };
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function fmtClock(ms) {
+    const d = new Date(Number(ms));
+    if (Number.isNaN(d.getTime())) return '—';
+    return pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+  function rel(ms) {
+    const diff = Date.now() - Number(ms);
+    if (!Number.isFinite(diff)) return '—';
+    if (diff < 0) return '刚刚';
+    if (diff < 60000) return Math.max(0, Math.round(diff / 1000)) + 's 前';
+    if (diff < 3600000) return Math.round(diff / 60000) + 'm 前';
+    if (diff < 86400000) return Math.round(diff / 3600000) + 'h 前';
+    return Math.round(diff / 86400000) + 'd 前';
+  }
+  function fmtVal(v) {
+    if (v === null || v === undefined) return '—';
+    if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/\.?0+$/, '');
+    if (typeof v === 'boolean') return v ? 'true' : 'false';
+    return String(v);
+  }
+  function maxSeq(devices) {
+    let m = 0;
+    for (const d of devices || []) {
+      for (const k of Object.keys(d.metrics || {})) m = Math.max(m, d.metrics[k].seq || 0);
+    }
+    return m;
+  }
+  function authHeaders() {
+    return token ? { authorization: 'Bearer ' + token } : {};
+  }
+  async function api(path) {
+    const res = await fetch(path, { headers: authHeaders(), cache: 'no-store' });
+    let body = null;
+    try { body = await res.json(); } catch (e) {}
+    if (!res.ok) {
+      const err = new Error((body && body.code) || ('HTTP ' + res.status));
+      err.status = res.status;
+      throw err;
+    }
+    return body;
+  }
+  function showBanner(msg) {
+    const b = $('#banner');
+    b.textContent = msg || '';
+    b.style.display = msg ? 'block' : 'none';
+  }
+
+  function renderStats() {
+    const online = state.devices.filter((d) => d.status === 'online').length;
+    const stale = state.devices.filter((d) => d.status === 'stale').length;
+    const offline = state.devices.filter((d) => d.status === 'offline').length;
+    $('#s-total').textContent = state.devices.length;
+    $('#s-online').textContent = online;
+    $('#s-stale').textContent = stale;
+    $('#s-offline').textContent = offline;
+    $('#s-updated').textContent = fmtClock(Date.now()).slice(6);
+    $('#dev-count').textContent = state.devices.length + ' 台';
+  }
+
+  function renderGateways() {
+    const list = state.gateways || [];
+    const box = $('#gateways');
+    $('#s-gw').textContent = list.length ? list.filter((g) => g.online).length + '/' + list.length : '—';
+    $('#gw-pill').className = 'pill' + (list.length && list.every((g) => !g.online) ? ' bad' : '');
+    if (!list.length) {
+      box.innerHTML = '<span class="pill">未登记网关</span>';
+      return;
+    }
+    box.innerHTML = list.map((g) => {
+      const m = g.meta || {};
+      const bits = [];
+      if (g.version) bits.push('v' + esc(g.version));
+      bits.push('设备 ' + Number(g.onlineDevices || 0) + '/' + Number(g.devices || 0));
+      if (m.spooled) bits.push('积压 ' + esc(m.spooled));
+      if (m.failed) bits.push('失败 ' + esc(m.failed));
+      return '<span class="gw"><b>' + esc(g.id) + '</b>' +
+        '<span class="status ' + (g.online ? 'online' : 'offline') + '">' + (g.online ? '在线' : '离线') + '</span>' +
+        '<span>' + rel(g.lastSeen) + '</span>' +
+        bits.map((b) => '<span>' + b + '</span>').join('') +
+        (m.lastError ? '<span class="warn">' + esc(m.lastError) + '</span>' : '') +
+      '</span>';
+    }).join('');
+  }
+
+  function renderDevices() {
+    const box = $('#devices');
+    if (!state.devices.length) {
+      box.innerHTML = '<div class="empty" style="margin:12px">还没有设备上报。<br>启动网关：<br><code>cd iot-gateway</code><br><code>EDGE_TOKEN=… npm start</code></div>';
+      return;
+    }
+    box.innerHTML = state.devices.map((d) => {
+      const entries = Object.entries(d.metrics || {});
+      const chips = entries.slice(0, 4).map(([k, m]) =>
+        '<span class="chip">' + esc(k) + ' <b>' + esc(fmtVal(m.value)) + esc(m.unit || '') + '</b></span>'
+      ).join('');
+      return '<button type="button" class="device' + (d.id === state.selectedId ? ' active' : '') + '" data-id="' + esc(d.id) + '">' +
+        '<div class="top"><span class="status ' + esc(d.status) + '">' + esc(STATUS[d.status] || d.status) + '</span>' +
+        '<span class="name">' + esc(d.name || d.id) + '</span></div>' +
+        '<div class="id">' + esc(d.id) + ' · ' + esc(d.transport || 'unknown') + ' · ' + rel(d.lastSeen) + '</div>' +
+        (chips ? '<div class="chips">' + chips + '</div>' : '') +
+      '</button>';
+    }).join('');
+  }
+
+  function numericMetrics() {
+    if (!state.detail) return [];
+    return Object.entries(state.detail.device.metrics || {})
+      .filter(([, m]) => typeof m.value === 'number')
+      .map(([k]) => k);
+  }
+
+  async function loadSeries() {
+    state.series = null;
+    if (!state.selectedId || !state.metric) return;
+    const base = '/iot/devices/' + encodeURIComponent(state.selectedId) + '/series?metric=' + encodeURIComponent(state.metric);
+    try {
+      let body = await api(base + '&since=' + (Date.now() - 15 * 60 * 1000) + '&limit=200');
+      if (!body.points || !body.points.length) body = await api(base + '&since=0&limit=200');
+      state.series = body;
+    } catch (e) {
+      state.series = null;
+    }
+  }
+
+  function chartSvg() {
+    const pts = ((state.series && state.series.points) || []).filter((p) => typeof p.value === 'number');
+    if (!pts.length) return '<div class="empty small">时间段内没有数值点</div>';
+
+    const W = 900, H = 220, PL = 54, PR = 14, PT = 16, PB = 26;
+    const vals = pts.map((p) => p.value);
+    let min = Math.min.apply(null, vals);
+    let max = Math.max.apply(null, vals);
+    if (min === max) { min -= 1; max += 1; }
+    const span = max - min;
+    const x = (i) => PL + (pts.length === 1 ? (W - PL - PR) / 2 : i / (pts.length - 1) * (W - PL - PR));
+    const y = (v) => H - PB - (v - min) / span * (H - PT - PB);
+    const grid = [0, 0.5, 1].map((t) => {
+      const gy = PT + t * (H - PT - PB);
+      return '<line x1="' + PL + '" y1="' + gy + '" x2="' + (W - PR) + '" y2="' + gy + '" stroke="var(--line)" />';
+    }).join('');
+    const line = pts.length > 1
+      ? '<polyline fill="none" stroke="var(--blue)" stroke-width="2" stroke-linejoin="round" points="' +
+        pts.map((p, i) => x(i).toFixed(1) + ',' + y(p.value).toFixed(1)).join(' ') + '" />'
+      : '';
+    const last = pts.length - 1;
+    const head = '<circle cx="' + x(last).toFixed(1) + '" cy="' + y(pts[last].value).toFixed(1) + '" r="3.5" fill="var(--blue)" />';
+
+    return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="指标时序">' + grid +
+      '<text x="' + (PL - 8) + '" y="' + (PT + 4) + '" text-anchor="end" fill="var(--muted)" font-size="11">' + esc(fmtVal(max)) + '</text>' +
+      '<text x="' + (PL - 8) + '" y="' + (H - PB + 4) + '" text-anchor="end" fill="var(--muted)" font-size="11">' + esc(fmtVal(min)) + '</text>' +
+      line + head +
+      '<text x="' + PL + '" y="' + (H - 8) + '" fill="var(--muted)" font-size="11">' + esc(fmtClock(pts[0].at).slice(6)) + '</text>' +
+      '<text x="' + (W - PR) + '" y="' + (H - 8) + '" text-anchor="end" fill="var(--muted)" font-size="11">' + esc(fmtClock(pts[last].at).slice(6)) + '</text>' +
+    '</svg>';
+  }
+
+  function renderDetail() {
+    const box = $('#detail');
+    if (!state.detail) {
+      box.innerHTML = '<div class="empty">选择左侧设备查看详情</div>';
+      return;
+    }
+    const d = state.detail.device;
+    const events = (state.detail.events || []).slice(-10).reverse();
+    const entries = Object.entries(d.metrics || {});
+    const numeric = numericMetrics();
+
+    const cards = entries.map(([k, m]) => {
+      const bad = m.quality === 'stale' || m.quality === 'degraded';
+      return '<div class="metric' + (bad ? ' stale' : '') + '">' +
+        '<div class="k"><span>' + esc(k) + '</span><span class="quality ' + esc(m.quality) + '">' + esc(QUALITY[m.quality] || m.quality) + '</span></div>' +
+        '<div class="v">' + esc(fmtVal(m.value)) + (m.unit ? '<small>' + esc(m.unit) + '</small>' : '') + '</div>' +
+        '<div class="k" style="margin-top:4px"><span>' + rel(m.at) + '</span><span>' + fmtClock(m.at) + '</span></div>' +
+      '</div>';
+    }).join('') || '<div class="empty small" style="grid-column:1/-1">暂无最新值</div>';
+
+    const picker = numeric.length
+      ? '<select id="metric-select">' + numeric.map((k) =>
+          '<option value="' + esc(k) + '"' + (k === state.metric ? ' selected' : '') + '>' + esc(k) + '</option>'
+        ).join('') + '</select>'
+      : '';
+
+    const chart = numeric.length
+      ? '<div class="chart-card"><div class="chart-head"><span>近 15 分钟时序</span>' + picker + '</div><div id="chart">' + chartSvg() + '</div></div>'
+      : '<div class="empty small">该设备没有可绘制的数值指标</div>';
+
+    const evtRows = events.map((e) =>
+      '<div class="evt"><span class="t">' + fmtClock(e.at) + '</span>' +
+      '<span class="m">' + esc(e.metric || e.kind || 'event') + '</span>' +
+      '<span class="v">' + esc(fmtVal(e.value)) + esc(e.unit || '') + '</span></div>'
+    ).join('') || '<div class="empty small">暂无事件</div>';
+
+    box.innerHTML =
+      '<h2 class="d-title"><span class="status ' + esc(d.status) + '">' + esc(STATUS[d.status] || d.status) + '</span>' + esc(d.name || d.id) + '</h2>' +
+      '<div class="d-sub">' + esc(d.id) + ' · ' + esc(d.transport || 'unknown') + (d.profile ? ' · ' + esc(d.profile) : '') +
+        (d.source ? ' · 网关 ' + esc(d.source) : '') + '<br>最后活动 ' + rel(d.lastSeen) + '（' + fmtClock(d.lastSeen) + '）</div>' +
+      '<div class="metrics">' + cards + '</div>' + chart +
+      '<div class="events"><h3>最近事件</h3>' + evtRows + '</div>';
+  }
+
+  async function loadDetail(keepMetric) {
+    if (!state.selectedId) { state.detail = null; renderDetail(); return; }
+    try {
+      state.detail = await api('/iot/devices/' + encodeURIComponent(state.selectedId));
+    } catch (e) {
+      state.detail = null;
+      if (e.status === 404) { state.selectedId = null; renderDevices(); }
+      renderDetail();
+      return;
+    }
+    const numeric = numericMetrics();
+    if (!keepMetric || !numeric.includes(state.metric)) state.metric = numeric[0] || null;
+    await loadSeries();
+    renderDetail();
+  }
+
+  async function selectDevice(id) {
+    if (!id || id === state.selectedId) return;
+    state.selectedId = id;
+    state.metric = null;
+    state.detail = null;
+    renderDevices();
+    await loadDetail(false);
+  }
+
+  async function refresh() {
+    if (state.refreshing) return;
+    state.refreshing = true;
+    try {
+      const [body, gwBody] = await Promise.all([
+        api('/iot/devices'),
+        api('/iot/gateways').catch(() => null),
+      ]);
+      state.devices = body.devices || [];
+      state.gateways = (gwBody && gwBody.gateways) || [];
+      state.cursor = Math.max(state.cursor, maxSeq(state.devices));
+
+      if (state.gateways.length && state.gateways.every((g) => !g.online)) {
+        const last = Math.max.apply(null, state.gateways.map((g) => Number(g.lastSeen) || 0));
+        showBanner('采集网关离线，设备数据可能停更（最后心跳 ' + rel(last) + '）。');
+      } else {
+        showBanner('');
+      }
+
+      if (!state.selectedId || !state.devices.some((d) => d.id === state.selectedId)) {
+        state.selectedId = state.devices.length ? state.devices[0].id : null;
+        state.metric = null;
+        state.detail = null;
+      }
+
+      renderStats();
+      renderGateways();
+      renderDevices();
+      await loadDetail(true);
+    } catch (e) {
+      if (e.status === 401) showBanner('需要 EDGE_TOKEN：填写后点「保存」。');
+      else showBanner('店根不可达：' + e.message);
+      state.devices = [];
+      state.gateways = [];
+      state.selectedId = null;
+      state.detail = null;
+      renderStats();
+      renderGateways();
+      renderDevices();
+      renderDetail();
+    } finally {
+      state.refreshing = false;
+    }
+  }
+
+  function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
+  async function startStream() {
+    const epoch = ++state.streamEpoch;
+    if (state.abort) state.abort.abort();
+    while (epoch === state.streamEpoch) {
+      const ctl = new AbortController();
+      state.abort = ctl;
+      try {
+        const res = await fetch('/iot/stream?since=' + state.cursor + '&wait=25000', {
+          headers: authHeaders(), signal: ctl.signal, cache: 'no-store',
+        });
+        if (res.status === 401) {
+          showBanner('需要 EDGE_TOKEN：填写后点「保存」。');
+          await sleep(5000);
+          continue;
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const body = await res.json();
+        if (body.cursor) state.cursor = Math.max(state.cursor, body.cursor);
+        if (body.events && body.events.length) await refresh();
+      } catch (e) {
+        if (ctl.signal.aborted) return;
+        await sleep(3000);
+      }
+    }
+  }
+
+  $('#devices').addEventListener('click', (e) => {
+    const row = e.target.closest('button[data-id]');
+    if (row) selectDevice(row.dataset.id);
+  });
+
+  $('#detail').addEventListener('change', async (e) => {
+    if (e.target.id !== 'metric-select') return;
+    state.metric = e.target.value;
+    await loadSeries();
+    renderDetail();
+  });
+
+  $('#save').addEventListener('click', async () => {
+    token = tokenEl.value.trim();
+    localStorage.setItem('edge:token', token);
+    showBanner('');
+    await refresh();
+    startStream();
+  });
+  $('#refresh').addEventListener('click', () => refresh());
+
+  window.addEventListener('beforeunload', () => {
+    if (state.abort) state.abort.abort();
+  });
+
+  renderStats();
+  renderGateways();
+  renderDevices();
+  renderDetail();
+  refresh().finally(startStream);
+  setInterval(() => { refresh(); }, 5000);
+})();
+</script>
+</body>
+</html>

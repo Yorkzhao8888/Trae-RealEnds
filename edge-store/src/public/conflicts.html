@@ -21,6 +21,8 @@
   }
   h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
   .spacer { flex: 1; }
+  .nav { color: var(--muted); text-decoration: none; font-size: 12px; border-bottom: 1px dashed transparent; }
+  .nav:hover { color: var(--text); border-bottom-color: var(--line); }
   .token { display: flex; gap: 6px; align-items: center; }
   input[type=password], input[type=text] {
     background: var(--panel); color: var(--text); border: 1px solid var(--line);
@@ -85,6 +87,7 @@
 <header>
   <h1>店根 · 冲突复核</h1>
   <span class="spacer"></span>
+  <a class="nav" href="/edge/ui/iot">IoT 看板 →</a>
   <div class="token">
     <input id="token" type="password" placeholder="EDGE_TOKEN" autocomplete="off" />
     <button id="save" class="ghost">保存</button>

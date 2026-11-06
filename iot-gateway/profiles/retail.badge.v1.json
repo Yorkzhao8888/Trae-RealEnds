@@ -1,0 +1,12 @@
+{
+  "profile": "retail.badge.v1",
+  "kind": "badge-reader",
+  "description": "工牌读卡器（只读；只采刷卡事件与设备状态）",
+  "match": { "transport": "nfc", "model": "ACR122U" },
+  "staleAfterMs": 60000,
+  "metrics": {
+    "scan.badge": { "type": "string", "staleAfterMs": 60000 },
+    "reader.state": { "type": "string", "enum": ["ready", "fault"] },
+    "battery": { "type": "number", "unit": "%" }
+  }
+}

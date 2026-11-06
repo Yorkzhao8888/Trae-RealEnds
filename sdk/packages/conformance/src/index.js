@@ -599,14 +599,18 @@ export async function runConformance(shellFile, opts = {}) {
         if (!['online', 'offline', 'unknown'].includes(d.status)) throw new Error(`status=${d.status}`);
       }
     });
-    await record(results, 'iot.write 强制幂等键且只返回 accepted + ackId', async () => {
+    await record(results, 'iot.write 强制幂等键；只读适配器返回 E_UNSUPPORTED', async () => {
       const list = await Shell.call('iot.devices');
       const d = (list.data.devices || [])[0];
       if (!d) throw new Error('没有可用设备，无法验证 iot.write');
       const bad = await Shell.call('iot.write', { deviceId: d.id, action: 'probe' });
       if (bad.ok || bad.code !== 'E_BAD_ARGS') throw new Error(`缺 idem：${bad.code}`);
       const r = await Shell.call('iot.write', { deviceId: d.id, action: 'probe', idem: 'conf-iot' });
-      if (!r.ok || r.data.accepted !== true || typeof r.data.ackId !== 'string') throw new Error(JSON.stringify(r));
+      if (r.ok) {
+        if (r.data.accepted !== true || typeof r.data.ackId !== 'string') throw new Error(JSON.stringify(r));
+      } else if (r.code !== 'E_UNSUPPORTED') {
+        throw new Error(JSON.stringify(r));
+      }
     });
   }
 

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://uendos.local/schema/iot-profile.schema.json",
+  "title": "UendOS IoT device profile v1",
+  "description": "设备型号 profile：把各协议原始读数归一为 deviceId + metric + value。只读采集，不声明控制能力。",
+  "type": "object",
+  "required": ["profile", "match", "metrics"],
+  "additionalProperties": false,
+  "properties": {
+    "profile": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*(\\.[a-z0-9-]+)+$",
+      "maxLength": 64
+    },
+    "kind": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "description": { "type": "string", "maxLength": 200 },
+    "staleAfterMs": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+    "match": {
+      "type": "object",
+      "required": ["transport"],
+      "additionalProperties": false,
+      "properties": {
+        "transport": { "enum": ["serial", "ble", "mqtt", "nfc", "http"] },
+        "vid": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "pid": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "manufacturer": { "type": "string", "minLength": 1, "maxLength": 64 }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type"],
+        "additionalProperties": false,
+        "properties": {
+          "type": { "enum": ["number", "string", "boolean"] },
+          "unit": { "type": ["string", "null"], "maxLength": 16 },
+          "enum": { "type": "array", "minItems": 1, "maxItems": 32 },
+          "scale": { "type": "number" },
+          "staleAfterMs": { "type": "integer", "minimum": 1000, "maximum": 86400000 },
+          "description": { "type": "string", "maxLength": 200 }
+        }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "description": "预留给后续控制面；v1 网关不执行写操作，只做只读采集。",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "label": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "params": { "type": "object" }
+        }
+      }
+    }
+  }
+}

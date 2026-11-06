@@ -1,0 +1,9 @@
+{
+  "name": "@uendos/plugin-iot-gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "UendOS 构建期 IoT 网关代理适配器（只读，代理店根 /iot/*）",
+  "files": ["runtime.js", "uendos.plugin.json", "conformance.mjs"],
+  "keywords": ["uendos", "iot", "gateway", "edge-store"]
+}

@@ -31,7 +31,7 @@ export const CAPABILITIES = [
   'secureStore',
   // 设备身份：默认 none；配置 security.identity 后可用，令牌只存 secureStore
   'identity',
-  // IoT 总开关；iot.ble / iot.serial / iot.mqtt / iot.nfc 由适配器插件声明
+  // IoT 总开关；iot.ble / iot.serial / iot.mqtt / iot.nfc / iot.gateway 由适配器插件声明
   'iot',
   'edge.storeRoot',
 ];
@@ -98,7 +98,7 @@ export const UPDATE_CHANNELS = ['stable', 'beta'];
 export const UPDATE_CHANNEL_DEFAULT = 'stable';
 
 /** 预留的 IoT 适配器能力 ID：由构建期插件声明，核心只提供 iot 总开关 */
-export const IOT_TRANSPORT_CAPABILITIES = ['iot.ble', 'iot.serial', 'iot.mqtt', 'iot.nfc'];
+export const IOT_TRANSPORT_CAPABILITIES = ['iot.ble', 'iot.serial', 'iot.mqtt', 'iot.nfc', 'iot.gateway'];
 
 /** IoT 事件信封 v1：所有 shell:iot-* 事件的 data 都必须满足该形状 */
 export const IOT_EVENT_VERSION = 1;

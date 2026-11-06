@@ -121,7 +121,7 @@
   // 只允许构建期嵌入，禁止运行时远程加载。
   var PLUGIN_REGISTRY = { list: [], methods: {} };
   var RESERVED_NS = ['core', 'edge', 'offline', 'desktop', 'shell'];
-  var IOT_TRANSPORTS = ['ble', 'serial', 'mqtt', 'nfc'];
+  var IOT_TRANSPORTS = ['ble', 'serial', 'mqtt', 'nfc', 'gateway'];
   var IOT_ADAPTERS = [];
   var SECURE_ADAPTER = null;
   var CURRENT_PLUGIN_ID = null;

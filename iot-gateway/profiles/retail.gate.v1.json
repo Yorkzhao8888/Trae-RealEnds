@@ -1,0 +1,12 @@
+{
+  "profile": "retail.gate.v1",
+  "kind": "gate",
+  "description": "门禁状态采集（只读；不提供开锁动作）",
+  "match": { "transport": "ble", "model": "SL-GATE" },
+  "staleAfterMs": 120000,
+  "metrics": {
+    "lock.state": { "type": "string", "enum": ["locked", "unlocked", "ajar"], "staleAfterMs": 120000 },
+    "battery": { "type": "number", "unit": "%" },
+    "tamper": { "type": "boolean" }
+  }
+}

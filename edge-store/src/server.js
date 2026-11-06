@@ -1,11 +1,13 @@
 // 店根 HTTP 服务：契约 §店根 API（/edge/health /edge/lease /edge/commit /edge/snapshot）
 // 无第三方依赖，默认监听 0.0.0.0:7321（门店局域网），通过 EDGE_TOKEN 做最小鉴权。
 import { createServer } from 'node:http';
+import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
 import { openDb, createLease, aliveLeases, commit, snapshot, metaGet, metaSet, version, catalogList } from './db.js';
 import { syncOnce, openConflicts, resolveConflict, pending } from './sync.js';
 import { pullOnce } from './pull.js';
 import { startSync } from './scheduler.js';
+import { ingest, heartbeat, listDevices, listGateways, getDevice, series, waitForEvents } from './iot.js';
 
 const PORT = Number(process.env.EDGE_PORT || 7321);
 const HOST = process.env.EDGE_HOST || '0.0.0.0';
@@ -16,7 +18,7 @@ const MAX_QTY = Number(process.env.EDGE_MAX_QTY || 20);
 
 // 运营页（静态）：浏览器导航无法携带 Authorization，因此页面本身不鉴权，
 // 页面里调用的数据接口仍然要 token。
-const UI_PAGES = { '/edge/ui/conflicts': 'conflicts.html' };
+const UI_PAGES = { '/edge/ui/conflicts': 'conflicts.html', '/edge/ui/iot': 'iot.html' };
 
 function json(res, code, body) {
   const buf = Buffer.from(JSON.stringify(body));
@@ -42,6 +44,9 @@ function readBody(req) {
 
 export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE_ID, cloudUrl = '', cloudToken = '' } = {}) {
   const db = openDb(dbPath);
+  // IoT 长轮询唤醒：只在进程内广播，不落库；事件本身以 iot_event.seq 为准
+  const iotBus = new EventEmitter();
+  iotBus.setMaxListeners(100);
 
   function cloudSend(url, tk) {
     return async (payload) => {
@@ -208,6 +213,60 @@ export function createEdge({ dbPath = ':memory:', token = TOKEN, storeId = STORE
           cursor: Number(metaGet(db, 'catalogSeq') || 0),
           items: catalogList(db),
         });
+      }
+
+      // ---------------------------------------------------------------- IoT 数据面
+      // 网关只读推送：设备台账 + 事件批量落库；控制指令不在这里闭环。
+      if (req.method === 'POST' && path === '/iot/ingest') {
+        const body = await readBody(req);
+        const r = ingest(db, body);
+        if (!r.ok) return json(res, r.code === 'internal' ? 500 : 400, r);
+        if (r.applied > 0) iotBus.emit('events', r.cursor);
+        return json(res, 200, r);
+      }
+
+      if (req.method === 'POST' && path === '/iot/heartbeat') {
+        const body = await readBody(req);
+        const r = heartbeat(db, body);
+        return json(res, r.ok ? 200 : 400, r);
+      }
+
+      if (req.method === 'GET' && path === '/iot/devices') {
+        return json(res, 200, { ok: true, ...listDevices(db) });
+      }
+
+      if (req.method === 'GET' && path === '/iot/gateways') {
+        return json(res, 200, { ok: true, ...listGateways(db) });
+      }
+
+      const iotDetail = path.match(/^\/iot\/devices\/([^/]+)$/);
+      if (req.method === 'GET' && iotDetail) {
+        const id = decodeURIComponent(iotDetail[1]);
+        const r = getDevice(db, id);
+        return r ? json(res, 200, { ok: true, ...r }) : json(res, 404, { ok: false, code: 'device_not_found' });
+      }
+
+      const iotSeries = path.match(/^\/iot\/devices\/([^/]+)\/series$/);
+      if (req.method === 'GET' && iotSeries) {
+        const id = decodeURIComponent(iotSeries[1]);
+        const metric = url.searchParams.get('metric') || '';
+        const r = series(db, id, {
+          metric,
+          since: Number(url.searchParams.get('since') || 0),
+          limit: Number(url.searchParams.get('limit') || 200),
+        });
+        return json(res, r.ok ? 200 : r.code === 'device_not_found' ? 404 : 400, r);
+      }
+
+      // 长轮询：since 是店根事件游标 seq；有增量立即回，没有就挂起到超时
+      if (req.method === 'GET' && path === '/iot/stream') {
+        const since = Number(url.searchParams.get('since') || 0);
+        const wait = Math.min(Math.max(Number(url.searchParams.get('wait')) || 25000, 0), 30000);
+        const ctl = new AbortController();
+        res.on('close', () => ctl.abort());
+        const r = await waitForEvents(db, { since, timeoutMs: wait, bus: iotBus, signal: ctl.signal });
+        if (res.writableEnded) return;
+        return json(res, 200, { ok: true, ...r });
       }
 
       if (req.method === 'POST' && path === '/edge/sync/now' && scheduler) {
