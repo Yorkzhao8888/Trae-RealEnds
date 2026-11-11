@@ -1,0 +1,21 @@
+{
+  "appId": "com.cewaycloud.ziway.bcp",
+  "appName": "知味客户端",
+  "webDir": "dist",
+  "server": {
+    "url": "https://bcp.ziway.cewaycloud.com/mall",
+    "errorPath": "offline.html",
+    "cleartext": false,
+    "allowNavigation": [
+      "bcp.ziway.cewaycloud.com",
+      "xu.ziway.cewaycloud.com",
+      "oas.cewaycloud.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  }
+}

@@ -461,6 +461,45 @@ uendos doctor --offline --json > diag.json   # 命令行侧诊断包，URL 去�
 
 `launcher` 模式的业务页由远程加载，Capacitor 原生插件是否可用取决于远程页能否拿到运行时；需要强原生能力（推送/震动/生物识别）时用 `portal`，由主端门户页负责切换。
 
+### 生态多 App 投影（ziway）
+
+一个业务端一个包时，不要手工复制工程：用 [`scripts/ziway-ecosystem.mjs`](scripts/ziway-ecosystem.mjs) 从 [`apps/ziway/ecosystem.json`](../apps/ziway/ecosystem.json) 投影。
+
+```bash
+# 首期清单：BCP 知味客户端（app+mp）、BJP 知味经营端（app+pc）
+node sdk/scripts/ziway-ecosystem.mjs scaffold
+node sdk/scripts/ziway-ecosystem.mjs check        # 清单/配置/品牌桥漂移校验
+
+# 已有工程按清单更新（改 URL、能力、主题后）
+node sdk/scripts/ziway-ecosystem.mjs scaffold --resync
+```
+
+投影规则：
+
+- 每个端生成独立 `uendos.config.json`：`prefix`/`endKey` 为 `ziway-<code>`，`launchMode: portal`，`ends` 只有自己一个端，不再出身份选择页。
+- `app+pc` 会拆成 `<code>` 与 `<code>-pc` 两个工程：两套模板的 `package.json` 同名，合在一个目录会互相覆盖。
+- `allowNavigation` 收紧到「本业务域 + XU + OAS」，不再用 `*.cewaycloud.com` 通配；当前 `ziway` 单包选择页方案仍保留在旧工程。
+- `XU` 是身份/分发中枢，不进 `apps` 清单，也不生成原生包；深链与票据回跳由 XU 侧实现。
+
+### 四宝产品矩阵（正式结构）
+
+`apps/ziway` 是 BCP / BJP 的试点投影，正式目标结构写在 [`apps/btos/product-matrix.json`](../apps/btos/product-matrix.json)：四宝做商店 App，知味业务端做 entry。
+
+| 宝 | 品牌键 | 身份层 | 承载的知味业务端 |
+|---|---|---|---|
+| 生活宝 Beaulife | `beaulife` | XUF 用户端 | BCP 生态消费端 |
+| 工作宝 Cajob | `cajob` | XPN / 职聘云 XHPZ | BHP 生态作业端 |
+| 经营宝 XSO | `xso` | XPZL / 工场云 XEPZ | BJP 经营端、BRP 供应端 |
+| 生态宝 Xeco | `xeco` | XECO / 知味云 XSPZ | GMP、GVP 治理端 |
+
+注意：
+
+- **Ziway 是食业产业互联网生态，不是生态宝**；`ziway` 品牌键保留，生态宝可承载多个生态。
+- 跨域业务端写进各宝的 `ends`，不要用 `entry.routes` 跨域（该字段只接受同源相对路径）。
+- Beaulife / Xeco 的正式入口 URL 未定，清单标记 `urlStatus: todo`，确认前不投影工程。
+- 当前 `scripts/ziway-ecosystem.mjs` 只支持单品牌、单端试点；正式四宝投影需要先支持
+  `apps[].brand`、多 `ends` 与受众分组，不能直接拿试点清单替换。
+
 ## 55 项断言覆盖什么
 
 `@uendos/conformance` 用 `vm` 构造最小浏览器沙箱（window / document / navigator / localStorage / fetch / CustomEvent），对生成的桥逐项断言：

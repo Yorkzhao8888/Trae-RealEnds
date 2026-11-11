@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "brand": "ziway",
+  "displayName": "知味经营端",
+  "alias": "ziwayOS",
+  "prefix": "ziway-bjp-pc",
+  "accent": "#2563EB",
+  "statusBarStyle": "dark",
+  "endKey": "ziway-bjp-pc.end",
+  "contractVersion": "0.7.0",
+  "profile": "pro",
+  "targets": [
+    "pc"
+  ],
+  "packageId": "com.cewaycloud.ziway.bjp",
+  "launchMode": "portal",
+  "ends": {
+    "bjp": {
+      "name": "知味经营端",
+      "url": "https://bjp.ziway.cewaycloud.com/shop"
+    }
+  },
+  "theme": {
+    "mode": "light",
+    "tokens": {
+      "accent": "#2563EB"
+    }
+  },
+  "caps": {
+    "allow": [
+      "vibrate",
+      "share",
+      "geolocation",
+      "push",
+      "haptics",
+      "statusBar",
+      "splash",
+      "backButton",
+      "openExternal",
+      "deeplink",
+      "network",
+      "safeArea",
+      "files",
+      "camera",
+      "offlineQueue",
+      "iot",
+      "edge.storeRoot"
+    ]
+  },
+  "store": {
+    "downloadDir": "/download/ziway/bjp-pc/"
+  }
+}

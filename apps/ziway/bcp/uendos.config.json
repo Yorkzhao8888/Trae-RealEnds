@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "brand": "ziway",
+  "displayName": "知味客户端",
+  "alias": "ziwayOS",
+  "accent": "#F97316",
+  "statusBarStyle": "dark",
+  "endKey": "ziway-bcp.end",
+  "contractVersion": "0.7.0",
+  "profile": "pro",
+  "targets": [
+    "app",
+    "mp"
+  ],
+  "packageId": "com.cewaycloud.ziway.bcp",
+  "launchMode": "portal",
+  "ends": {
+    "bcp": {
+      "name": "知味客户端",
+      "url": "https://bcp.ziway.cewaycloud.com/mall"
+    }
+  },
+  "theme": {
+    "mode": "light",
+    "tokens": {
+      "accent": "#F97316"
+    }
+  },
+  "caps": {
+    "allow": [
+      "vibrate",
+      "share",
+      "geolocation",
+      "push",
+      "haptics",
+      "statusBar",
+      "splash",
+      "backButton",
+      "openExternal",
+      "deeplink",
+      "network",
+      "safeArea",
+      "files",
+      "camera",
+      "offlineQueue"
+    ]
+  },
+  "store": {
+    "downloadDir": "/download/ziway/bcp/"
+  },
+  "prefix": "ziway-bcp"
+}

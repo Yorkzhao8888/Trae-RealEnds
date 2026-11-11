@@ -222,3 +222,58 @@ test('profile 热加载：新增文件生效，坏文件不破坏当前映射，
 
   await gw.stop();
 });
+
+test('运行期重取名册：新增设备进入台账与心跳，不再重启网关', async () => {
+  let roster = [
+    { id: 'IOT-DW-0001', transport: 'ble', profile: 'retail.gate.v1', model: 'SL-GATE', meta: { code: 'IOT-DW-0001' } },
+  ];
+  const worker = {
+    id: 'dyard',
+    transport: 'dyard',
+    detect: () => true,
+    devices: async () => roster,
+    subscribe: () => () => {},
+  };
+  const beats = [];
+  const gw = createGateway({
+    profilesDir,
+    spoolPath: null,
+    client: {
+      async heartbeat(body) { beats.push(body); return { status: 200, body: { ok: true } }; },
+      async ingest() { return { status: 200, body: { ok: true, applied: 0, replayed: 0 } }; },
+    },
+    workers: [worker],
+    flushMs: 60000,
+    heartbeatMs: 60000,
+  });
+
+  await gw.start();
+  assert.equal(gw.devices.length, 1);
+
+  roster = [...roster, { id: 'IOT-DW-0002', transport: 'serial', profile: 'retail.scanner.v1', model: 'SL-SCAN' }];
+  const r = await gw.refreshDevices();
+  assert.equal(r.ok, true);
+  assert.equal(r.added, 1);
+  assert.equal(gw.devices.length, 2);
+  assert.equal(gw.status().lastDeviceRefresh.added, 1);
+
+  // 重取后心跳带 2 台设备；已下发的设备名册里消失也不删（由店根超期判定）
+  await gw.heartbeat();
+  assert.equal(beats.at(-1).devices.length, 2);
+
+  // 归档：worker 下发 {id, archived:true}，网关清本地台账，心跳不再上报
+  roster = [
+    { id: 'IOT-DW-0001', archived: true },
+    { id: 'IOT-DW-0002', transport: 'serial', profile: 'retail.scanner.v1', model: 'SL-SCAN' },
+  ];
+  const again = await gw.refreshDevices();
+  assert.equal(again.removed, 1);
+  assert.equal(gw.devices.length, 1);
+  assert.equal(gw.status().lastDeviceRefresh.removed, 1);
+
+  await gw.heartbeat();
+  assert.equal(beats.at(-1).devices.length, 1);
+  assert.equal(beats.at(-1).devices[0].id, 'IOT-DW-0002');
+
+  await gw.stop();
+});

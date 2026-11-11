@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "manifestSha256": "d7f21c056fda6e4a0c5a3dd7e32b4418ceda8cb471c6a08bd9d225b8ad041bc2",
+  "projects": {
+    "bcp": {
+      "app": "bcp",
+      "dir": "apps/ziway/bcp",
+      "packageId": "com.cewaycloud.ziway.bcp",
+      "targets": [
+        "app",
+        "mp"
+      ],
+      "configSha256": "509eba8cc6cef2eaf1add0da80dffb6419e6629f3360318663c5a99857177073",
+      "shell": "shell/ziway-bcp-shell.js"
+    },
+    "bjp": {
+      "app": "bjp",
+      "dir": "apps/ziway/bjp",
+      "packageId": "com.cewaycloud.ziway.bjp",
+      "targets": [
+        "app"
+      ],
+      "configSha256": "47318b7f78639142e464ee27ca89a6fafc323b77fc2437c54fa3003cce285027",
+      "shell": "shell/ziway-bjp-shell.js"
+    },
+    "bjp-pc": {
+      "app": "bjp",
+      "dir": "apps/ziway/bjp-pc",
+      "packageId": "com.cewaycloud.ziway.bjp",
+      "targets": [
+        "pc"
+      ],
+      "configSha256": "a578c35954ab04259eb06e432c4f48c8492da37baf2662df7ef611e1bbcb5484",
+      "shell": "shell/ziway-bjp-pc-shell.js"
+    }
+  }
+}

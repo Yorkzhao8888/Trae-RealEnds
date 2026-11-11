@@ -808,3 +808,76 @@ Shell.call<Method extends CapabilityMethod>(method: Method, args?: Input): Promi
    自动继续。设备停更仍由店根 `staleAfterMs` 判超期，不依赖厂商自报在线。
 6. **优先级**：`IOT_MQTT_CONFIG` > `IOT_VENDOR_CONFIG` > fixture；同一网关只启用一个源，
    避免重复上报。
+
+## 38. 四宝产品矩阵与业务端入口
+
+1. **层级**：`云 → 本体端 → 宝 → 业务端`。四宝是面向应用商店的独立 App：
+   `beaulife` 生活宝（XUF 用户端）、`cajob` 工作宝（XPN / 职聘云 XHPZ）、
+   `xso` 经营宝（XPZL 法人 / 工场云 XEPZ）、`xeco` 生态宝（XECO / 知味云 XSPZ）。
+   `XU` 仍是身份、分发与权限中枢，不生成原生包。
+2. **Ziway 的定位**：Ziway 是“食业”产业互联网生态，不是生态宝本身；`ziway` 品牌键
+   继续保留，生态宝可承载 Ziway 及其他生态。禁止把 `ziway` 重命名为 `xeco`。
+3. **端不独立成包**：BCP / BJP / BRP / BHP / GMP / GVP 是生态宝内部的业务端，按受众
+   聚合进四宝，作为 `entry` 暴露；不再各打一个商店包，避免 4 + 6 = 10 个包的签名、
+   商店资料、登录态与维护成本。
+4. **受众映射**：生活宝承载 BCP（生态消费）；工作宝承载 BHP（生态作业）；经营宝承载
+   BJP / BRP（生态经营 / 供应）；生态宝承载 GMP / GVP（门户 / 平台治理）。
+5. **入口实现**：跨域业务端写入各宝的 `ends`，用 `ends` / `switchEnd` 或选择页切换；
+   `entry.routes` 仅接受同源相对路径，不能用于跳转到其他业务域名。`allowNavigation`
+   仍只放本业务域、XU 与 OAS，不使用 `*.cewaycloud.com` 通配。
+6. **命名与包名**：`beaulife` / `cajob` / `xso` / `xeco` 分别对应
+   `com.cewaycloud.beaulife` / `com.cewaycloud.cajob` / `com.cewaycloud.xso` /
+   `com.cewaycloud.xeco`；`xso` / `cajob` 沿用既有包名，避免增量更新断链。
+7. **清单状态**：正式结构见 [`apps/btos/product-matrix.json`](../apps/btos/product-matrix.json)。
+   Beaulife 与 Xeco 的正式入口 URL 未定，清单标记 `urlStatus: todo`；在域名确认前只做
+   结构定义，不投影工程。`apps/ziway/ecosystem.json` 中的 BCP / BJP 独立包属于试点，
+   迁移完成后不再作为正式发布结构。
+
+## 39. 物物边缘 DyardOS 只读接入
+
+1. **定位**：DyardOS 是门店边缘盒子上的物物引擎，负责设备间协同与本地联动；
+   UendOS 壳是“人机边缘”，负责界面、能力桥与入口分发。两者不合并成一个产品，
+   也不互相托管：壳不接管物物编排，DyardOS 不接管 UI 与人类身份。
+2. **接入位置**：DyardOS 作为 `iot-gateway` 的第四种 worker（`dyard`），与
+   `mqtt` / `vendor-http` / `fixture` 平级；数据仍走 `POST /iot/ingest` 落店根，
+   不新开数据面。壳、SDK 与四品牌桥零改动。
+3. **只读红线**：worker 只发 `GET`，不调用 DyardOS 任何控制或写入接口；
+   `iot.write` 仍返回 `E_UNSUPPORTED`。业务侧控制面本期不做。若将来需要下发指令，
+   必须单独设计命令面（租约、责任人、审计、回执、幂等），不得复用事件通道。
+4. **接口**：`GET {baseUrl}/dyard/devices` 返回名册（DyardOS 侧实际路径
+   `/api/dyardos/contract/readonly/devices`）；`GET {baseUrl}/dyard/events?since=&wait=`
+   是可选事件通道。`eventsPath` 为 `null` / `false` / 空串时表示只做名册、事件走硬件直连，
+   网关不发事件请求也不算错误。配置项为 `baseUrl` / `devicesPath` / `eventsPath` /
+   `tokenEnv` / `headers` / `waitMs` / `timeoutMs` / `retryMs`；凭证从环境变量取，
+   `headers` 键统一小写并与 `tokenEnv` 去重，支持 `${ENV_VAR}`。
+5. **字段映射**：`thing_code`→设备 `id`（对外业务键）、`id`→`meta.uuid`（仅内部主键）、
+   `name`→`name`、`iot_role`→`kind`（`IoT-GW`→`gateway`，`IoT-DV` 交给 profile 的 `kind`）、
+   `profile`→`profile`（能力档，显式优先）、`iot_model`→`model`、`iot_protocol`→`transport`、
+   `iot_online`→`status`、`current_node_*`→`meta.site`、`last_seen_at`→`meta.lastSeenAt`、
+   `parent_gateway_code`→`meta.parentGateway`（也接受 `metadata.parent_gateway_code`）。
+   事件里的设备引用同样接受 UUID 或 `thing_code`，网关按别名表映射回设备 id。
+6. **传输归物理**：DyardOS 原值透传 `iot_protocol`，映射由网关侧承担：
+   `rs232/rs485/can/modbus → serial`、`ble/bluetooth → ble`、`zigbee/z_wave/lora/mqtt → mqtt`、
+   `nfc/rfid → nfc`、`http/https/tcp/udp/wifi → http`，其余回落 `http`；
+   不产生 `dyard` 传输，profile 契约不变。
+7. **兜底与空名册**：`devices()` 优先读 DyardOS 名册，配置里的 `devices` 按 `id` 覆盖或补位；
+   名册为空是**正常结果**（该场确实没有智件），按 0 台设备启动；只有“请求失败且无兜底配置”
+   才启动失败，避免网关空转。
+8. **名册增量**：首次全量拉取；之后带 `?since=<上次结果集最大 updated_at 或 cursor>`
+   与 `if-none-match: <etag>`，`304` 直接复用当前台账、不重放、不记错误；增量结果与已有序
+   合并，服务端忽略 `since` 返回全量也照样成立。网关按 `IOT_DEVICE_REFRESH_MS`
+   （默认 `0` = 只在启动时取一次）定时重取，新增设备无需重启；名册里“消失”的设备保留，
+   由店根 `staleAfterMs` 判超期，避免增量协议下误删未变更设备。
+9. **归档闭环**：DyardOS 归档设备时**必须仍返回一行** `{thing_code, status: 'archived',
+   updated_at}`（不可直接过滤掉）。worker 把该行转成 `{id, archived: true}` 交给网关，
+   网关从本地台账移除并在下一次心跳中不再上报；店根保留 `iot_device` 历史，由
+   `staleAfterMs` 自然转为超期/离线，不经网关删除任何店根数据。名册层面的归档过滤
+   会让网关永远收不到信号，视为契约违约。
+10. **时序与时效**：事件游标首次为空，之后按返回的 `cursor`/`next` 递增；事件 `idem`
+    原样透传，落库键仍为 `gatewayId:idem`；在线与否由店根 `staleAfterMs` 判定，
+    DyardOS 的 `online` 只作初值参考。未知设备的事件在 worker 侧计数并丢弃，不污染 spool。
+11. **优先级**：`IOT_DYARD_CONFIG` > `IOT_MQTT_CONFIG` > `IOT_VENDOR_CONFIG` > fixture；
+    同一网关只启用一个源，避免重复上报。
+12. **租户边界**：一个 DyardOS 实例对应一个 `gatewayId`，不混多店；设备台账只在店根
+    维护，DyardOS 不另建面向业务的设备台账。
+

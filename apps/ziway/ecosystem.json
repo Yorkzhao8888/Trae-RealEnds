@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "brand": "ziway",
+  "displayName": "知味工场",
+  "accent": "#F97316",
+  "contractVersion": "0.7.0",
+  "hub": {
+    "code": "xu",
+    "name": "XU 中枢",
+    "url": "https://xu.ziway.cewaycloud.com",
+    "loginPath": "/api/auth/login",
+    "ssoHosts": ["oas.cewaycloud.com"]
+  },
+  "apps": [
+    {
+      "code": "bcp",
+      "desk": "cp",
+      "name": "知味客户端",
+      "url": "https://bcp.ziway.cewaycloud.com/mall",
+      "targets": ["app", "mp"],
+      "profile": "pro",
+      "packageId": "com.cewaycloud.ziway.bcp",
+      "scheme": "ziway-bcp",
+      "mpAppId": "touristappid",
+      "accent": "#F97316",
+      "capsAllow": [
+        "vibrate",
+        "share",
+        "geolocation",
+        "push",
+        "haptics",
+        "statusBar",
+        "splash",
+        "backButton",
+        "openExternal",
+        "deeplink",
+        "network",
+        "safeArea",
+        "files",
+        "camera",
+        "offlineQueue"
+      ],
+      "store": {
+        "downloadDir": "/download/ziway/bcp/",
+        "items": {
+          "android": "ziway-bcp-android",
+          "ios": "ziway-bcp-ios",
+          "mp": "ziway-bcp-mp"
+        }
+      },
+      "notes": "买家端：XU 登录后经 /d/cp 直达；首期输出 App 壳 + 微信小程序壳。"
+    },
+    {
+      "code": "bjp",
+      "desk": "jp",
+      "name": "知味经营端",
+      "url": "https://bjp.ziway.cewaycloud.com/shop",
+      "targets": ["app", "pc"],
+      "profile": "pro",
+      "packageId": "com.cewaycloud.ziway.bjp",
+      "scheme": "ziway-bjp",
+      "accent": "#2563EB",
+      "capsAllow": [
+        "vibrate",
+        "share",
+        "geolocation",
+        "push",
+        "haptics",
+        "statusBar",
+        "splash",
+        "backButton",
+        "openExternal",
+        "deeplink",
+        "network",
+        "safeArea",
+        "files",
+        "camera",
+        "offlineQueue",
+        "iot",
+        "edge.storeRoot"
+      ],
+      "store": {
+        "downloadDir": "/download/ziway/bjp/",
+        "pcDownloadDir": "/download/ziway/bjp-pc/",
+        "items": {
+          "android": "ziway-bjp-android",
+          "ios": "ziway-bjp-ios",
+          "pc": "ziway-bjp-pc"
+        }
+      },
+      "notes": "经营端：首期输出 App 壳 + PC 壳；IoT 网关插件与店根地址后续接入。"
+    }
+  ]
+}

@@ -23,6 +23,7 @@ export function createGateway({
   heartbeatMs = 30000,
   maxBackoffMs = 60000,
   watchProfiles = false,
+  refreshDevicesMs = 0,
   client = null,
   clock = () => Date.now(),
   onEvent = null,
@@ -47,6 +48,7 @@ export function createGateway({
   let heartbeatTimer = null;
   let profileWatcher = null;
   let profileWatchTimer = null;
+  let deviceTimer = null;
 
   const stats = {
     published: 0,
@@ -60,7 +62,38 @@ export function createGateway({
     lastFlush: null,
     lastHeartbeat: null,
     lastProfileReload: null,
+    lastDeviceRefresh: null,
   };
+
+  // 设备归一：worker 报上来的型号在这里换成分辨率更高的 profile。
+  // 返回 true=新增，false=更新，'archived'=已移除，null=无 profile 被跳过。
+  function absorbDevice(d) {
+    if (!d || typeof d.id !== 'string' || !d.id) return null;
+    // 归档：worker 只给 id 标记，网关清掉本地台账；店根历史仍保留，由 staleAfterMs 判超期。
+    if (d.archived) {
+      if (known.delete(d.id)) return 'archived';
+      return null;
+    }
+    const existing = known.get(d.id);
+    const profile = resolveProfile(profilesMap, d) || (existing && existing.profile
+      ? profilesMap.get(existing.profile)
+      : null);
+    if (!profile) {
+      stats.lastError = `设备 ${d.id} 没有匹配的 profile`;
+      return null;
+    }
+    known.set(d.id, {
+      ...existing,
+      ...d,
+      profile: profile.profile,
+      kind: d.kind || profile.kind || 'device',
+      status: d.status === 'offline' ? 'offline' : 'online',
+      staleAfterMs: Number(d.staleAfterMs) || profile.staleAfterMs || 60000,
+      capabilities: Array.isArray(d.capabilities) ? d.capabilities : [],
+      meta: d.meta && typeof d.meta === 'object' ? d.meta : {},
+    });
+    return !existing;
+  }
 
   async function init() {
     if (!profilesMap) profilesMap = await loadProfiles(profilesDir);
@@ -69,28 +102,51 @@ export function createGateway({
     for (const w of workers) {
       if (typeof w.detect === 'function' && !(await w.detect())) continue;
       const list = typeof w.devices === 'function' ? await w.devices() : [];
-      for (const d of Array.isArray(list) ? list : []) {
-        if (!d || typeof d.id !== 'string' || !d.id) continue;
-        const profile = resolveProfile(profilesMap, d);
-        if (!profile) {
-          stats.lastError = `设备 ${d.id} 没有匹配的 profile`;
-          continue;
-        }
-        known.set(d.id, {
-          ...d,
-          profile: profile.profile,
-          kind: d.kind || profile.kind || 'device',
-          status: d.status === 'offline' ? 'offline' : 'online',
-          staleAfterMs: Number(d.staleAfterMs) || profile.staleAfterMs || 60000,
-          capabilities: Array.isArray(d.capabilities) ? d.capabilities : [],
-          meta: d.meta && typeof d.meta === 'object' ? d.meta : {},
-        });
-      }
+      for (const d of Array.isArray(list) ? list : []) absorbDevice(d);
       activeWorkers.push(w);
     }
 
     spool = spool || await openSpool(spoolPath);
     spooled = await spool.size();
+  }
+
+  // 运行期重取设备名册：DyardOS 支持 `?since=` + ETag，轮询成本很低。
+  // 名册里“消失”的设备保留（增量下无法区分归档与未变更），只有显式 `archived` 才清缓存。
+  async function refreshDevices() {
+    if (!activeWorkers.length) return { ok: false, code: 'not_started', added: 0, updated: 0, removed: 0 };
+    let added = 0;
+    let updated = 0;
+    let removed = 0;
+    const errors = [];
+    for (const w of activeWorkers) {
+      if (typeof w.devices !== 'function') continue;
+      let list;
+      try {
+        list = await w.devices();
+      } catch (e) {
+        errors.push(`${w.id || 'worker'}: ${e.message}`);
+        continue;
+      }
+      for (const d of Array.isArray(list) ? list : []) {
+        const r = absorbDevice(d);
+        if (r === true) added++;
+        else if (r === false) updated++;
+        else if (r === 'archived') removed++;
+      }
+    }
+    stats.lastDeviceRefresh = { at: clock(), added, updated, removed, devices: known.size, errors };
+    if (errors.length) stats.lastError = 'device refresh: ' + errors.join('; ');
+    return { ok: errors.length === 0, added, updated, removed, devices: known.size, errors };
+  }
+
+  function scheduleDeviceRefresh() {
+    if (stopped || refreshDevicesMs <= 0) return;
+    clearTimeout(deviceTimer);
+    deviceTimer = setTimeout(async () => {
+      await refreshDevices().catch(() => {});
+      scheduleDeviceRefresh();
+    }, refreshDevicesMs);
+    deviceTimer.unref?.();
   }
 
   // 新增型号只需加 profile 文件；热加载后已知设备重新匹配，匹配不到的下次事件会被拦下。
@@ -351,6 +407,7 @@ export function createGateway({
     }
 
     startProfileWatch();
+    scheduleDeviceRefresh();
     await drainPending();
     await heartbeat();
     scheduleFlush(flushMs);
@@ -365,7 +422,8 @@ export function createGateway({
     clearTimeout(flushTimer);
     clearTimeout(heartbeatTimer);
     clearTimeout(profileWatchTimer);
-    drainTimer = flushTimer = heartbeatTimer = profileWatchTimer = null;
+    clearTimeout(deviceTimer);
+    drainTimer = flushTimer = heartbeatTimer = profileWatchTimer = deviceTimer = null;
 
     try { profileWatcher?.close(); } catch (e) {}
     profileWatcher = null;
@@ -398,6 +456,7 @@ export function createGateway({
     start,
     stop,
     reloadProfiles,
+    refreshDevices,
     flushNow,
     heartbeat,
     publish,

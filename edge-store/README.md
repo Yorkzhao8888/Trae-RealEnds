@@ -181,6 +181,8 @@ EDGE_TOKEN=dev-token npm start   # 默认 fixture 假设备，5s 一轮
 | `IOT_HEARTBEAT_MS` | `30000` | 网关心跳间隔；店根 90s 未收到即判网关离线 |
 | `IOT_MQTT_CONFIG` | 空 | 非空时改用 MQTT 订阅源（配置示例 `iot-gateway/config/mqtt.example.json`），不再启动 fixture |
 | `IOT_VENDOR_CONFIG` | 空 | 非空时改用厂商云 HTTP 轮询源（配置示例 `iot-gateway/config/vendor.example.json`）；优先级低于 MQTT |
+| `IOT_DYARD_CONFIG` | 空 | 非空时改用 DyardOS 物物引擎（配置示例 `iot-gateway/config/dyard.example.json`）；优先级高于 MQTT |
+| `IOT_DEVICE_REFRESH_MS` | `0` | 设备名册重取间隔；`0` 表示只在启动时取一次。DyardOS 走 `since`/ETag 增量，建议 `300000` |
 
 profile 契约见 [`iot-gateway/schema/profile.schema.json`](../iot-gateway/schema/profile.schema.json) 与示例 `retail.scanner.v1` / `retail.sensor.v1` / `retail.gate.v1` / `retail.badge.v1`：新增型号只加 profile + fixture，不改网关代码。网关监听 `profiles/` 目录热加载，坏文件不会替换当前映射；移除 profile 后对应设备的后续事件会被拦下，并在 `lastProfileReload.unmapped` 中可见。
 
@@ -212,6 +214,18 @@ profile 契约见 [`iot-gateway/schema/profile.schema.json`](../iot-gateway/sche
 - 多个 source 逐个拉取、互不拖累：一个失败只记 `lastError`，其余继续采；恢复后自动回到正常。
 - 指标值仍由 gateway 按 profile 校验，单位取 profile；厂商没给时间时用采集时刻。
 - 设备停更由店根 `staleAfterMs` 判超期，不靠轮询接口自报在线。
+
+### 物物边缘（DyardOS）
+
+DyardOS 是门店边缘盒子上的物物引擎，负责设备间协同与本地联动；它作为 `dyard` worker 接入同一个网关，和 MQTT、厂商云平级，**壳与 SDK 都不用改**。
+
+- 只发 `GET /api/dyardos/contract/readonly/devices` 读名册；事件通道可选，`eventsPath: null` 表示只做名册、事件由硬件直连，网关不算错误。
+- `thing_code` 是对外业务键，落店根设备 `id`；UUID 只进 `meta.uuid`，重建租户不会断历史。
+- `profile` 是能力档、`iot_model` 是硬件型号，分开映射；`parent_gateway_code` 进 `meta.parentGateway`；`iot_protocol` 由网关映射为 `serial`/`ble`/`mqtt`/`nfc`/`http`（`rs485`→`serial`、`zigbee`/`lora`→`mqtt`、`tcp`→`http`），profile 匹配规则不变。
+- 名册增量：`?since=` + `if-none-match: <etag>`，`304` 复用当前台账；网关按 `IOT_DEVICE_REFRESH_MS` 定时重取，新增设备免重启；除显式归档外只增改不删。
+- 归档闭环：DyardOS 归档时必须仍返回 `{thing_code, status: 'archived', updated_at}`；worker 转成 `{id, archived:true}`，网关清本地台账、心跳不再上报，店根保留历史并靠 `staleAfterMs` 自然转超期。
+- 配置里的 `devices` 是兜底与覆盖：DyardOS 临时不可达时仍能按配置建台账；名册为空按 0 台正常启动；请求失败且无兜底才启动失败。
+- 未知设备的事件在 worker 侧计数丢弃；在线与否仍由店根 `staleAfterMs` 判定，`online` 只作初值。
 
 ### 只读看板
 

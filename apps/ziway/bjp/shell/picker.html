@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>知味经营端 · 选择身份</title>
+<script src="./ziway-bjp-shell.js"></script>
+<style>
+  /* 颜色、圆角、字号全部来自 ShellCore.applyTheme 写入的 CSS 变量（配置 → theme） */
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; min-height: 100%; background: var(--uendos-bg); color: var(--uendos-ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .page { padding: 32px 22px calc(28px + env(safe-area-inset-bottom)); }
+  .head { display: flex; align-items: center; gap: 12px; margin: 16px 0 32px; }
+  .mark { width: 44px; height: 44px; border-radius: calc(var(--uendos-radius) * 0.75); background: var(--uendos-accent); color: var(--uendos-bg);
+    font-weight: 700; font-size: var(--uendos-fs-xl); display: grid; place-items: center; }
+  .head b { font-size: var(--uendos-fs-lg); }
+  .head span { display: block; font-size: var(--uendos-fs-xs); color: var(--uendos-ink-muted); letter-spacing: 2px; margin-top: 2px; }
+  h1 { font-size: var(--uendos-fs-xl); margin: 0 0 6px; }
+  .tip { color: var(--uendos-ink-muted); font-size: var(--uendos-fs-base); margin-bottom: 20px; }
+  .grid { display: grid; gap: 12px; }
+  .grouplabel { color: var(--uendos-ink-muted); font-size: var(--uendos-fs-sm); margin: 8px 0 -4px; letter-spacing: 1px; }
+  .card { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid var(--uendos-line);
+    border-radius: var(--uendos-radius); background: var(--uendos-surface); color: inherit; text-decoration: none; width: 100%;
+    text-align: left; font: inherit; transition: transform .12s, border-color .12s; }
+  .card:active { transform: scale(.985); border-color: var(--uendos-accent); }
+  .txt b { font-size: var(--uendos-fs-base); }
+  .txt i { display: block; font-style: normal; font-size: var(--uendos-fs-sm); color: var(--uendos-ink-muted); margin-top: 3px; }
+  .arrow { margin-left: auto; color: var(--uendos-ink-muted); font-size: var(--uendos-fs-lg); }
+  .foot { margin-top: 28px; color: var(--uendos-ink-muted); font-size: var(--uendos-fs-sm); line-height: 1.7; text-align: center; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <div class="mark">知味经营端</div>
+    <div><b>知味经营端</b><span>UENDOS SHELL</span></div>
+  </div>
+  <h1>选择你的身份</h1>
+  <div class="tip">选择后进入对应工作台，可随时返回本页切换。</div>
+  <div class="grid" id="ends"></div>
+  <div class="foot">壳版本 v0.7.0 · 由 uendos 生成</div>
+</div>
+<script>
+(function () {
+  var D = {"title":"选择你的身份","subtitle":"选择后进入对应工作台，可随时返回本页切换。","rememberLast":true,"order":["bjp"],"groups":[],"rest":["bjp"],"ends":{"bjp":{"name":"知味经营端","url":"https://bjp.ziway.cewaycloud.com/shop"}},"endKey":"ziway-bjp.end","shellFile":"ziway-bjp-shell.js"};
+  var box = document.getElementById('ends');
+  var ends = D.ends || {};
+
+  // launcher 模式：记住上次选择的端；?picker=1 可强制回到本页
+  if (D.rememberLast) {
+    try {
+      var saved = localStorage.getItem(D.endKey);
+      if (saved && ends[saved] && location.search.indexOf('picker=1') < 0) {
+        location.replace(ends[saved].url);
+        return;
+      }
+    } catch (e) {}
+  }
+
+  function card(id) {
+    var e = ends[id];
+    var btn = document.createElement('button');
+    btn.className = 'card';
+    btn.innerHTML = '<div class="txt"><b></b><i></i></div><div class="arrow">›</div>';
+    btn.querySelector('b').textContent = e.name;
+    btn.querySelector('i').textContent = id.toUpperCase();
+    btn.onclick = function () {
+      try { if (D.rememberLast) localStorage.setItem(D.endKey, id); } catch (err) {}
+      if (window.Shell) window.Shell.call('core.switchEnd', { id: id });
+      else location.replace(e.url);
+    };
+    return btn;
+  }
+
+  (D.groups || []).forEach(function (g) {
+    var ids = (g.ends || []).filter(function (id) { return ends[id]; });
+    if (!ids.length) return;
+    if (g.label) {
+      var label = document.createElement('div');
+      label.className = 'grouplabel';
+      label.textContent = g.label;
+      box.appendChild(label);
+    }
+    ids.forEach(function (id) { box.appendChild(card(id)); });
+  });
+  (D.rest || []).forEach(function (id) { if (ends[id]) box.appendChild(card(id)); });
+
+  if (!box.children.length) {
+    box.innerHTML = '<div class="tip">未读取到端配置，请检查品牌桥是否加载。</div>';
+  }
+})();
+</script>
+</body>
+</html>

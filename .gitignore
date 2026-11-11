@@ -3,3 +3,8 @@ dist/
 dist-release/
 .DS_Store
 iot-gateway/iot-spool.ndjson
+
+# 生态投影工程的原生平台与打包产物（由 pack 生成，不入库）
+apps/ziway/*/android/
+apps/ziway/*/ios/
+apps/ziway/*/release/

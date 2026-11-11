@@ -1,0 +1,31 @@
+{
+  "name": "ziway-bcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "知味客户端 · UendOS App 壳",
+  "scripts": {
+    "prepare:web": "bash scripts/prepare-web.sh",
+    "sync": "npm run prepare:web && npx cap sync",
+    "add:android": "npm run prepare:web && npx cap add android",
+    "add:ios": "npm run prepare:web && npx cap add ios",
+    "build:android": "npx cap sync android && cd android && ./gradlew assembleDebug",
+    "assets": "capacitor-assets generate --iconBackgroundColor '#F97316' --iconBackgroundColorDark '#0B1220' --splashBackgroundColor '#F97316' --splashBackgroundColorDark '#0B1220'"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/browser": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/geolocation": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/push-notifications": "^6.0.0",
+    "@capacitor/share": "^6.0.0",
+    "@capacitor/splash-screen": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^6.0.0"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "brand": "ziway",
+  "displayName": "知味经营端",
+  "accent": "#2563EB",
+  "primaryEnd": "bjp",
+  "ends": {
+    "bjp": {
+      "name": "知味经营端",
+      "url": "https://bjp.ziway.cewaycloud.com/shop"
+    }
+  },
+  "shellFile": "ziway-bjp-pc-shell.js"
+}

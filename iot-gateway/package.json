@@ -6,7 +6,7 @@
   "description": "BTOS IoT 只读采集网关：协议适配、profile 归一、spool 重试",
   "scripts": {
     "start": "node src/main.js",
-    "test": "node --test test/gateway.test.js test/adapter.test.js test/mqtt.test.js test/vendor.test.js"
+    "test": "node --test test/gateway.test.js test/adapter.test.js test/mqtt.test.js test/vendor.test.js test/dyard.test.js"
   },
   "engines": {
     "node": ">=18"

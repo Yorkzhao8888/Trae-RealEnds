@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "kind": "btos-product-matrix",
+  "status": "planned",
+  "product": "BTOS 百泰OS",
+  "hub": {
+    "code": "xu",
+    "name": "中枢 XU",
+    "url": "https://xu.ziway.cewaycloud.com",
+    "role": "身份、分发、权限；不生成原生包"
+  },
+  "principles": [
+    "四宝是面向商店的独立 App；知味业务端是生态宝内部的入口，不再各自独立成包",
+    "Ziway 是食业产业互联网生态，不是生态宝本身；生态宝可承载 Ziway 及其他生态",
+    "六端保留为 entry，由四宝按受众聚合；XU 只做身份与分发",
+    "Beaulife 与 Xeco 的正式入口 URL 未定，本清单只定义结构，不生成工程"
+  ],
+  "ecosystems": [
+    {
+      "id": "ziway",
+      "name": "知味 · 食业生态",
+      "nameEn": "Ziway",
+      "brand": "ziway",
+      "ends": [
+        {
+          "code": "bcp",
+          "name": "生态消费端",
+          "url": "https://bcp.ziway.cewaycloud.com/mall",
+          "audience": "beaulife"
+        },
+        {
+          "code": "bjp",
+          "name": "生态经营端",
+          "url": "https://bjp.ziway.cewaycloud.com/shop",
+          "audience": "xso"
+        },
+        {
+          "code": "brp",
+          "name": "生态供应端",
+          "url": "https://brp.ziway.cewaycloud.com/supply",
+          "audience": "xso"
+        },
+        {
+          "code": "bhp",
+          "name": "生态作业端",
+          "url": "https://bhp.ziway.cewaycloud.com/work",
+          "audience": "cajob"
+        },
+        {
+          "code": "gmp",
+          "name": "生态门户治理",
+          "url": "https://gmp.ziway.cewaycloud.com/portal",
+          "audience": "xeco"
+        },
+        {
+          "code": "gvp",
+          "name": "生态平台治理",
+          "url": "https://gvp.ziway.cewaycloud.com/platform/suppliers",
+          "audience": "xeco"
+        }
+      ]
+    }
+  ],
+  "apps": [
+    {
+      "code": "beaulife",
+      "brand": "beaulife",
+      "name": "生活宝",
+      "nameEn": "Beaulife",
+      "identity": "XUF 用户端",
+      "audience": "自然人 / 公共用户",
+      "url": null,
+      "urlStatus": "todo",
+      "targets": ["app", "mp"],
+      "packageId": "com.cewaycloud.beaulife",
+      "entries": [
+        { "id": "ziway.bcp", "label": "知味消费", "group": "食业生态" }
+      ]
+    },
+    {
+      "code": "cajob",
+      "brand": "cajob",
+      "name": "工作宝",
+      "nameEn": "Cajob",
+      "identity": "XPN 自然人 / 职聘云 XHPZ",
+      "audience": "求职者 / 作业人员",
+      "url": "https://cajob.cewaysoft.com/",
+      "urlStatus": "confirmed",
+      "targets": ["app", "mp", "pc"],
+      "packageId": "com.cewaycloud.cajob",
+      "entries": [
+        { "id": "ziway.bhp", "label": "知味作业", "group": "食业生态" }
+      ]
+    },
+    {
+      "code": "xso",
+      "brand": "xso",
+      "name": "经营宝",
+      "nameEn": "XSO",
+      "identity": "XPZL 法人 / 工场云 XEPZ",
+      "audience": "企业 / 商户",
+      "url": "https://xso.cewaysoft.com/",
+      "urlStatus": "confirmed",
+      "targets": ["app", "pc"],
+      "packageId": "com.cewaycloud.xso",
+      "entries": [
+        { "id": "ziway.bjp", "label": "知味经营", "group": "食业生态" },
+        { "id": "ziway.brp", "label": "知味供应", "group": "食业生态" }
+      ]
+    },
+    {
+      "code": "xeco",
+      "brand": "xeco",
+      "name": "生态宝",
+      "nameEn": "Xeco",
+      "identity": "XECO / 知味云 XSPZ",
+      "audience": "生态租户 / 治理方",
+      "url": null,
+      "urlStatus": "todo",
+      "targets": ["pc"],
+      "packageId": "com.cewaycloud.xeco",
+      "entries": [
+        { "id": "ziway.gmp", "label": "食业门户治理", "group": "食业生态" },
+        { "id": "ziway.gvp", "label": "食业平台治理", "group": "食业生态" }
+      ]
+    }
+  ]
+}

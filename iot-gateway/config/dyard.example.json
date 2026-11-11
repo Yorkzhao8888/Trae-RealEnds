@@ -1,0 +1,9 @@
+{
+  "baseUrl": "https://dyardos.example.com",
+  "devicesPath": "/api/dyardos/contract/readonly/devices",
+  "eventsPath": null,
+  "tokenEnv": "DYARDOS_TOKEN",
+  "waitMs": 0,
+  "timeoutMs": 10000,
+  "retryMs": 1000
+}

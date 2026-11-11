@@ -1,0 +1,21 @@
+{
+  "appId": "com.cewaycloud.ziway.bjp",
+  "appName": "知味经营端",
+  "webDir": "dist",
+  "server": {
+    "url": "https://bjp.ziway.cewaycloud.com/shop",
+    "errorPath": "offline.html",
+    "cleartext": false,
+    "allowNavigation": [
+      "bjp.ziway.cewaycloud.com",
+      "xu.ziway.cewaycloud.com",
+      "oas.cewaycloud.com"
+    ]
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  }
+}
